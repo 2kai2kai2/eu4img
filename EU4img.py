@@ -27,6 +27,7 @@ class Nation:
         self.debt = 0
         self.treasury = 0.0
         self.totalIncome = 0.0
+        self.totalExpense = 0.0
         self.scorePlace = None
 
 #Start Data Selection
@@ -36,8 +37,54 @@ dlc = []
 GP = []
 lines = srcFile.readlines()
 brackets = []
+playersEditReady = False #so that we can tell if we have scanned through all the players yet or not
 print("Reading save file...")
 for line in lines:
+    #Separately:
+    if playersEditReady == True and not brackets == ["players_countries={"]:
+        #Data corrections
+        playersEditReady = False #don't do it over and over again
+        lastcommand = "null" #set this to "null" so it will go through the first loop
+        print("Current players list:")
+        for x in countries:
+            print("\n"+x.tag+ ": "+ x.player)
+        print("Do you want to make any changes?")
+        print("Press enter without any entries to finish. Commands:")
+        print("add TAG playername")
+        print("remove TAG")
+        print("")
+
+        while lastcommand != "":
+            lastcommand = input().strip("\n ")
+            if lastcommand.startswith("add "):
+                tag = lastcommand.partition(" ")[2].partition(" ")[0].strip("\t\n ")
+                name = lastcommand.partition(" ")[2].partition(" ")[2].strip("\t\n ")
+                if len(tag) != 3:
+                    print("Tag length is incorrect. Canceling action.")
+                    continue
+                for x in countries:
+                    if x.tag == tag: #Players are added later to the list as they join, so we remove all previous players
+                        countries.remove(x)
+                countries.append(Nation(name))
+                countries[len(countries)-1].tag = tag.upper().strip("\t \n")
+                playertags.append(tag.upper().strip("\t \n"))
+                print("Added " + countries[len(countries)-1].tag + ": " + countries[len(countries)-1].player)
+                
+            elif lastcommand.startswith("remove "):
+                tag = lastcommand.partition(" ")[2].strip("\t\n ")
+                if len(tag) != 3:
+                    print("Tag length is incorrect. Canceling action.")
+                    continue
+                for nat in countries:
+                    if nat.tag.upper().strip("\t \n") == tag.upper().strip("\t \n"):
+                        countries.remove(nat)
+                        playertags.remove(nat.tag)
+                        print("Removed " + tag.upper())
+                        break
+                    elif countries[len(countries)-1] == nat: #This means we are on the last one and elif- it's still not on the list.
+                        print("Did not recognize " + tag.upper() + " as a played nation.")
+    #Now the actual stuff
+
     if "{" in line:
         if line.strip("\n ").endswith("}"):
             continue
@@ -58,6 +105,7 @@ for line in lines:
     #elif len(brackets) < 0 and ("countries={" == brackets[0] and not (line.strip("\t={\n") in GP or line.strip("\t={\n") in playertags)):
         #print("HI" + line.strip("\t={\n"))
         #continue
+    
     else:
         #This is where we do stuff
         #Get current gamedate
@@ -74,6 +122,7 @@ for line in lines:
                 mp = False
         #Get player names and country tags
         elif brackets == ["players_countries={"]:
+            playersEditReady = True
             #In the file, the format is like this:
             #players_countries={
             #   "playername"
@@ -134,8 +183,6 @@ for line in lines:
                             x.stability = round(float(line.strip("\tstability=\n")))
                         elif "treasury=" in line:
                             x.treasury = round(float(line.strip("\ttreasury=\n")))
-                        elif "estimated_monthly_income=" in line:
-                            x.totalIncome = round(float(line.strip("\testimated_monthly_income=\n")))
                         #elif "\tmanpower=" in line:
                             #x.manpower = round(float(line.strip("\tmanpower=\n")))
                         #elif "max_manpower=" in line:
@@ -145,6 +192,10 @@ for line in lines:
                         #Get size of each loan
                         if brackets[2] == "\t\tloan={" and "amount=" in line:
                             x.debt += round(float(line.strip("\tamount=\n")))
+                        elif brackets[2] == "\t\tledger={" and "\tlastmonthincome=" in line:
+                            x.totalIncome = round(float(line.strip("\tlastmonthincome=\n")), 2)
+                        elif brackets[2] == "\t\tledger={" and "\tlastmonthexpense=" in line:
+                            x.totalExpense = round(float(line.strip("\tlastmonthexpense=\n")), 2)
                     elif len(brackets) == 4:
                         #Add 1 to army size for each regiment
                         if brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "morale=" in line:
@@ -168,7 +219,7 @@ countries.sort(key=lambda x: x.development, reverse=True)
 
 print("Finished extracting save data.")
 print("\nPlayer nations: "+ str(len(countries)))
-print(mp)
+print("Multiplayer:", mp)
 print(date)
 print(dlc)
 for x in countries:
@@ -182,7 +233,7 @@ for x in countries:
     #print("Manpower: "+ x.manpower)
     #print("Max Manpower: "+ x.maxManpower)
     print("Prestige:", x.prestige)
-    
+
 #End Data Selection
 print("")
 #Start Map Creation
@@ -221,52 +272,77 @@ print("Copying map into final image...")
 imgFinal.paste(mapFinal, (0, imgFinal.size[1]-mapFinal.size[1])) #Copy map into bottom of final image
 print("Preparing final image editing...")
 #The top has 5632x1119
+fontsmall = ImageFont.load_default()
 font = ImageFont.load_default()
 fontbig = ImageFont.load_default()
 try:
+    fontsmall = ImageFont.truetype("FONT.TTF", 50)
     font = ImageFont.truetype("FONT.TTF", 100)
     fontbig = ImageFont.truetype("FONT.TTF", 180)
-    print("Found font. Size:", font.getsize)
+    print("Found font.")
 except(FileNotFoundError, IOError):
     try:
+        fontsmall = ImageFont.truetype("GARA.TTF", 50)
         font = ImageFont.truetype("GARA.TTF", 100)
         fontbig = ImageFont.truetype("GARA.TTF",180)
         print("Found EU4 font.")
     except(FileNotFoundError, IOError):
+        fontsmall = ImageFont.load_default()
         font = ImageFont.load_default()
         fontbig = ImageFont.load_default()
-        print("Could not find font. Using default. Size:", font.getsize)
-#Players section from (20,30) to (4710, 1100) half way is x=2345
-#So start with yborder = 38, yheight = 128 for each player row. x just make it half or maybe thirds depending on how it goes
-imgDraw = ImageDraw.Draw(imgFinal)
-for nat in countries:
-    natnum = countries.index(nat)
-    x = 38 + 2000*int(natnum/8)
-    y = 38 + 128*(natnum%8)
-    if (natnum < 16):
-        print(nat.tag + " adding")
-        #x: Country
-        imgFinal.paste(EU4Lib.flag(nat.tag), (x, y))
-        #x+128: Player
-        imgDraw.text((x+128, y), nat.player, (255, 255, 255), font)
-        #x+760: Army
-        imgFinal.paste(Image.open("src//army.png"), (x+760, y))
-        armydisplay = str(round(nat.army/1000, 1))
-        if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
-            armydisplay = armydisplay.partition(".")[0]
-        armydisplay = armydisplay + "k"
-        imgDraw.text((x+760+128, y), armydisplay, (255, 255, 255), font)
-        #x+1100: Navy
-        imgFinal.paste(Image.open("src//navy.png"), (x+1100, y))
-        imgDraw.text((x+1100+128, y), str(nat.navy), (255, 255, 255), font)
-        #x+1440: Development
-        imgFinal.paste(Image.open("src//development.png"), (x+1440, y))
-        imgDraw.text((x+1440+128, y), str(nat.development), (255, 255, 255), font)
-        #x+1780:
-    else:
-        print(nat.tag + " does not fit!")
-    
+        print("Could not find font. Using default.")
 
+imgDraw = ImageDraw.Draw(imgFinal)
+#================MULTIPLAYER================#
+if mp == True:
+    #Players section from (20,30) to (4710, 1100) half way is x=2345
+    #So start with yborder = 38, yheight = 128 for each player row. x just make it half or maybe thirds depending on how it goes
+    for nat in countries:
+        natnum = countries.index(nat)
+        x = 38 + 2335*int(natnum/8) #We have 2335 pixels to work with maximum for each player column
+        y = 38 + 128*(natnum%8)
+        if (natnum < 16):
+            print(nat.tag + " adding")
+            #x: Country
+            imgFinal.paste(EU4Lib.flag(nat.tag), (x, y))
+            #x+128: Player
+            imgDraw.text((x+128, y), nat.player, (255, 255, 255), font)
+            #x+760: Army
+            imgFinal.paste(Image.open("src//army.png"), (x+760, y))
+            armydisplay = str(round(nat.army/1000, 1))
+            if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
+                armydisplay = armydisplay.partition(".")[0]
+            armydisplay = armydisplay + "k"
+            imgDraw.text((x+760+128, y), armydisplay, (255, 255, 255), font)
+            #x+1100: Navy
+            imgFinal.paste(Image.open("src//navy.png"), (x+1100, y))
+            imgDraw.text((x+1100+128, y), str(nat.navy), (255, 255, 255), font)
+            #x+1440: Development
+            imgFinal.paste(Image.open("src//development.png"), (x+1440, y))
+            imgDraw.text((x+1440+128, y), str(nat.development), (255, 255, 255), font)
+            #x+1780: Income/Expense
+            monthlyProfit = nat.totalIncome-nat.totalExpense
+            imgIncome = Image.open("src//income.png")
+            if monthlyProfit < 0:
+                imgIncome = imgIncome.crop((128, 0, 255, 127))
+                imgFinal.paste(imgIncome, (x+1780, y))
+                imgDraw.text((x+1780+128, y), str(round(nat.totalIncome - nat.totalExpense)), (247, 16, 16), font)
+            else:
+                imgIncome = imgIncome.crop((0, 0, 127, 127))
+                imgFinal.paste(imgIncome, (x+1780, y))
+                imgDraw.text((x+1780+128, y), str(round(nat.totalIncome - nat.totalExpense)), (49, 190, 66), font)
+            imgDraw.text((x+2130, y), "+" + str(round(nat.totalIncome, 2)), (49, 190, 66), fontsmall)
+            imgDraw.text((x+2130, y+64), "-" + str(round(nat.totalExpense, 2)), (247, 16, 16), fontsmall)
+            #navy_strength
+            #manpower
+            #max_manpower
+            #max_sailors
+        else:
+            print(nat.tag + " does not fit!")
+#================SINGLEPLAYER================#
+elif mp == False:
+    pass #TODO
+#================END  SECTION================#
 #Date
 imgDraw.text((4800,85), date, (255, 255, 255), fontbig)
 
