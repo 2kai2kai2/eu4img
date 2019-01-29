@@ -95,17 +95,8 @@ for line in lines:
         brackets.pop()
         #print("}")
     #Get rid of long, useless sections
-    #Possible to use sections:
-    #Provinces
     elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
         continue
-    #Ignoring all but player / GP 
-    #Possible to use: HRE / pope / crusade / china
-    
-    #elif len(brackets) < 0 and ("countries={" == brackets[0] and not (line.strip("\t={\n") in GP or line.strip("\t={\n") in playertags)):
-        #print("HI" + line.strip("\t={\n"))
-        #continue
-    
     else:
         #This is where we do stuff
         #Get current gamedate
@@ -128,13 +119,12 @@ for line in lines:
             #   "playername"
             #   "SWE"
             #
-            #Where "   " is a tab
-            #This v adds a new country object and player name if there is none open.
-            #print("Found a line in players_countries")
+            #Where "   " is a tab \t
+            #This v adds a new Nation object and player name if there is none open.
             if len(countries) == 0 or countries[len(countries)-1].tag is not None:
                 print("Adding: ", line.strip('\t"\n'))
                 countries.append(Nation(line.strip('\t"\n')))
-            #Add country code to most recent country (which, because of ^ cannot have a tag)
+            #Add country code to most recent country (which, because of ^ will not have a tag)
             else:
                 for x in countries:
                     if x.tag == line.strip('\t"\n'): #Players are added later to the list as they join, so we remove all previous players
@@ -166,8 +156,7 @@ for line in lines:
         #Get papal controller
         elif "previous_controller=" in line and brackets == ["religion_instance_data={", "\tcatholic={", "\t\tpapacy={"]:
             continue
-        #Country-specific for players
-        #TODO: Not sure if this need optimization
+        #Country-specific data (for players)
         elif len(brackets) > 1 and brackets[0] == "countries={" and brackets[1].strip("\t={\n") in playertags:
             for x in countries:
                 if x.tag in brackets[1]:
@@ -189,11 +178,13 @@ for line in lines:
                             #x.maxManpower = round(float(line.strip("\tmax_manpower=\n")))
                         else: continue
                     elif len(brackets) == 3:
-                        #Get size of each loan
+                        #Get each loan and add its amount to debt
                         if brackets[2] == "\t\tloan={" and "amount=" in line:
                             x.debt += round(float(line.strip("\tamount=\n")))
+                        #Get Income from the previous month
                         elif brackets[2] == "\t\tledger={" and "\tlastmonthincome=" in line:
                             x.totalIncome = round(float(line.strip("\tlastmonthincome=\n")), 2)
+                        #Get Expense from the previous month
                         elif brackets[2] == "\t\tledger={" and "\tlastmonthexpense=" in line:
                             x.totalExpense = round(float(line.strip("\tlastmonthexpense=\n")), 2)
                     elif len(brackets) == 4:
@@ -207,10 +198,11 @@ for line in lines:
                                 x.army = round(x.army - 1000 + 1000*float(line.strip("\tstrength=\n")))
                             except ValueError:
                                 continue
+                        #Add 1 for each ship
                         elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
                             x.navy += 1
 
-for x in countries: #Remove dead countries
+for x in countries: #Remove dead countries from players list
     if x.development is None or x.development == None or x.development == 0:
         countries.remove(x)
 #Sort Data:
@@ -220,16 +212,15 @@ countries.sort(key=lambda x: x.development, reverse=True)
 print("Finished extracting save data.")
 print("\nPlayer nations: "+ str(len(countries)))
 print("Multiplayer:", mp)
-print(date)
-print(dlc)
+print("Current Date:", date)
+print("Game DLC", dlc)
 for x in countries:
     print("\n"+x.tag+ ": "+ x.player)
-    print("Army:", x.army)
-    print("Navy:", x.navy)
+    print("Army:", x.army, "Navy:", x.navy)
     print("Dev:", x.development)
     print("Stab:", x.stability)
-    print("Treasury:", x.treasury)
-    print("Debt:", x.debt)
+    print("Treasury:", x.treasury, "Debt:", x.debt)
+    print("Income:", x.totalIncome, "Expenses:", x.totalExpense)
     #print("Manpower: "+ x.manpower)
     #print("Max Manpower: "+ x.maxManpower)
     print("Prestige:", x.prestige)
@@ -263,15 +254,12 @@ for x in range(mapFinal.size[0]):
         #print(round(100*x*y/totalPixels, 2), "% Done (", x, ", ", y, ")")
 print("Map editing done.")
 #End Map Creation
-#mapFinal.show()
-#print("Saving map in 'map.png'...")
-#mapFinal.save("map.png", "PNG")
 
 #Start Final Img Creation
 print("Copying map into final image...")
 imgFinal.paste(mapFinal, (0, imgFinal.size[1]-mapFinal.size[1])) #Copy map into bottom of final image
-print("Preparing final image editing...")
 #The top has 5632x1119
+print("Searching for fonts:")
 fontsmall = ImageFont.load_default()
 font = ImageFont.load_default()
 fontbig = ImageFont.load_default()
@@ -279,7 +267,7 @@ try:
     fontsmall = ImageFont.truetype("FONT.TTF", 50)
     font = ImageFont.truetype("FONT.TTF", 100)
     fontbig = ImageFont.truetype("FONT.TTF", 180)
-    print("Found font.")
+    print("Found custom font at 'FONT.TTF'.")
 except(FileNotFoundError, IOError):
     try:
         fontsmall = ImageFont.truetype("GARA.TTF", 50)
@@ -290,11 +278,12 @@ except(FileNotFoundError, IOError):
         fontsmall = ImageFont.load_default()
         font = ImageFont.load_default()
         fontbig = ImageFont.load_default()
-        print("Could not find font. Using default.")
-
+        print("Could not find font. Using default. (This isn't going to be pretty)")
+print("Preparing final image editing...")
 imgDraw = ImageDraw.Draw(imgFinal)
 #================MULTIPLAYER================#
 if mp == True:
+    print("Game is multiplayer. Adding top players' data.")
     #Players section from (20,30) to (4710, 1100) half way is x=2345
     #So start with yborder = 38, yheight = 128 for each player row. x just make it half or maybe thirds depending on how it goes
     for nat in countries:
@@ -302,19 +291,19 @@ if mp == True:
         x = 38 + 2335*int(natnum/8) #We have 2335 pixels to work with maximum for each player column
         y = 38 + 128*(natnum%8)
         if (natnum < 16):
-            print(nat.tag + " adding")
-            #x: Country
+            print("Adding to final image:", nat.tag, "-", nat.player)
+            #x: Country flag
             imgFinal.paste(EU4Lib.flag(nat.tag), (x, y))
             #x+128: Player
             imgDraw.text((x+128, y), nat.player, (255, 255, 255), font)
-            #x+760: Army
+            #x+760: Army size
             imgFinal.paste(Image.open("src//army.png"), (x+760, y))
             armydisplay = str(round(nat.army/1000, 1))
             if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
                 armydisplay = armydisplay.partition(".")[0]
             armydisplay = armydisplay + "k"
             imgDraw.text((x+760+128, y), armydisplay, (255, 255, 255), font)
-            #x+1100: Navy
+            #x+1100: Navy size
             imgFinal.paste(Image.open("src//navy.png"), (x+1100, y))
             imgDraw.text((x+1100+128, y), str(nat.navy), (255, 255, 255), font)
             #x+1440: Development
@@ -333,6 +322,7 @@ if mp == True:
                 imgDraw.text((x+1780+128, y), str(round(nat.totalIncome - nat.totalExpense)), (49, 190, 66), font)
             imgDraw.text((x+2130, y), "+" + str(round(nat.totalIncome, 2)), (49, 190, 66), fontsmall)
             imgDraw.text((x+2130, y+64), "-" + str(round(nat.totalExpense, 2)), (247, 16, 16), fontsmall)
+            #Possible TODO:
             #navy_strength
             #manpower
             #max_manpower
@@ -341,9 +331,10 @@ if mp == True:
             print(nat.tag + " does not fit!")
 #================SINGLEPLAYER================#
 elif mp == False:
-    pass #TODO
+   print("Unfortunately, Singleplayer does not work yet. ):")
 #================END  SECTION================#
 #Date
+print("Adding game date to final image...")
 imgDraw.text((4800,85), date, (255, 255, 255), fontbig)
 
 
