@@ -17,7 +17,7 @@ class Nation:
     def __init__(self, player):
         self.player = player
         self.tag = None
-        self.development = None
+        self.development = 0
         self.prestige = None
         self.stability = None
         #self.manpower = None
@@ -203,7 +203,8 @@ for line in lines:
                             x.navy += 1
 
 for x in countries: #Remove dead countries from players list
-    if x.development is None or x.development == None or x.development == 0:
+    if x.development == 0:
+        playertags.remove(x.tag)
         countries.remove(x)
 #Sort Data:
 countries.sort(key=lambda x: x.development, reverse=True)
@@ -335,7 +336,33 @@ elif mp == False:
 #================END  SECTION================#
 #Date
 print("Adding game date to final image...")
-imgDraw.text((4800,85), date, (255, 255, 255), fontbig)
+year = date.partition(".")[0].strip("\t \n")
+month = date.partition(".")[2].partition(".")[0].strip("\t \n")
+day = date.partition(".")[2].partition(".")[2].strip("\t \n")
+if month == "1":
+    imgDraw.text((4880,60), day + " January " + year, (255, 255, 255), font)
+elif month == "2":
+    imgDraw.text((4880,60), day + " Feburary " + year, (255, 255, 255), font)
+elif month == "3":
+    imgDraw.text((4880,60), day + " March " + year, (255, 255, 255), font)
+elif month == "4":
+    imgDraw.text((4880,60), day + " April " + year, (255, 255, 255), font)
+elif month == "5":
+    imgDraw.text((4880,60), day + " May " + year, (255, 255, 255), font)
+elif month == "6":
+    imgDraw.text((4880,60), day + " June " + year, (255, 255, 255), font)
+elif month == "7":
+    imgDraw.text((4880,60), day + " July " + year, (255, 255, 255), font)
+elif month == "8":
+    imgDraw.text((4880,60), day + " August " + year, (255, 255, 255), font)
+elif month == "9":
+    imgDraw.text((4880,60), day + " September " + year, (255, 255, 255), font)
+elif month == "10":
+    imgDraw.text((4880,60), day + " October " + year, (255, 255, 255), font)
+elif month == "11":
+    imgDraw.text((4880,60), day + " November " + year, (255, 255, 255), font)
+elif month == "12":
+    imgDraw.text((4880,60), day + " December " + year, (255, 255, 255), font)
 
 
 print("Final image editing done.")
