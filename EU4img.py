@@ -39,7 +39,9 @@ lines = srcFile.readlines()
 brackets = []
 playersEditReady = False #so that we can tell if we have scanned through all the players yet or not
 print("Reading save file...")
+linenum = 0
 for line in lines:
+    linenum+=1
     #Separately:
     if playersEditReady == True and not brackets == ["players_countries={"]:
         #Data corrections
@@ -86,13 +88,22 @@ for line in lines:
     #Now the actual stuff
 
     if "{" in line:
-        if line.strip("\n ").endswith("}"):
+        if line.count("{") == line.count("}"):
             continue
-        else:
+        elif line.count("}") == 0 and line.count("{") == 1:
             brackets.append(line.rstrip("\n "))
+        elif line.count("}") == 0 and line.count("{") > 1:
+            for x in range(line.count("{")):
+                brackets.append("{") #TODO: fix this so it has more
+        else:
+            print("Unexpected brackets at line #" + str(linenum) + ": " + line)
         #print("{")
     elif "}" in line:
-        brackets.pop()
+        try:
+            brackets.pop()
+        except IndexError:
+            print("No brackets to delete.")
+            print("Line", linenum, ":", line)
         #print("}")
     #Get rid of long, useless sections
     elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
