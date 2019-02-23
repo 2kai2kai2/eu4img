@@ -378,7 +378,7 @@ elif month == "12":
 
 print("Final image editing done.")
 imgFinal.show()
-print("Saving final image...")
+print("Close image editor to save file... (Unfortunately this is necessary)")
 imgFinal.save("final.png", "PNG")
 #End Final Img Creation
 
