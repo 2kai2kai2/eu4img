@@ -1,8 +1,21 @@
 #This will need to be updated. Currently for 1.28
 from PIL import Image, ImageDraw
 
-def province():
-    pass
+def province(id):
+    srcFile = open("src\\positions.txt", "r")
+    lines = srcFile.readlines()
+    beyond = 0
+    for line in lines:
+        if beyond == 2:
+            vals = line.strip("\t\n ").split(" ")
+            return (float(vals[0]), 2048-float(vals[1]))
+        if beyond == 1:
+            beyond = 2
+            continue
+        if line.strip("\n ") == (str(id)+"={"):
+            beyond = 1
+            continue
+        
 def flag(tag):
     index = open("src\\flagfiles.txt", "r")
     line = index.read()

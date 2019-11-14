@@ -29,6 +29,7 @@ class Nation:
         self.totalIncome = 0.0
         self.totalExpense = 0.0
         self.scorePlace = None
+        self.capitalID = 0
 
 #Start Data Selection
 countries = []
@@ -175,6 +176,8 @@ for line in lines:
                     if len(brackets) == 2:
                         if "raw_development=" in line:
                             x.development = round(float(line.strip("\traw_devlopmnt=\n")))
+                        elif "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
+                            x.capitalID = int(line.strip("\tcapitl=\n"))
                         elif "score_place=" in line:
                             x.scorePlace = round(float(line.strip("\tscore_place=\n")))
                         elif "prestige=" in line:
@@ -236,6 +239,7 @@ for x in countries:
     #print("Manpower: "+ x.manpower)
     #print("Max Manpower: "+ x.maxManpower)
     print("Prestige:", x.prestige)
+    print("Capital:", x.capitalID)
 
 #End Data Selection
 print("")
