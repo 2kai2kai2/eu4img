@@ -1,6 +1,21 @@
 #This will need to be updated. Currently for 1.28
 from PIL import Image, ImageDraw
 
+def country(text):
+    srcFile = open("src\\countries_l_english.yml")
+    lines = srcFile.readlines()
+    srcFile.close
+    if len(text) == 3:
+        for line in lines:
+            if line[1:4] == text.upper():
+                return text
+    # text is not just a tag
+    for line in lines:
+       if ('"' + text.lower() + '"') in line.lower():
+           return line[1:4]
+    # text is unknown
+    return None
+
 def province(id):
     srcFile = open("src\\positions.txt", "r")
     lines = srcFile.readlines()
