@@ -20,27 +20,70 @@ class Nation:
         self.tag = tag
         self.capitalID = 0
 
+class Reserve:
+    def __init__(self, name):
+        self.tags = [] # list of str
+        self.name = name #str
+    def add(self, tag):
+        self.tags.append(tag)
+    def remove(self, tag):
+        if tag in self.tags:
+            self.tags.remove(tag)
+    def getSaveText(self):
+        string = self.name + "\n"
+        for tag in self.tags:
+            string += "\t" + tag + "\n"
+        return string
+
+def getSavedReserves():
+    reserves = []
+    f = open("savedreservationgames.txt", "r")
+    currentReserve = None
+    while True:
+        line = f.readline()
+        if line == "":
+            if currentReserve is not None:
+                reserves.append(currentReserve)
+            return reserves
+        elif line.startswith("\t") and len(line.strip("\n\t ")) == 3:
+            currentReserve.add(line.strip("\n\t "))
+        elif not line.startswith("\t") and not line.startswith(" ") and not line == "\n":
+            if currentReserve is not None:
+                reserves.append(currentReserve)
+            currentReserve = Reserve(line.strip("\n\t "))
+        else:
+            pass # Uh this shouldn't happen unless the file is formatted incorrectly.
+    f.close()
+    return reserves
+
 #Get reservations
 countries = []
 #Separately:
 lastcommand = "null" #set this to "null" so it will go through the first loop
 
 while lastcommand != "":
+    print("------------------------------------------------------------------------------------------")
     print("Current players list:")
-    if countries.__len__ == 0:
+    if len(countries) == 0:
         print("EMPTY")
     else:
         for x in countries:
             #print("\n"+x.tag+ ": "+ x.player)
             print(x.tag)
     print("Do you want to make any changes?")
-    print("Press enter without any entries to finish. Commands:")
+    print("------------------------------------------------------------------------------------------")
+    print("Commands:")
     #print("add TAG playername")
-    print("add COUNTRY/TAG")
-    print("remove COUNTRY/TAG")
-    print("")
+    print("add COUNTRY/TAG        | Adds the given nation to the reserved list.")
+    print("remove COUNTRY/TAG     | Removes the given nation from the reserved list.")
+    print("load GAMENAME          | Loads a saved reservation list by name.")
+    print("save GAMENAME          | Saves a reservation list by name. (WARNING: overrides same name)")
+    print("list [GAMENAME]        | If a name is included, shows all tags in the saved list.")
+    print("                       | Otherwise, shows all saved list names.")
+    print("Press enter without any entries to finish. ")
 
     lastcommand = input().strip("\n ")
+    clear()
     if lastcommand.startswith("add "):
         tag = EU4Lib.country(lastcommand.partition(" ")[2].strip("\t\n "))
         #name = lastcommand.partition(" ")[2].partition(" ")[2].strip("\t\n ")
@@ -54,7 +97,7 @@ while lastcommand != "":
         countries.append(Nation(tag))
         countries[len(countries)-1].tag = tag.upper().strip("\t \n")
         #print("Added " + countries[len(countries)-1].tag + ": " + countries[len(countries)-1].player)
-        print("Added " + tag)
+        print("Added " + tag.upper)
             
     elif lastcommand.startswith("remove "):
         tag = EU4Lib.country(lastcommand.partition(" ")[2].strip("\t\n "))
@@ -68,7 +111,78 @@ while lastcommand != "":
                 break
             elif countries[len(countries)-1] == nat: #This means we are on the last one and elif- it's still not on the list.
                 print("Did not recognize " + lastcommand + " as a reserved nation.")
+    
+    elif lastcommand.startswith("save "):
+        res = Reserve(lastcommand.partition(" ")[2].strip("\t\n "))
+        for tag in countries:
+            res.add(tag.tag)
+        if not os.path.isfile("savedreservationgames.txt"):
+            f = open("savedreservationgames.txt", "w")
+            f.write(res.getSaveText())
+            f.close()
+        else:
+            reservations = getSavedReserves()
+            for r in reservations:
+                if r.name == res.name:
+                    reservations.remove(r)
+            reservations.append(res)
+            
+            text = ""
+            for r in reservations:
+                text += r.getSaveText()
+            f = open("savedreservationgames.txt", "w")
+            f.write(text)
+            f.close()
+            print(text)
+        print("Saved as " + res.name)
 
+    elif lastcommand.startswith("load "):
+        if not os.path.exists("savedreservationgames.txt"):
+            print("No saved games.")
+        else:
+            reserves = getSavedReserves()
+            if len(reserves) == 0:
+                print("No saved games.")
+            else:
+                resName = lastcommand.partition(" ")[2].strip("\t\n ")
+                for res in reserves:
+                    if res.name == resName:
+                        countries = []
+                        for tag in res.tags:
+                            countries.append(Nation(tag))
+                        print("Loaded " + resName + ".")
+                        continue
+    
+    elif lastcommand.strip("\t\n ") == "list": # list with no arguments
+        if not os.path.exists("savedreservationgames.txt"):
+            print("No saved games.")
+        else:
+            reserves = getSavedReserves()
+            if len(reserves) == 0:
+                print("No saved games.")
+            else:
+                print("Reservation lists:")
+                for res in reserves:
+                    print(res.name + " (" + str(len(res.tags)) + ")")
+    elif lastcommand.startswith("list "):
+        if not os.path.exists("savedreservationgames.txt"):
+            print("No saved games.")
+        else:
+            reserves = getSavedReserves()
+            if len(reserves) == 0:
+                print("No saved games.")
+            else:
+                resName = lastcommand.partition(" ")[2].strip("\t\n ")
+                found = False
+                for res in reserves:
+                    if res.name == resName:
+                        print("Reservations:")
+                        for tag in res.tags:
+                            print(tag)
+                        found = True
+                        break
+                if not found:
+                    print("That reservation list does not exist.")
 
 #Start Data Selection
 lines = srcFile.readlines()
