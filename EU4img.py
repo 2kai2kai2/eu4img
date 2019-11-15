@@ -97,7 +97,7 @@ while lastcommand != "":
         countries.append(Nation(tag))
         countries[len(countries)-1].tag = tag.upper().strip("\t \n")
         #print("Added " + countries[len(countries)-1].tag + ": " + countries[len(countries)-1].player)
-        print("Added " + tag.upper)
+        print("Added " + tag.upper())
             
     elif lastcommand.startswith("remove "):
         tag = EU4Lib.country(lastcommand.partition(" ")[2].strip("\t\n "))
