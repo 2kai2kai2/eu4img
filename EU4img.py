@@ -56,8 +56,33 @@ def getSavedReserves():
     f.close()
     return reserves
 
+
+
 #Get reservations
 countries = []
+
+def save(name):
+    res = Reserve(name)
+    for tag in countries:
+        res.add(tag.tag)
+    if not os.path.isfile("savedreservationgames.txt"):
+        f = open("savedreservationgames.txt", "w")
+        f.write(res.getSaveText())
+        f.close()
+    else:
+        reservations = getSavedReserves()
+        for r in reservations:
+            if r.name == res.name:
+                reservations.remove(r)
+        reservations.append(res)
+        
+        text = ""
+        for r in reservations:
+            text += r.getSaveText()
+        f = open("savedreservationgames.txt", "w")
+        f.write(text)
+        f.close()
+
 #Separately:
 lastcommand = "null" #set this to "null" so it will go through the first loop
 
@@ -114,28 +139,8 @@ while lastcommand != "":
                 print("Did not recognize " + lastcommand + " as a reserved nation.")
     
     elif lastcommand.startswith("save "):
-        res = Reserve(lastcommand.partition(" ")[2].strip("\t\n "))
-        for tag in countries:
-            res.add(tag.tag)
-        if not os.path.isfile("savedreservationgames.txt"):
-            f = open("savedreservationgames.txt", "w")
-            f.write(res.getSaveText())
-            f.close()
-        else:
-            reservations = getSavedReserves()
-            for r in reservations:
-                if r.name == res.name:
-                    reservations.remove(r)
-            reservations.append(res)
-            
-            text = ""
-            for r in reservations:
-                text += r.getSaveText()
-            f = open("savedreservationgames.txt", "w")
-            f.write(text)
-            f.close()
-            print(text)
-        print("Saved as " + res.name)
+        save(lastcommand.partition(" ")[2].strip("\t\n "))
+        print("Saved as " + lastcommand.partition(" ")[2].strip("\t\n "))
 
     elif lastcommand.startswith("load "):
         if not os.path.exists("savedreservationgames.txt"):
