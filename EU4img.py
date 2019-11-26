@@ -11,7 +11,7 @@ mapFinal = imgPolitical.copy()
 def clear():
     #print(chr(27) + "[2J")
     #os.system('cls' if os.name == 'nt' else 'clear')
-    print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
+    print("\n" * 1000)
 
 class Nation:
     #def __init__(self, player, tag):
@@ -84,6 +84,7 @@ while lastcommand != "":
 
     lastcommand = input().strip("\n ")
     clear()
+    print("> " + lastcommand)
     if lastcommand.startswith("add "):
         tag = EU4Lib.country(lastcommand.partition(" ")[2].strip("\t\n "))
         #name = lastcommand.partition(" ")[2].partition(" ")[2].strip("\t\n ")
