@@ -1,11 +1,17 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
+from io import BytesIO
 import EU4Lib
-srcFile = open("src\\save_1444.eu4", "r")
+import discord
+from dotenv import load_dotenv
 imgPolitical = Image.open("src//map_1444.png")
 
+load_dotenv()
+token = os.getenv('DISCORD_TOKEN')
 #imgFinal = Image.open("src//finalTemplate.png")
-mapFinal = imgPolitical.copy()
+client = discord.Client()
+serverID = os.getenv("DISCORD_SERVER")
+
 
 #Clears terminal
 def clear():
@@ -22,18 +28,107 @@ class Nation:
 
 class Reserve:
     def __init__(self, name):
-        self.tags = [] # list of str
+        self.tags = [] # list of tuples of str
         self.name = name #str
     def add(self, tag):
         self.tags.append(tag)
     def remove(self, tag):
-        if tag in self.tags:
-            self.tags.remove(tag)
+        for i in self.tags:
+            if i[0] == tag:
+                self.tags.remove(i)
     def getSaveText(self):
         string = self.name + "\n"
         for tag in self.tags:
-            string += "\t" + tag + "\n"
+            string += "\t" + tag[0] + " " + tag[1] + "\n"
         return string
+
+def imageToFile(img): #input Image object; return discord.File object
+    file = BytesIO()
+    img.save(file, "PNG")
+    file.seek(0)
+    return discord.File(file, "img.png")
+
+def writeNewReservation(name):
+    if not os.path.isfile("savedreservationgames.txt"):
+        f = open("savedreservationgames.txt", "w")
+        f.write(Reserve(name).getSaveText())
+        f.close()
+    else:
+        reservations = getSavedReserves()
+        for r in reservations:
+            if r.name == name:
+                reservations.remove(r)
+        reservations.append(Reserve(name))
+        
+        text = ""
+        for r in reservations:
+            text += r.getSaveText()
+        f = open("savedreservationgames.txt", "w")
+        f.write(text)
+        f.close()
+
+def save(reservation, tag):
+    reservations = getSavedReserves()
+    for r in reservations:
+        if r.name == reservation:
+            reservations.add(tag)
+    
+    text = ""
+    for r in reservations:
+        text += r.getSaveText()
+    f = open("savedreservationgames.txt", "w")
+    f.write(text)
+    f.close()
+
+
+#Start Data Selection
+def createMap(reserve): #input a Reserve object
+    countries = [] # List of Nation objects
+    for res in reserve.tags:
+        print(res[0])
+        countries.append(Nation(res[0]))
+    mapFinal = imgPolitical.copy()
+    srcFile = open("src\\save_1444.eu4", "r")
+    lines = srcFile.readlines()
+    brackets = []
+    linenum = 0
+    for line in lines:
+        linenum+=1
+        
+        if "{" in line:
+            if line.count("{") == line.count("}"):
+                continue
+            elif line.count("}") == 0 and line.count("{") == 1:
+                brackets.append(line.rstrip("\n "))
+            elif line.count("}") == 0 and line.count("{") > 1:
+                for x in range(line.count("{")):
+                    brackets.append("{") #TODO: fix this so it has more
+            else:
+                print("Unexpected brackets at line #" + str(linenum) + ": " + line)
+            #print("{")
+        elif "}" in line:
+            try:
+                brackets.pop()
+            except IndexError:
+                print("No brackets to delete.")
+                print("Line", linenum, ":", line)
+            #print("}")
+        #Get rid of long, useless sections
+        elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
+            continue
+        elif len(brackets) > 1 and brackets[0] == "countries={":
+            for x in countries:
+                if x.tag in brackets[1]:
+                    #Here we have all the stats for country x on the players list
+                    if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
+                            x.capitalID = int(line.strip("\tcapitl=\n"))
+    srcFile.close()
+    imgX = Image.open("src//xIcon.png")
+    for x in countries:
+        loc = EU4Lib.province(x.capitalID)
+        mapFinal.paste(imgX, (int(loc[0]-imgX.size[0]/2), int(loc[1]-imgX.size[1]/2)), imgX)
+        # I hope this doesn't break if a capital is too close to the edge
+    return mapFinal
 
 def getSavedReserves():
     reserves = []
@@ -41,12 +136,12 @@ def getSavedReserves():
     currentReserve = None
     while True:
         line = f.readline()
-        if line == "":
+        if line is None or line == "":
             if currentReserve is not None:
                 reserves.append(currentReserve)
             return reserves
-        elif line.startswith("\t") and len(line.strip("\n\t ")) == 3:
-            currentReserve.add(line.strip("\n\t "))
+        elif line.startswith("\t"):
+            currentReserve.add(line.strip("\n\t ").split(" ", 1))
         elif not line.startswith("\t") and not line.startswith(" ") and not line == "\n":
             if currentReserve is not None:
                 reserves.append(currentReserve)
@@ -56,198 +151,78 @@ def getSavedReserves():
     f.close()
     return reserves
 
+def getReserve(name):
+    for r in getSavedReserves():
+        if r.name == name:
+            return r
+    return None
 
-
-#Get reservations
-countries = []
-
-def save(name):
-    res = Reserve(name)
-    for tag in countries:
-        res.add(tag.tag)
-    if not os.path.isfile("savedreservationgames.txt"):
-        f = open("savedreservationgames.txt", "w")
-        f.write(res.getSaveText())
-        f.close()
-    else:
-        reservations = getSavedReserves()
-        for r in reservations:
-            if r.name == res.name:
-                reservations.remove(r)
-        reservations.append(res)
-        
-        text = ""
-        for r in reservations:
-            text += r.getSaveText()
-        f = open("savedreservationgames.txt", "w")
-        f.write(text)
-        f.close()
-
-#Separately:
-lastcommand = "null" #set this to "null" so it will go through the first loop
-
-while lastcommand != "":
-    print("------------------------------------------------------------------------------------------")
-    print("Current players list:")
-    if len(countries) == 0:
-        print("EMPTY")
-    else:
-        for x in countries:
-            #print("\n"+x.tag+ ": "+ x.player)
-            print(x.tag)
-    print("Do you want to make any changes?")
-    print("------------------------------------------------------------------------------------------")
-    print("Commands:")
-    #print("add TAG playername")
-    print("add COUNTRY/TAG        | Adds the given nation to the reserved list.")
-    print("remove COUNTRY/TAG     | Removes the given nation from the reserved list.")
-    print("load GAMENAME          | Loads a saved reservation list by name.")
-    print("save GAMENAME          | Saves a reservation list by name. (WARNING: overrides same name)")
-    print("list [GAMENAME]        | If a name is included, shows all tags in the saved list.")
-    print("                       | Otherwise, shows all saved list names.")
-    print("Press enter without any entries to finish. ")
-
-    lastcommand = input().strip("\n ")
-    clear()
-    print("> " + lastcommand)
-    if lastcommand.startswith("add "):
-        tag = EU4Lib.country(lastcommand.partition(" ")[2].strip("\t\n "))
-        #name = lastcommand.partition(" ")[2].partition(" ")[2].strip("\t\n ")
-        if tag == None:
-            print("Country not recognized. Please check spelling.")
-            continue
-        for x in countries:
-            if x.tag == tag: #Players are added later to the list as they join, so we remove all previous players
-                countries.remove(x)
-        #countries.append(Nation(name, tag))
-        countries.append(Nation(tag))
-        countries[len(countries)-1].tag = tag.upper().strip("\t \n")
-        #print("Added " + countries[len(countries)-1].tag + ": " + countries[len(countries)-1].player)
-        print("Added " + tag.upper())
-            
-    elif lastcommand.startswith("remove "):
-        tag = EU4Lib.country(lastcommand.partition(" ")[2].strip("\t\n "))
-        if tag == None:
-            print("Country not recognized. Please check spelling.")
-            continue
-        for nat in countries:
-            if nat.tag.upper().strip("\t \n") == tag.upper().strip("\t \n"):
-                countries.remove(nat)
-                print("Removed " + tag.upper())
-                break
-            elif countries[len(countries)-1] == nat: #This means we are on the last one and elif- it's still not on the list.
-                print("Did not recognize " + lastcommand + " as a reserved nation.")
-    
-    elif lastcommand.startswith("save "):
-        save(lastcommand.partition(" ")[2].strip("\t\n "))
-        print("Saved as " + lastcommand.partition(" ")[2].strip("\t\n "))
-
-    elif lastcommand.startswith("load "):
-        if not os.path.exists("savedreservationgames.txt"):
-            print("No saved games.")
+class ReserveChannel: #I should make this save
+    def __init__(self, id, resName):
+        self.id = id
+        self.resName = resName
+        self.textID = None
+        self.imgID = None
+    def setTextID(self, textID):
+        self.textID = textID
+    def getTextID(self):
+        return self.textID
+    def setImgID(self, imgID):
+        self.imgID = imgID
+    def getImgID(self):
+        return self.imgID
+    async def updateText(self):
+        reserve = getReserve(self.resName)
+        string = "Current players list:"
+        if reserve is None or len(reserve.tags) == 0:
+            string = string + "\n*It's so empty here...*"
         else:
-            reserves = getSavedReserves()
-            if len(reserves) == 0:
-                print("No saved games.")
-            else:
-                resName = lastcommand.partition(" ")[2].strip("\t\n ")
-                for res in reserves:
-                    if res.name == resName:
-                        countries = []
-                        for tag in res.tags:
-                            countries.append(Nation(tag))
-                        print("Loaded " + resName + ".")
-                        continue
-    
-    elif lastcommand.strip("\t\n ") == "list": # list with no arguments
-        if not os.path.exists("savedreservationgames.txt"):
-            print("No saved games.")
+            for x in reserve.tags:
+                string = string + "\n" + x[1] + ": " + x[0]
+        if self.textID is None:
+            self.setTextID((await client.get_channel(self.id).send(content=string)).id)
         else:
-            reserves = getSavedReserves()
-            if len(reserves) == 0:
-                print("No saved games.")
-            else:
-                print("Reservation lists:")
-                for res in reserves:
-                    print(res.name + " (" + str(len(res.tags)) + ")")
-    elif lastcommand.startswith("list "):
-        if not os.path.exists("savedreservationgames.txt"):
-            print("No saved games.")
-        else:
-            reserves = getSavedReserves()
-            if len(reserves) == 0:
-                print("No saved games.")
-            else:
-                resName = lastcommand.partition(" ")[2].strip("\t\n ")
-                found = False
-                for res in reserves:
-                    if res.name == resName:
-                        print("Reservations:")
-                        for tag in res.tags:
-                            print(tag)
-                        found = True
-                        break
-                if not found:
-                    print("That reservation list does not exist.")
+            await (await (await client.fetch_channel(self.id)).fetch_message(self.getTextID())).edit(content=string)
+    async def updateImg(self):
+        reserve = getReserve(self.resName)
+        if self.imgID is not None:
+            await (await (await client.fetch_channel(self.id)).fetch_message(self.getImgID())).delete()
+        self.setImgID((await client.get_channel(self.id).send(file=imageToFile(createMap(reserve)))).id)
 
-#Start Data Selection
-lines = srcFile.readlines()
-brackets = []
-print("Reading default data...")
-linenum = 0
-for line in lines:
-    linenum+=1
-    
-    if "{" in line:
-        if line.count("{") == line.count("}"):
-            continue
-        elif line.count("}") == 0 and line.count("{") == 1:
-            brackets.append(line.rstrip("\n "))
-        elif line.count("}") == 0 and line.count("{") > 1:
-            for x in range(line.count("{")):
-                brackets.append("{") #TODO: fix this so it has more
-        else:
-            print("Unexpected brackets at line #" + str(linenum) + ": " + line)
-        #print("{")
-    elif "}" in line:
-        try:
-            brackets.pop()
-        except IndexError:
-            print("No brackets to delete.")
-            print("Line", linenum, ":", line)
-        #print("}")
-    #Get rid of long, useless sections
-    elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
-        continue
-    elif len(brackets) > 1 and brackets[0] == "countries={":
-        for x in countries:
-            if x.tag in brackets[1]:
-                #Here we have all the stats for country x on the players list
-                if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
-                        x.capitalID = int(line.strip("\tcapitl=\n"))
-
-print("Finished extracting game data.")
-print("\nPlayer nations: "+ str(len(countries)))
-for x in countries:
-    #print("\n"+x.tag+ ": "+ x.player)
-    print(x.tag)
-
-#End Data Selection
-print("")
-#Start Map Creation
-print("Locating reserved nations...")
-imgX = Image.open("src//xIcon.png")
-for x in countries:
-    loc = EU4Lib.province(x.capitalID)
-    mapFinal.paste(imgX, (int(loc[0]-imgX.size[0]/2), int(loc[1]-imgX.size[1]/2)), imgX)
-    # I hope this doesn't break if a capital is too close to the edge
+channels = []
 
 
-print("Map editing done.")
-#End Map Creation
-mapFinal.show()
-print("Close image editor to save file... (Unfortunately this is necessary)")
-mapFinal.save("final.png", "PNG")
-#End Final Img Creation
 
-end = input("Done!") #Press enter to end
+
+# DISCORD CODE
+
+
+@client.event
+async def on_ready():
+    pass
+
+@client.event
+async def on_message(message):
+    if not message.author.bot: #and message.guild.id == serverID:
+        text = message.content.strip("\n\t ")
+        channelID = message.channel.id
+        await message.delete()
+        if (text.upper() == "$UPDATE"):
+            for channel in channels:
+                if channel.id == channelID:
+                    await channel.updateText()
+                    await channel.updateImg()
+                    break
+        elif (text.upper() == "$NEW"):
+            c = ReserveChannel(channelID, "abc")
+            await c.updateText()
+            await c.updateImg()
+            channels.append(c)
+        elif text.upper() == "$END":
+            for channel in channels:
+                if channel.id == channelID:
+                    channels.remove(channel)
+                    await client.get_channel(channelID).send("*Reservations are now ended. Good Luck.*")
+                
+
+client.run(token)
