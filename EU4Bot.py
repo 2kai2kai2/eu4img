@@ -69,13 +69,18 @@ class ReserveChannel:
             await (await (await client.fetch_channel(self.id)).fetch_message(self.getImgID())).delete()
         self.setImgID((await client.get_channel(self.id).send("[image]")).id)#file=imageToFile(EU4Reserve.createMap(reserve)))).id)
     async def add(self, nation): # nation should be EU4Reserve.Nation object
-        EU4Reserve.saveAdd(self.id, nation)
-        await self.updateText()
-        await self.updateImg()
+        addInt = EU4Reserve.saveAdd(self.id, nation)
+        if addInt == 1 or addInt == 2: # Success!
+            await self.updateText()
+            await self.updateImg()
+        elif addInt == 0: # This is not a reserve channel. How did this happen?
+            await sendUserMessage(client.get_user(int(nation.player.strip("\n\t <@>"))), "You can't reserve nations in " + client.get_channel(int(self.id)).mention + ".")
+        elif addInt == 3: # This nation is already taken
+            await sendUserMessage(client.get_user(int(nation.player.strip("\n\t <@>"))), "The nation " + EU4Lib.tagToName(nation.tag) + " is already reserved in " + client.get_channel(int(self.id)).mention + ".")
+        return addInt
     async def remove(self, tag): # tag should be nation tag str
         pass
     async def removePlayer(self, name): # name should be player name str
-        EU4Reserve.saveRemove(self.id, name)
         await self.updateText()
         await self.updateImg()
 
@@ -89,33 +94,35 @@ channels = []
 
 @client.event
 async def on_ready():
-    pass
+    print("EU4 Reserve Bot!")
+    print("Prefix: " + os.getenv("PREFIX") + "\n")
 
 @client.event
 async def on_message(message):
     if not message.author.bot:
         text = message.content.strip("\n\t ")
         channelID = message.channel.id
-        if (text.startswith(os.getenv("PREFIX"))):
+        prefix = os.getenv("PREFIX")
+        if (text.startswith(prefix)):
             user = message.author
             await message.delete()
-            if (text.upper() == "$UPDATE"):
+            if (text.upper() == prefix + "UPDATE"):
                 for channel in channels:
                     if channel.id == channelID:
                         await channel.updateText()
                         await channel.updateImg()
                         break
-            elif (text.upper() == "$NEW"):
+            elif (text.upper() == prefix + "NEW"):
                 c = ReserveChannel(channelID)
                 await c.updateText()
                 await c.updateImg()
                 channels.append(c)
-            elif text.upper() == "$END":
+            elif text.upper() == prefix + "END":
                 for channel in channels:
                     if channel.id == channelID:
                         channels.remove(channel)
                         await client.get_channel(channelID).send("*Reservations are now ended. Good Luck.*")
-            elif text.upper().startswith("$RESERVE "):
+            elif text.upper().startswith(prefix + "RESERVE "):
                 res = text.split(" ", 1)[1].strip("\n\t ")
                 for channel in channels:
                     if channel.id == channelID:
@@ -125,7 +132,7 @@ async def on_message(message):
                             await channel.add(EU4Reserve.Nation(user.mention, tag.upper()))
                         else:
                             await sendUserMessage(user, "Your country reservation in " + client.get_channel(channelID).mention + " was not recorded, as \"" + res + "\" was not recognized.")
-            elif text.upper() == "$DELRESERVE" or text.upper() == "$DELETERESERVE":
+            elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE":
                 for channel in channels:
                     if channel.id == channelID:
                         await channel.removePlayer(user.mention)

@@ -80,15 +80,37 @@ def writeNewReservation(id):
 
 def saveAdd(id, nation):
     reserves = getSavedReserves()
+    change = 0
+    # 0 = Failed; Reserve id not found (Should be rare)
+    # 1 = Success; New reservation
+    # 2 = Success; Replaced old reservation
+    # 3 = Failed; Nation taken by other
+    # 4 = Failed; Nation taken by same player (no notif)
     for r in reserves:
         if r.name == str(id):
+            change = 1 # 1 - unless changed
+            for nat in r.nations: #Go through delete reservation if already reserved
+                if nat.tag == nation.tag:
+                    if nat.player == nation.player:
+                        return 4 # 4 - No changes
+                    else:
+                        return 3 # 3 - No changes
+            for nat in r.nations: #Go through delete reservation if already reserved
+                if nat.player == nation.player:
+                    r.nations.remove(nat)
+                    change = 2 # 2
+            #Then add the reservation
             r.add(nation)
+            break # There should only be 1 of the same id
+    if change == 0:
+        return 0 # 0 - If nothing happened, no need to rewrite
     text = ""
     for r in reserves:
         text += r.getSaveText()
     f = open("savedreservationgames.txt", "w")
     f.write(text)
     f.close()
+    return change
 
 def saveRemove(id, user):
     reserves = getSavedReserves()
