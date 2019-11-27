@@ -1,1 +1,1 @@
-python EU4img.py
+python EU4Bot.py

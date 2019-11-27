@@ -16,6 +16,16 @@ def country(text):
     # text is unknown
     return None
 
+def tagToName(tag):
+    srcFile = open("src\\countries_l_english.yml")
+    lines = srcFile.readlines()
+    srcFile.close
+    if len(tag) == 3:
+        for line in lines:
+            if line[1:4] == tag.upper():
+                return line[8:].split("\"", 1)[0].strip("\" \t\n")
+    return None
+
 def province(id):
     srcFile = open("src\\positions.txt", "r")
     lines = srcFile.readlines()
