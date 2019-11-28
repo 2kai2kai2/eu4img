@@ -35,6 +35,46 @@ async def sendUserMessage(user, message): # user can be id, User object. message
     await u.dm_channel.send(message)
     print("Sent message \"" + message + "\" to " + user.mention + ".")
 
+def getRoleFromStr(server, roleName):
+    # Get server object
+    s = None
+    if isinstance(server, str) or isinstance(server, int):
+        s = client.get_guild(int(server))
+    elif isinstance(server, discord.Guild):
+        s = server
+    else: 
+        print("ERROR: Could not find discord server get role.")
+    for role in s.roles:
+        if role.name.strip("\n\t @").lower() == roleName.strip("\n\t @").lower():
+            return role
+    return None
+
+def checkResAdmin(server, user): # Both can be int id or object
+    # Get server object
+    s = None
+    if isinstance(server, str) or isinstance(server, int):
+        s = client.get_guild(int(server))
+    elif isinstance(server, discord.Guild):
+        s = server
+    else: 
+        print("ERROR: Could not find discord server to check for admin.")
+        return False
+    # Get member object
+    u = None
+    if isinstance(user, str) or isinstance(user, int): # id
+        u = s.get_member(int(user))
+    elif isinstance(user, discord.User):
+        u = s.get_member(user.id)
+    elif isinstance(user, discord.Member):
+        u = user
+    else:
+        print("ERROR: Could not find discord user to check for admin.")
+        print(user)
+        return False #pass uh something went wrong.. false i guess?
+    #OK now check
+    return getRoleFromStr(s, os.getenv("MIN_ADMIN")) <= u.top_role
+
+
 class ReserveChannel:
     def __init__(self, id):
         self.id = id
@@ -105,24 +145,27 @@ async def on_message(message):
         prefix = os.getenv("PREFIX")
         if (text.startswith(prefix)):
             user = message.author
-            await message.delete()
             if (text.upper() == prefix + "UPDATE"):
                 for channel in channels:
-                    if channel.id == channelID:
+                    if channel.id == channelID and checkResAdmin(message.guild, user):
+                        await message.delete()
                         await channel.updateText()
                         await channel.updateImg()
                         break
-            elif (text.upper() == prefix + "NEW"):
+            elif (text.upper() == prefix + "NEW") and checkResAdmin(message.guild, user):
+                await message.delete()
                 c = ReserveChannel(channelID)
                 await c.updateText()
                 await c.updateImg()
                 channels.append(c)
-            elif text.upper() == prefix + "END":
+            elif text.upper() == prefix + "END" and checkResAdmin(message.guild, user):
+                await message.delete()
                 for channel in channels:
                     if channel.id == channelID:
                         channels.remove(channel)
                         await client.get_channel(channelID).send("*Reservations are now ended. Good Luck.*")
             elif text.upper().startswith(prefix + "RESERVE "):
+                await message.delete()
                 res = text.split(" ", 1)[1].strip("\n\t ")
                 for channel in channels:
                     if channel.id == channelID:
@@ -133,9 +176,14 @@ async def on_message(message):
                         else:
                             await sendUserMessage(user, "Your country reservation in " + client.get_channel(channelID).mention + " was not recorded, as \"" + res + "\" was not recognized.")
             elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE":
+                await message.delete()
                 for channel in channels:
                     if channel.id == channelID:
                         await channel.removePlayer(user.mention)
+            else:
+                for channel in channels:
+                    if channel.id == channelID:
+                        await message.delete()
         else:
             for i in channels:
                 if i.id == channelID:
