@@ -58,6 +58,27 @@ async def inquiryFile(user, message, type, repeat):
     file.seek(0)
     return file
 
+async def inquiryFileOrStr(user, message, type):
+    await sendUserMessage(user, message)
+    async def check(m):
+        if m.channel == user.dm_channel and not m.author.bot:
+            if len(m.attachments) > 0 and m.attachments[0].filename.endswith(type):
+                return True
+            elif len(m.content) > 0:
+                return True
+            else:
+                await sendUserMessage(user, "Please include a string or file of the type " + type)
+        return False
+    message = await client.wait_for('message', timeout=300.0, check=check)
+    if len(message.attachments) > 0 and message.attachments[0].filename.endswith(type):
+        file = BytesIO()
+        await client.wait_until_ready()
+        await message.attachments[0].save(file)
+        file.seek(0)
+        return file
+    else:
+        return message.content
+
 def getRoleFromStr(server, roleName):
     # Get server object
     s = None
@@ -544,21 +565,25 @@ async def on_message(message):
                         await channel.removePlayer(user.mention)
             elif text.upper() == prefix + "STATS" and checkResAdmin(message.guild, user):
                 await message.delete()
-                saveURL = await inquiryStr(user, "Send a direct link to an uncompressed .eu4 save file:\nYou can do this by uploading to https://www.filesend.jp/l/en-US/ \n then right clicking on the DOWNLOAD to Copy Link Address.")
-                if saveURL is None:
-                    sendUserMessage(user, "Inquiry timed out. If you still want to post stats, please try again.")
-                    return
-                response = requests.get(saveURL)
-                if not response.status_code == requests.codes.OK:
-                    while True:
-                        saveURL = await inquiryStr(user, "Something went wrong. Please try a different link.")
-                        if saveURL is None:
-                            sendUserMessage(user, "Inquiry timed out. If you still want to post stats, please try again.")
-                            return
-                        response = requests.get(saveURL)
-                        if response.status_code == requests.codes.OK:
-                            break
-                saveFile = StringIO(response.content.decode('ansi'))
+                saveIn = await inquiryFileOrStr(user, "Send EITHER an uncompressed .eu4 save file\nor a direct link to an uncompressed .eu4 save file:\nYou can do this by uploading to https://www.filesend.jp/l/en-US/ \n then right clicking on the DOWNLOAD to Copy Link Address.", ".eu4")
+                if isinstance(saveIn, str):
+                    saveURL = saveIn
+                    if saveURL is None:
+                        sendUserMessage(user, "Inquiry timed out. If you still want to post stats, please try again.")
+                        return
+                    response = requests.get(saveURL)
+                    if not response.status_code == requests.codes.OK:
+                        while True:
+                            saveURL = await inquiryStr(user, "Something went wrong. Please try a different link.")
+                            if saveURL is None:
+                                sendUserMessage(user, "Inquiry timed out. If you still want to post stats, please try again.")
+                                return
+                            response = requests.get(saveURL)
+                            if response.status_code == requests.codes.OK:
+                                break
+                    saveFile = StringIO(response.content.decode('ansi'))
+                else: # It's a BytesIO()
+                    saveFile = StringIO(saveIn.getvalue().decode('ansi'))
                 politicalFile = await inquiryFile(user, "Send the Political Mapmode screenshot in this channel (png):", ".png", True)
                 if politicalFile is None:
                     sendUserMessage(user, "Inquiry timed out. If you still want to post stats, please try again.")
