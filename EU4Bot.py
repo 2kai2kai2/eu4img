@@ -107,7 +107,7 @@ class ReserveChannel:
             reserve = EU4Reserve.Reserve(str(self.id))
         if self.imgID is not None:
             await (await (await client.fetch_channel(self.id)).fetch_message(self.getImgID())).delete()
-        self.setImgID((await client.get_channel(self.id).send("[image]")).id)#file=imageToFile(EU4Reserve.createMap(reserve)))).id)
+        self.setImgID((await client.get_channel(self.id).send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
     async def add(self, nation): # nation should be EU4Reserve.Nation object
         addInt = EU4Reserve.saveAdd(self.id, nation)
         if addInt == 1 or addInt == 2: # Success!
@@ -188,6 +188,11 @@ async def on_message(message):
             for i in channels:
                 if i.id == channelID:
                     await message.delete()
-                
+
+@client.event
+async def on_guild_channel_delete(channel):
+    for c in channels:
+        if c.id == channel.id:
+            channels.remove(c)
 
 client.run(token)
