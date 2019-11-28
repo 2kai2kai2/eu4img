@@ -32,11 +32,12 @@ async def sendUserMessage(user, message): # user can be id, User object. message
         return #pass uh something went wrong
     if u.dm_channel is None:
         await u.create_dm()
-    await u.dm_channel.send(message)
-    print("Sent message \"" + message + "\" to " + user.mention + ".")
+    msg = await u.dm_channel.send(message)
+    return msg
 
 async def inquiryStr(user, message):
-    await sendUserMessage(user, message)
+    if message is not None:
+        await sendUserMessage(user, message)
     def check(m):
         return m.channel == user.dm_channel and not m.author.bot
     return (await client.wait_for('message', timeout=300.0, check=check)).content
@@ -52,6 +53,7 @@ async def inquiryFile(user, message, type, repeat):
         return False
     file = BytesIO()
     message = await client.wait_for('message', timeout=180.0, check=check)
+    await client.wait_until_ready()
     await message.attachments[0].save(file)
     file.seek(0)
     return file
@@ -177,6 +179,12 @@ async def runStats(srcFile, imgPolitical, imgPlayers, user):
     lines = srcFile.readlines()
     brackets = []
     playersEditReady = False #so that we can tell if we have scanned through all the players yet or not
+    def promptStr():
+        prompt = "**Current players list:**```"
+        for x in countries:
+            prompt += "\n"+x.tag+ ": "+ x.player
+        prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nadd TAG playername\nremove TAG**\n"
+        return prompt
     #Reading save file...
     linenum = 0
     for line in lines:
@@ -185,23 +193,19 @@ async def runStats(srcFile, imgPolitical, imgPlayers, user):
         if playersEditReady == True and not brackets == ["players_countries={"]:
             #Data corrections
             playersEditReady = False #don't do it over and over again
-            lastcommand = "null" #set this to "null" so it will go through the first loop
-            lastResponse = "Current players list:"
-            for x in countries:
-                lastResponse += "\n"+x.tag+ ": "+ x.player
-            lastResponse += "\nDo you want to make any changes?\nType 'done' to finish. Commands:\nadd TAG playername\nremove TAG\n"
-
-
+            msg = await sendUserMessage(user, promptStr())
+            lastcommand = "null"
             while lastcommand != "done":
-                lastcommand = (await inquiryStr(user, lastResponse)).strip("\n ")
+                await msg.edit(content=promptStr())
+                lastcommand = (await inquiryStr(user, None)).strip("\n ")
                 if lastcommand is None:
-                    sendUserMessage(user, "Response timed out. Please try again if you want to continue.")
+                    await sendUserMessage(user, "Response timed out. Please try again if you want to continue.")
                     return
                 if lastcommand.startswith("add "):
                     tag = lastcommand.partition(" ")[2].partition(" ")[0].strip("\t\n ")
                     name = lastcommand.partition(" ")[2].partition(" ")[2].strip("\t\n ")
                     if len(tag) != 3:
-                        lastResponse = "Tag length is incorrect. Canceling action."
+                        await sendUserMessage(user, "Tag length is incorrect. Canceling action.")
                         continue
                     for x in countries:
                         if x.tag == tag: #Players are added later to the list as they join, so we remove all previous players
@@ -209,21 +213,19 @@ async def runStats(srcFile, imgPolitical, imgPlayers, user):
                     countries.append(Nation(name))
                     countries[len(countries)-1].tag = tag.upper().strip("\t \n")
                     playertags.append(tag.upper().strip("\t \n"))
-                    lastResponse = "Added " + countries[len(countries)-1].tag + ": " + countries[len(countries)-1].player
                     
                 elif lastcommand.startswith("remove "):
                     tag = lastcommand.partition(" ")[2].strip("\t\n ")
                     if len(tag) != 3:
-                        lastResponse = "Tag length is incorrect. Canceling action."
+                        await sendUserMessage(user, "Tag length is incorrect. Canceling action.")
                         continue
                     for nat in countries:
                         if nat.tag.upper().strip("\t \n") == tag.upper().strip("\t \n"):
                             countries.remove(nat)
                             playertags.remove(nat.tag)
-                            lastResponse = "Removed " + tag.upper()
                             break
                         elif countries[len(countries)-1] == nat: #This means we are on the last one and elif- it's still not on the list.
-                            lastResponse = "Did not recognize " + tag.upper() + " as a played nation."
+                            await sendUserMessage(user,"Did not recognize " + tag.upper() + " as a played nation.")
         #Now the actual stuff
 
         if "{" in line:
@@ -364,6 +366,7 @@ async def runStats(srcFile, imgPolitical, imgPlayers, user):
     countries.sort(key=lambda x: x.development, reverse=True)
 
     #End Data Selection
+    await sendUserMessage(user, "**Processing...**")
     #Start Map Creation
     mapDraw = ImageDraw.Draw(mapFinal)
     for x in range(mapFinal.size[0]):
@@ -407,7 +410,7 @@ async def runStats(srcFile, imgPolitical, imgPlayers, user):
             fontbig = ImageFont.load_default()
     imgDraw = ImageDraw.Draw(imgFinal)
     #================MULTIPLAYER================#
-    if mp == True:
+    if True:#mp == True:
         #Players section from (20,30) to (4710, 1100) half way is x=2345
         #So start with yborder = 38, yheight = 128 for each player row. x just make it half or maybe thirds depending on how it goes
         for nat in countries:
@@ -539,7 +542,7 @@ async def on_message(message):
                 for channel in channels:
                     if channel.id == channelID:
                         await channel.removePlayer(user.mention)
-            elif text.upper() == prefix + "STATS":
+            elif text.upper() == prefix + "STATS" and checkResAdmin(message.guild, user):
                 await message.delete()
                 saveURL = await inquiryStr(user, "Send a direct link to an uncompressed .eu4 save file:\nYou can do this by uploading to https://www.filesend.jp/l/en-US/ \n then right clicking on the DOWNLOAD to Copy Link Address.")
                 if saveURL is None:
