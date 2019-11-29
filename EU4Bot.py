@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
+from random import shuffle
 from io import BytesIO, StringIO
 import EU4Lib, EU4Reserve
 import discord, requests
@@ -97,7 +98,7 @@ class ReserveChannel(AbstractChannel):
         self.imgID = None
         EU4Reserve.writeNewReservation(self.interactChannel.id)
     async def responsive(self, message):
-        return message.channel == self.interactChannel and message.content.startswith(prefix)
+        return message.channel == self.interactChannel
     async def process(self, message):
         text = message.content.strip("\n\t ")
         if text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author):
@@ -120,6 +121,8 @@ class ReserveChannel(AbstractChannel):
         elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE":
             await self.removePlayer(message.author.mention)
             await message.delete()
+        else:
+            await message.delete()
     def setTextID(self, textID):
         self.textID = textID
     def getTextID(self):
@@ -130,7 +133,7 @@ class ReserveChannel(AbstractChannel):
         return self.imgID
     async def updateText(self):
         reserve = EU4Reserve.getReserve(str(self.interactChannel.id))
-        string = "Current players list:"
+        string = "How to reserve: " + prefix + "reserve [nation]\nTo unreserve: " + prefix + "delreserve\n**Current players list:**"
         if reserve is None or len(reserve.nations) == 0:
             string = string + "\n*It's so empty here...*"
         else:
@@ -549,11 +552,95 @@ class statsChannel(AbstractChannel):
                         break
                     elif self.game.countries[len(self.game.countries)-1] == nat: #This means we are on the last one and elif- it's still not on the list.
                         await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
-        
-    
-    
 
+class asiReserve:
+    def __init__(self, user):
+        self.user = user
+        self.picks = None
 
+class asiresChannel(AbstractChannel): # This is custom for my discord group. Anybody else can ignore it or do what you will.
+    def __init__(self, user, initChannel):
+        self.user = None
+        self.interactChannel = initChannel
+        self.displayChannel = initChannel
+        self.textID = None
+        self.reserves = []
+    async def responsive(self, message):
+        return message.channel == self.interactChannel
+    async def process(self, message):
+        text = message.content.strip("\n\t ")
+        if text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author):
+            await message.delete()
+            await self.updateText()
+        elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author):
+            await message.delete()
+            finalReserves = [] # List of EU4Reserve.Nation objects
+            shuffle(self.reserves)
+            for res in self.reserves:
+                finaltag = None
+                for tag in res.picks:
+                    for x in finalReserves:
+                        if x.tag.upper() == tag.upper():
+                            break
+                    else: # This means they get this tag
+                        finaltag = tag
+                        break
+                finalReserves.append(EU4Reserve.Nation(res.user.mention, finaltag))
+            # At this point the finalReserves list is complete with all finished reserves. If a player had no reserves they could take, their tag is None
+            string = "**Reserves are finished. The following are the draft order:**"
+            count = 1
+            for res in finalReserves:
+                if res.tag is None:
+                    string += "\n" + str(count) + " " + res.player + ": *[all taken]*"
+                else:
+                    string += "\n" + str(count) + " " + res.player + ": " + EU4Lib.tagToName(res.tag)
+                count += 1
+            await self.displayChannel.send(string)
+            # aaand we're done!
+            interactions.remove(self)
+            del(self)
+        elif text.upper().startswith(prefix + "RESERVE "):
+            await self.add(message.author, text.split(" ", 1)[1].strip("\n\t "))
+            await message.delete()
+            await self.updateText()
+        elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE":
+            await self.remove(message.author)
+            await message.delete()
+            await self.updateText()
+        else:
+            await message.delete()
+    async def updateText(self):
+        string = "How to reserve: " + prefix + "reserve [nation1], [nation2], [nation3]\nTo unreserve: " + prefix + "delreserve\n**Current players list:**"
+        if len(self.reserves) == 0:
+            string += "\n*It's so empty here...*"
+        else:
+            for x in self.reserves:
+                string += "\n" + x.user.mention + ": " + EU4Lib.tagToName(x.picks[0]) + ", " + EU4Lib.tagToName(x.picks[1]) + ", " + EU4Lib.tagToName(x.picks[2])
+        if self.textID is None:
+            self.textID = (await self.displayChannel.send(content=string)).id
+        else:
+            await (await (self.displayChannel).fetch_message(self.textID)).edit(content=string)
+    async def remove(self, user):
+        for res in self.reserves:
+            if res.user == user:
+                self.reserves.remove(res)
+    async def add(self, user, text):
+        picks = text.split(",")
+        if not len(picks) == 3:
+            await sendUserMessage(user, "Your reserve in " + self.interactChannel.mention + " needs to be 3 elements in the format 'a,b,c'")
+            return
+        tags = []
+        for pick in picks:
+            tag = EU4Lib.country(pick.strip("\n\t "))
+            if tag is not None:
+                tags.append(tag)
+            else:
+                await sendUserMessage(user, "Your reservation of " + pick.strip("\n\t ") + " in " + self.interactChannel.mention + " was not a recognized nation.")
+                return
+        res = asiReserve(user)
+        res.picks = tags
+        await self.remove(user)
+        self.reserves.append(res)
 
 #Start Data Selection
 
@@ -584,6 +671,11 @@ async def on_message(message):
             elif text.upper() == prefix + "STATS" and checkResAdmin(message.guild, message.author):
                 interactions.append(await statsChannel(message.author, message.channel).asyncInit())
                 await message.delete()
+            elif text.upper() == prefix + "NEWASI" and checkResAdmin(message.guild, message.author):
+                c = asiresChannel(message.guild, message.channel)
+                await message.delete()
+                await c.updateText()
+                interactions.append(c)
 
 @client.event
 async def on_guild_channel_delete(channel):
