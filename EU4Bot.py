@@ -101,16 +101,16 @@ class ReserveChannel(AbstractChannel):
         return message.channel == self.interactChannel
     async def process(self, message):
         text = message.content.strip("\n\t ")
-        if text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author):
+        if text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author): # UPDATE
             await message.delete()
             await self.updateText()
             await self.updateImg()
-        elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author):
+        elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author): # END
             await message.delete()
             await self.displayChannel.send("*Reservations are now ended. Good Luck.*")
             interactions.remove(self)
             del(self)
-        elif text.upper().startswith(prefix + "RESERVE "):
+        elif text.upper().startswith(prefix + "RESERVE "): # RESERVE [nation]
             res = text.split(" ", 1)[1].strip("\n\t ")
             tag = EU4Lib.country(res)
             if tag is not None:
@@ -118,8 +118,25 @@ class ReserveChannel(AbstractChannel):
             else:
                 await sendUserMessage(message.author, "Your country reservation in " + self.displayChannel.mention + " was not recorded, as \"" + res + "\" was not recognized.")
             await message.delete()
-        elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE":
+        elif text.upper().startswith(prefix + "ADMRES") and checkResAdmin(message.guild, message.author): # ADMRES [nation] @[player]
+            if len(message.mentions) == 1:
+                res = text.split(" ", 1)[1].replace(message.mentions[0].mention, "").strip("\n\t ")
+                tag = EU4Lib.country(res)
+                if tag is not None:
+                    await self.add(EU4Reserve.Nation(message.mentions[0].mention, tag.upper()))
+                else:
+                    await sendUserMessage(message.author, "Your reservation for " + message.mentions[0].mention + " in " + self.displayChannel.mention + " was not recorded, as \"" + res + "\" was not recognized.")
+            else:
+                await sendUserMessage(message.author, "Your reservation in " + self.displayChannel.mention + " needs to @ a player.")
+            await message.delete()
+        elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE": # DELRESERVE
             await self.removePlayer(message.author.mention)
+            await message.delete()
+        elif text.upper().startswith(prefix + "ADMDELRES") and checkResAdmin(message.guild, message.author): # ADMDELRES @[player]
+            if len(message.mentions) == 1:
+                await self.removePlayer(message.mentions[0].mention)
+            else:
+                await sendUserMessage(message.author, "Your deletion of a reservation in " + self.displayChannel.mention + " needs to @ a player.")
             await message.delete()
         else:
             await message.delete()
@@ -569,10 +586,10 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         return message.channel == self.interactChannel
     async def process(self, message):
         text = message.content.strip("\n\t ")
-        if text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author):
+        if text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author): # UPDATE
             await message.delete()
             await self.updateText()
-        elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author):
+        elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author): # END
             await message.delete()
             finalReserves = [] # List of EU4Reserve.Nation objects
             shuffle(self.reserves)
@@ -600,13 +617,38 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
             interactions.remove(self)
             del(self)
         elif text.upper().startswith(prefix + "RESERVE "):
-            await self.add(message.author, text.split(" ", 1)[1].strip("\n\t "))
+            await self.add(message.author, text.split(" ", 1)[1].strip("\n\t ")) # RESERVE [nation1], [nation2], [nation3]
             await message.delete()
             await self.updateText()
-        elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE":
+        elif text.upper().startswith(prefix + "ADMRES") and checkResAdmin(message.guild, message.author): # ADMRES [nation1], [nation2], [nation3] @[player]
+            if len(message.mentions) == 1:
+                res = text.split(" ", 1)[1].strip("\n\t ").replace(message.mentions[0].mention, "")
+                picks = res.split(",")
+                if not len(picks) == 3:
+                    await sendUserMessage(message.author, "Your reserve in " + self.interactChannel.mention + " for " + message.mentions[0].mention + " needs to be 3 elements in the format 'a,b,c'")
+                    await message.delete()
+                    return
+                for pick in picks:
+                    if EU4Lib.country(pick.strip("\n\t ")) is None:
+                        await sendUserMessage(message.author, "Your reservation of " + pick.strip("\n\t ") + " in " + self.interactChannel.mention + " for " + message.mentions[0].mention + " was not a recognized nation.")
+                        await message.delete()
+                        return
+                await self.add(message.mentions[0], res) # at this point the reservation should be valid, because otherwise add will send the faliure to the target.
+                await self.updateText()
+            else:
+                await sendUserMessage(message.author, "Your reservation in " + self.displayChannel.mention + " needs to @ a player.")
+            await message.delete()
+        elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE": # DELRESERVE
             await self.remove(message.author)
             await message.delete()
             await self.updateText()
+        elif text.upper().startswith(prefix + "ADMDELRES") and checkResAdmin(message.guild, message.author): # ADMDELRES @[player]
+            if len(message.mentions) == 1:
+                await self.remove(message.mentions[0].mention)
+                await self.updateText()
+            else:
+                await sendUserMessage(message.author, "Your deletion of a reservation in " + self.displayChannel.mention + " needs to @ a player.")
+            await message.delete()
         else:
             await message.delete()
     async def updateText(self):
@@ -662,7 +704,16 @@ async def on_message(message):
                 await interaction.process(message)
                 return
         if (text.startswith(prefix)):
-            if (text.upper() == prefix + "NEW") and checkResAdmin(message.guild, message.author):
+            if text.upper() == prefix + "HELP":
+                stringHelp = "__**Command help:**__"
+                stringHelp += "\n**" + prefix + "HELP**\nGets you this information!"
+                if checkResAdmin(message.guild, message.author): # Here we send info about commands only for admins
+                    stringHelp += "\n**" + prefix + "NEW**\nTurns the text channel into a reservation channel\n(more commands within that; use this command in it for info)"
+                    stringHelp += "\n**" + prefix + "STATS**\nCreates a eu4 stats image in the channel.\nUses DMs to gather the necessary files for creation."
+                    stringHelp += "\n**" + prefix + "NEWASI**\nTurns the text channel into a ASI reservation channel\nThis is specific to my discord."
+                await message.delete()
+                await sendUserMessage(message.author, stringHelp)
+            elif (text.upper() == prefix + "NEW") and checkResAdmin(message.guild, message.author):
                 c = ReserveChannel(message.author, message.channel)
                 await message.delete()
                 await c.updateText()
