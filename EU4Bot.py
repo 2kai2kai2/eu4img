@@ -91,6 +91,9 @@ class AbstractChannel(ABC):
     @abstractmethod
     async def msgdel(self, msgID):
         pass
+    @abstractmethod
+    async def userdel(self, user):
+        pass
 
 class ReserveChannel(AbstractChannel):
     def __init__(self, user, initChannel):
@@ -196,9 +199,9 @@ class ReserveChannel(AbstractChannel):
     async def remove(self, tag): # tag should be nation tag str
         pass
     async def removePlayer(self, name): # name should be player name str
-        EU4Reserve.saveRemove(self.interactChannel.id, name)
-        await self.updateText()
-        await self.updateImg()
+        if EU4Reserve.saveRemove(self.interactChannel.id, name): # If it did anything
+            await self.updateText()
+            await self.updateImg()
     async def msgdel(self, msgID):
         if msgID == self.textID:
             self.textID = None
@@ -210,6 +213,9 @@ class ReserveChannel(AbstractChannel):
             if reserve is None:
                 reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
+    async def userdel(self, user): # user is a Member object
+        if (hasattr(self.displayChannel, 'guild') and self.displayChannel.guild == user.guild) or (hasattr(self.interactChannel, 'guild') and self.interactChannel.guild == user.guild):
+            await self.removePlayer(user)
     
 class Nation:
     def __init__(self, player):
@@ -627,6 +633,17 @@ class statsChannel(AbstractChannel):
                         await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
     async def msgdel(self, msgID):
         pass
+    async def userdel(self, user):
+        if user == self.user:
+            try:
+                await self.interactChannel.send("You left the " + self.displayChannel.guild.name + " discord server, so this interaction is cancelled.")
+            except: # This means the account was deleted. Oh well.
+                pass
+            interactions.remove(self)
+            del(self)
+
+
+
 class asiReserve:
     def __init__(self, user):
         self.user = user
@@ -756,6 +773,9 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         if msgID == self.textID:
             self.textID = None
             await self.updateText()
+    async def userdel(self, user):
+        await self.remove(user)
+        await self.updateText()
 
 #Start Data Selection
 
@@ -809,8 +829,27 @@ async def on_guild_channel_delete(channel):
             del(c)
 
 @client.event
+async def on_private_channel_delete(channel):
+    for c in interactions:
+        if c.displayChannel == channel or c.interactChannel == channel:
+            interactions.remove(c)
+            del(c)
+
+@client.event
 async def on_raw_message_delete(payload):
     for c in interactions:
         await c.msgdel(payload.message_id)
+
+@client.event
+async def on_member_remove(member):
+    for c in interactions:
+        await c.userdel(member)
+
+@client.event
+async def on_guild_remove(guild):
+    for c in interactions:
+        if (hasattr(c.displayChannel, 'guild') and c.displayChannel.guild == guild) or (hasattr(c.interactChannel, 'guild') and c.interactChannel.guild == guild):
+            interactions.remove(c)
+            del(c)
 
 client.run(token)

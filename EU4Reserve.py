@@ -114,15 +114,18 @@ def saveAdd(id, nation):
 
 def saveRemove(id, user):
     reserves = getSavedReserves()
+    change = False
     for r in reserves:
         if r.name == str(id):
             r.removePlayer(user)
+            change = True
     text = ""
     for r in reserves:
         text += r.getSaveText()
     f = open("savedreservationgames.txt", "w")
     f.write(text)
     f.close()
+    return change
 
 
 #Start Data Selection
