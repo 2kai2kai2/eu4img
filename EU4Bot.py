@@ -395,6 +395,8 @@ class statsChannel(AbstractChannel):
             if x.development == 0:
                 self.game.playertags.remove(x.tag)
                 self.game.countries.remove(x)
+        if self.game.GP == [] or self.game.date == None or self.game.age == None: # These signify that it's probably not a valid save file.
+            raise Exception("This probably isn't a valid .eu4 uncompressed save file from " + self.user.mention)
         #Sort Data:
         self.game.countries.sort(key=lambda x: x.development, reverse=True)
     async def generateImage(self):
@@ -533,31 +535,54 @@ class statsChannel(AbstractChannel):
     async def process(self, message):
         if self.saveFile is None:
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".eu4"):
-                self.saveFile = StringIO()
-                await message.attachments[0].save(self.saveFile)
-                #saveFile = StringIO(message.attachments[0].getvalue().decode('ansi'))
+                try:
+                    self.saveFile = StringIO((await message.attachments[0].read()).decode('ansi'))
+                except UnicodeError as error:
+                    await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the ANSI encoding.\n**Please try another file or change the file's encoding and try again.**")
+                    self.saveFile = None
+                    return
             else: #str
                 saveURL = message.content.strip("\n\t ")
                 response = requests.get(saveURL)
                 if response.status_code == 200: #200 == requests.codes.ok
-                    self.saveFile = StringIO(response.content.decode('ansi'))
+                    try:
+                        self.saveFile = StringIO(response.content.decode('ansi'))
+                    except UnicodeError as error:
+                        await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the ANSI encoding.\n**Please try another file or change the file's encoding and try again.**")
+                        self.saveFile = None
+                        return
                 else:
                     await self.interactChannel.send("Something went wrong. Please try a different link.")
                     return
-            await self.interactChannel.send("Recieved save file. Processing...")
-            await self.readFile()
+            await self.interactChannel.send("**Recieved save file. Processing...**")
+            try:
+                await self.readFile()
+            except:
+                await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Is it uncompressed?\n**Please try another file.**")
+                self.saveFile = None
+                return
             await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
         elif (self.saveFile is not None) and (self.politicalImage is None):
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".png"):
                 politicalFile = BytesIO()
                 await message.attachments[0].save(politicalFile)
                 self.politicalImage = Image.open(politicalFile)
+                if self.politicalImage.size != (5632, 2048):
+                    await self.interactChannel.send("**Your image was not the right size.** (5632, 2048)\nDid you submit a Political Mapmode screenshot? (f10)\n**Please try another image.**")
+                    self.politicalImage = None
+                    return
                 self.modMsg = await self.interactChannel.send(self.modPromptStr())
         elif (self.saveFile is not None) and (self.politicalImage is not None) and (not self.doneMod):
             if message.content.strip("\n\t ") == "done":
                 self.doneMod == True
-                await self.displayChannel.send(file = imageToFile(await self.generateImage()))
-                await self.interactChannel.send("**Image posted to " + self.displayChannel.mention + "**")
+                try:
+                    await self.displayChannel.send(file = imageToFile(await self.generateImage()))
+                except:
+                    await self.interactChannel.send("**Image generation failed!**\nPerhaps something was wrong with one of the files?\n**Try " + prefix + "stats again after checking that the files are valid and unchanged from their creation.**")
+                else:
+                    await self.interactChannel.send("**Image posted to " + self.displayChannel.mention + "**")
+                interactions.remove(self)
+                del(self)
             #elif message.content.strip("\n\t ").startswith("add "):
             #    tag = message.content.strip("\n\t ").partition(" ")[2].partition(" ")[0].strip("\t\n ")
             #    name = message.content.strip("\n\t ").partition(" ")[2].partition(" ")[2].strip("\t\n ")
