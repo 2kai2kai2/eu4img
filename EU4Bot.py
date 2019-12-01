@@ -88,6 +88,9 @@ class AbstractChannel(ABC):
     @abstractmethod
     async def process(self, message):
         pass
+    @abstractmethod
+    async def msgdel(self, msgID):
+        pass
 
 class ReserveChannel(AbstractChannel):
     def __init__(self, user, initChannel):
@@ -166,7 +169,8 @@ class ReserveChannel(AbstractChannel):
             reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
         if self.imgID is not None:
             await (await self.interactChannel.fetch_message(self.getImgID())).delete()
-        self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
+        else:
+            self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
     async def add(self, nation): # nation should be EU4Reserve.Nation object
         addInt = EU4Reserve.saveAdd(self.interactChannel.id, nation)
         if addInt == 1 or addInt == 2: # Success!
@@ -183,6 +187,17 @@ class ReserveChannel(AbstractChannel):
         EU4Reserve.saveRemove(self.interactChannel.id, name)
         await self.updateText()
         await self.updateImg()
+    async def msgdel(self, msgID):
+        if msgID == self.textID:
+            self.textID = None
+            await self.updateText()
+            await (await self.interactChannel.fetch_message(self.getImgID())).delete()
+        if msgID == self.imgID:
+            self.imgID = None
+            reserve = EU4Reserve.getReserve(str(self.interactChannel.id))
+            if reserve is None:
+                reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
+            self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
     
 class Nation:
     def __init__(self, player):
@@ -569,7 +584,8 @@ class statsChannel(AbstractChannel):
                         break
                     elif self.game.countries[len(self.game.countries)-1] == nat: #This means we are on the last one and elif- it's still not on the list.
                         await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
-
+    async def msgdel(self, msgID):
+        pass
 class asiReserve:
     def __init__(self, user):
         self.user = user
@@ -683,6 +699,10 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         res.picks = tags
         await self.remove(user)
         self.reserves.append(res)
+    async def msgdel(self, msgID):
+        if msgID == self.textID:
+            self.textID = None
+            await self.updateText()
 
 #Start Data Selection
 
@@ -734,5 +754,10 @@ async def on_guild_channel_delete(channel):
         if c.displayChannel == channel or c.interactChannel == channel:
             interactions.remove(c)
             del(c)
+
+@client.event
+async def on_raw_message_delete(payload):
+    for c in interactions:
+        await c.msgdel(payload.message_id)
 
 client.run(token)
