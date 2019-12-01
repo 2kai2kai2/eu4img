@@ -104,7 +104,19 @@ class ReserveChannel(AbstractChannel):
         return message.channel == self.interactChannel
     async def process(self, message):
         text = message.content.strip("\n\t ")
-        if text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author): # UPDATE
+        if text.upper() == prefix + "HELP":
+                stringHelp = "__**Command help for " + message.channel.mention + ":**__"
+                stringHelp += "\n**" + prefix + "HELP**\nGets you this information!"
+                stringHelp += "\n**" + prefix + "RESERVE [nation]**\nReserves a nation or overwrites your previous reservation. Don't include the brackets."
+                stringHelp += "\n**" + prefix + "DELRESERVE**\nCancels your reservation."
+                if checkResAdmin(message.guild, message.author): # Here we send info about commands only for admins
+                    stringHelp += "\n**" + prefix + "END**\nStops allowing reservations and stops the bot's channel management.\nThis should be done by the time the game starts."
+                    stringHelp += "\n**" + prefix + "ADMRES [nation] [@user]**\nReserves a nation on behalf of a player on the server.\nMake sure to actually @ the player."
+                    stringHelp += "\n**" + prefix + "ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
+                    stringHelp += "\n**" + prefix + "UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
+                await message.delete()
+                await sendUserMessage(message.author, stringHelp)
+        elif text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author): # UPDATE
             await message.delete()
             await self.updateText()
             await self.updateImg()
@@ -533,7 +545,11 @@ class statsChannel(AbstractChannel):
     async def responsive(self, message):
         return message.channel == self.interactChannel and message.author.bot == False
     async def process(self, message):
-        if self.saveFile is None:
+        if message.content.upper() == prefix + "CANCEL":
+            await self.interactChannel.send("**Cancelling the stats operation.**")
+            interactions.remove(self)
+            del(self)
+        elif self.saveFile is None:
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".eu4"):
                 try:
                     self.saveFile = StringIO((await message.attachments[0].read()).decode('ansi'))
@@ -627,7 +643,19 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         return message.channel == self.interactChannel
     async def process(self, message):
         text = message.content.strip("\n\t ")
-        if text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author): # UPDATE
+        if text.upper() == prefix + "HELP":
+                stringHelp = "__**Command help for " + message.channel.mention + ":**__"
+                stringHelp += "\n**" + prefix + "HELP**\nGets you this information!"
+                stringHelp += "\n**" + prefix + "RESERVE [nation1], [nation2], [nation3]**\nReserves your picks or overwrites your previous reservation.\nThese are in the order of first pick to third. Don't include the brackets."
+                stringHelp += "\n**" + prefix + "DELRESERVE**\nCancels your reservation."
+                if checkResAdmin(message.guild, message.author): # Here we send info about commands only for admins
+                    stringHelp += "\n**" + prefix + "END**\nStops allowing reservations and stops the bot's channel management.\nThen runs and displays the draft. Draft may need to be rearranged manually to ensure game balance."
+                    stringHelp += "\n**" + prefix + "ADMRES [nation1], [nation2], [nation3] [@user]**\nReserves picks on behalf of a player on the server.\nMake sure to actually @ the player."
+                    stringHelp += "\n**" + prefix + "ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
+                    stringHelp += "\n**" + prefix + "UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
+                await message.delete()
+                await sendUserMessage(message.author, stringHelp)
+        elif text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author): # UPDATE
             await message.delete()
             await self.updateText()
         elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author): # END
