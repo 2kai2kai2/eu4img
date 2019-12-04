@@ -1,14 +1,17 @@
-EU4img - Reservations
+EU4img Bot
 by 2kai2kai2
 
-This is software for creating a map that shows all reserved nations (or otherwise marking all nations you want in 1444) intended for multiplayer games.
+This bot helps to manage eu4 game reservations and to show stats about game save files after they are played.
 
 Requirements:
-Python 3.6 (https://www.python.org/downloads/)
+Python 3.8 (https://www.python.org/downloads/)
 Pillow 6.0.0+ (https://pypi.org/project/Pillow/)
+Discord.py (https://pypi.org/project/discord.py/)
+Dotenv (https://pypi.org/project/python-dotenv/)
+Requests (https://pypi.org/project/requests/)
 
 How to use:
-Run the program. You can add or remove countries via commands when prompted, then hit enter with nothing typed to continue. A map will be generated and shown in a text editor, in addition to being saved into the run directory (the folder with the files) as final.png . X's will be placed on the capitals of all marked nations in 1444. The placement may seem to be inaccurate, but this is because the X is placed on the location of the city (as shown in-game) of the capital province, meaning that the X may not be at the center of a province.
+Run the bot with the appropriate data in a .env file. Use the command HELP in discord to find out what commands you can use.
 
 Updating:
-Updated province data will be necessary when a new eu4 version is released.
+Updated data will be necessary when a new eu4 version is released.
