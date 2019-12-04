@@ -54,3 +54,137 @@ def flag(tag):
     flagimg = flagfile.crop((x, y, x+127, y+127))
     flagimg.load()
     return flagimg
+
+def provinceArea(provinceID):
+    srcFile = open("src\\area.txt", "r")
+    lines = srcFile.readlines()
+    currentArea = None
+    for line in lines:
+        if " = {" in line:
+            currentArea = line.split(" ")[0].strip("\t ={\n")
+        else:
+            if str(provinceID) in line.split():
+                return currentArea
+    # Was not found
+    raise ValueError(str(provinceID) + " was not a valid province.")
+
+def region(areaName):
+    srcFile = open("src\\region.txt", "r")
+    lines = srcFile.readlines()
+    currentRegion = None
+    for line in lines:
+        if " = {" in line and not line.startswith("\t"):
+            currentRegion = line.split(" ")[0].strip("\t ={\n")
+        else:
+            if line.strip("\n\t ") == areaName:
+                return currentRegion
+    # Was not found
+    raise ValueError(str(areaName) + " was not a valid area.")
+
+def superregion(regionName):
+    srcFile = open("src\\superregion.txt", "r")
+    lines = srcFile.readlines()
+    currentSuperregion = None
+    for line in lines:
+        if " = {" in line and not line.startswith("\t"):
+            currentSuperregion = line.split(" ")[0].strip("\t ={\n")
+        else:
+            if line.strip("\n\t ") == regionName:
+                return currentSuperregion
+    # Was not found
+    raise ValueError(str(regionName) + " was not a valid region.")
+
+def continent(provinceID):
+    srcFile = open("src\\continent.txt", "r")
+    lines = srcFile.readlines()
+    currentContinent = None
+    for line in lines:
+        if " = {" in line:
+            currentContinent = line.split(" ")[0].strip("\t ={\n")
+        else:
+            if str(provinceID) in line.split():
+                return currentContinent
+    # Was not found
+    raise ValueError(str(provinceID) + " was not a valid province.")
+
+class dataReq:
+    DATATYPE_PROVINCEDAT = 0
+    REQUEST_PROVINCE_NAME = 0
+    REQUEST_PROVINCE_TRADE = 1
+    REQUEST_PROVINCE_CULTURE_ORIGINAL = 2
+    REQUEST_PROVINCE_RELIGION_ORIGINAL = 3
+    def __init__(self, datatype, key, request):
+        self.datatype = datatype
+        self.key = key
+        self.request = request
+        self.response = None
+    def respond(self, r):
+        if self.datatype == self.DATATYPE_PROVINCEDAT:
+            if self.request == self.REQUEST_PROVINCE_NAME:
+                if isinstance(r, str):
+                    self.response = r
+                else:
+                    raise ValueError("PROVINCE NAME request for " + self.key + " was the wrong type.")
+            elif self.request == self.REQUEST_PROVINCE_TRADE:
+                if isinstance(r, str):
+                    self.response = r
+                else:
+                    raise ValueError("PROVINCE TRADE request for " + self.key + " was the wrong type.")
+            elif self.request == self.REQUEST_PROVINCE_CULTURE_ORIGINAL:
+                if isinstance(r, str):
+                    self.response = r
+                else:
+                    raise ValueError("PROVINCE CULTURE ORIGINAL request for " + self.key + " was the wrong type.")
+            elif self.request == self.REQUEST_PROVINCE_RELIGION_ORIGINAL:
+                if isinstance(r, str):
+                    self.response = r
+                else:
+                    raise ValueError("PROVINCE RELIGION ORIGINAL request for " + self.key + " was the wrong type.")
+            # More things
+        # More datatypes
+def provinceData(*requests):
+    data = requests
+    lines = open("src\\save_1444.eu4").readlines()
+    brackets = []
+    
+    #Reading save file...
+    linenum = 0
+    for line in lines:
+        linenum+=1
+        if "{" in line:
+            if line.count("{") == line.count("}"):
+                continue
+            elif line.count("}") == 0 and line.count("{") == 1:
+                brackets.append(line.rstrip("\n "))
+            elif line.count("}") == 0 and line.count("{") > 1:
+                for x in range(line.count("{")):
+                    brackets.append("{") #TODO: fix this so it has more
+            else:
+                #print("Unexpected brackets at line #" + str(linenum) + ": " + line)
+                pass
+            #print("{")
+        elif "}" in line:
+            try:
+                brackets.pop()
+            except IndexError:
+                #print("No brackets to delete.")
+                #print("Line", linenum, ":", line)
+                pass
+            #print("}")
+        #Get rid of long, useless sections
+        elif len(brackets) == 2 and "provinces={" == brackets[0]:
+            for request in data:
+                if request.response is None and request.datatype == dataReq.DATATYPE_PROVINCEDAT and ("-" + str(request.key) + "={") == brackets[1]:
+                    if request.request == dataReq.REQUEST_PROVINCE_NAME and line.startswith("\t\tname="):
+                        request.respond(line.split("\"", 2)[1].strip("\n\t "))
+                    elif request.request == dataReq.REQUEST_PROVINCE_TRADE and line.startswith("\t\ttrade="):
+                        request.respond(line.split("\"", 2)[1].strip("\n\t "))
+                    elif request.request == dataReq.REQUEST_PROVINCE_CULTURE_ORIGINAL and line.startswith("\t\toriginal_culture="):
+                        request.respond(line.split("=", 1)[1].strip("\n\t "))
+                    elif request.request == dataReq.REQUEST_PROVINCE_RELIGION_ORIGINAL and line.startswith("\t\toriginal_religion="):
+                        request.respond(line.split("=", 1)[1].strip("\n\t "))
+        elif len(brackets) < 0 and ("trade={" == brackets[1]  or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
+            continue
+        else:
+            pass
+    return data
