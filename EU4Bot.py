@@ -6,24 +6,29 @@ import EU4Lib, EU4Reserve
 import discord, requests
 from dotenv import load_dotenv
 from abc import ABC, abstractmethod
+from typing import Union, Optional, List
 
 
 load_dotenv()
-token = os.getenv('DISCORD_TOKEN')
+token: str = os.getenv('DISCORD_TOKEN')
 #imgFinal = Image.open("src//finalTemplate.png")
 client = discord.Client()
-serverID = os.getenv("DISCORD_SERVER")
-prefix = os.getenv("PREFIX")
+serverID: str = os.getenv("DISCORD_SERVER")
+prefix: str = os.getenv("PREFIX")
 
+DiscUser = Union[discord.User, discord.Member]
 
+def imageToFile(img: Image) -> discord.File:
+    """Comverts PIL Images into discord File objects."""
 
-def imageToFile(img): #input Image object; return discord.File object
     file = BytesIO()
     img.save(file, "PNG")
     file.seek(0)
     return discord.File(file, "img.png")
 
-async def sendUserMessage(user, message): # user can be id, User object. message can be str
+async def sendUserMessage(user: Union[str, int, DiscUser], message: str) -> discord.Message:
+    """Sends a user a specified DM via discord. Returns the discord Message object sent."""
+
     u = None
     if isinstance(user, str) or isinstance(user, int): # id
         u = client.get_user(int(user))
@@ -37,7 +42,11 @@ async def sendUserMessage(user, message): # user can be id, User object. message
         await u.create_dm()
     msg = await u.dm_channel.send(message)
     return msg
-def getRoleFromStr(server, roleName):
+def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Optional[discord.Role]:
+    """Converts a string into the role on a specified discord server.
+    Use an '@role' string as the roleName argument. (@ is optional)
+    Returns None if the role cannot be found."""
+
     # Get server object
     s = None
     if isinstance(server, str) or isinstance(server, int):
@@ -51,7 +60,9 @@ def getRoleFromStr(server, roleName):
             return role
     return None
 
-def checkResAdmin(server, user): # Both can be int id or object
+def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscUser]) -> bool:
+    """Returns whether or not a user has bot admin control roles as set in .env on a server."""
+
     # Get server object
     s = None
     if isinstance(server, str) or isinstance(server, int):
@@ -78,34 +89,34 @@ def checkResAdmin(server, user): # Both can be int id or object
 
 class AbstractChannel(ABC):
     @abstractmethod
-    def __init__(self, user, initChannel):
+    def __init__(self, user: DiscUser, initChannel: Union[discord.TextChannel, discord.GroupChannel, discord.DMChannel]):
         self.user = user
         self.interactChannel = initChannel
         self.displayChannel = initChannel
     @abstractmethod
-    async def responsive(self, message):
+    async def responsive(self, message: discord.Message) -> bool:
         pass
     @abstractmethod
-    async def process(self, message):
+    async def process(self, message: discord.Message):
         pass
     @abstractmethod
-    async def msgdel(self, msgID):
+    async def msgdel(self, msgID: Union[str, int]):
         pass
     @abstractmethod
-    async def userdel(self, user):
+    async def userdel(self, user: DiscUser):
         pass
 
 class ReserveChannel(AbstractChannel):
-    def __init__(self, user, initChannel):
+    def __init__(self, user: DiscUser, initChannel: Union[discord.TextChannel, discord.GroupChannel, discord.DMChannel]):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
         self.textID = None
         self.imgID = None
         EU4Reserve.writeNewReservation(self.interactChannel.id)
-    async def responsive(self, message):
+    async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
-    async def process(self, message):
+    async def process(self, message: discord.Message):
         text = message.content.strip("\n\t ")
         if text.upper() == prefix + "HELP":
                 stringHelp = "__**Command help for " + message.channel.mention + ":**__"
@@ -186,7 +197,7 @@ class ReserveChannel(AbstractChannel):
             await (await self.interactChannel.fetch_message(self.getImgID())).delete()
         else:
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
-    async def add(self, nation): # nation should be EU4Reserve.Nation object
+    async def add(self, nation: EU4Reserve.Nation) -> int:
         addInt = EU4Reserve.saveAdd(self.interactChannel.id, nation)
         if addInt == 1 or addInt == 2: # Success!
             await self.updateText()
@@ -196,13 +207,13 @@ class ReserveChannel(AbstractChannel):
         elif addInt == 3: # This nation is already taken
             await sendUserMessage(client.get_user(int(nation.player.strip("\n\t <@>"))), "The nation " + EU4Lib.tagToName(nation.tag) + " is already reserved in " + self.displayChannel.mention + ".")
         return addInt
-    async def remove(self, tag): # tag should be nation tag str
+    async def remove(self, tag: str):
         pass
-    async def removePlayer(self, name): # name should be player name str
+    async def removePlayer(self, name: str):
         if EU4Reserve.saveRemove(self.interactChannel.id, name): # If it did anything
             await self.updateText()
             await self.updateImg()
-    async def msgdel(self, msgID):
+    async def msgdel(self, msgID: Union[str, int]):
         if msgID == self.textID:
             self.textID = None
             await self.updateText()
@@ -213,59 +224,63 @@ class ReserveChannel(AbstractChannel):
             if reserve is None:
                 reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
-    async def userdel(self, user): # user is a Member object
+    async def userdel(self, user: DiscUser):
         if (hasattr(self.displayChannel, 'guild') and self.displayChannel.guild == user.guild) or (hasattr(self.interactChannel, 'guild') and self.interactChannel.guild == user.guild):
             await self.removePlayer(user)
     
 class Nation:
     def __init__(self, player):
         self.player = player
-        self.tag = None
-        self.development = 0
-        self.prestige = None
-        self.stability = None
+        self.tag: Optional[str] = None
+        self.development: int = 0
+        self.prestige: int = None
+        self.stability: int = None
         #self.manpower = None
         #self.maxManpower = None
-        self.army = 0.0
-        self.navy = 0
-        self.debt = 0
-        self.treasury = 0.0
-        self.totalIncome = 0.0
-        self.totalExpense = 0.0
+        self.army: float = 0.0
+        self.navy: int = 0
+        self.debt: int = 0
+        self.treasury: float = 0.0
+        self.totalIncome: float = 0.0
+        self.totalExpense: float = 0.0
         self.scorePlace = None
-        self.capitalID = 0
+        self.capitalID: int = 0
 
 class saveGame():
     def __init__(self):
         self.countries = []
-        self.playertags = []
-        self.dlc = []
-        self.GP = []
-        self.date = None
-        self.mp = True
-        self.age = None
-        self.HRE = None
-        self.china = None
-        self.crusade = None
+        self.playertags: List[str] = []
+        self.dlc: List[str] = []
+        self.GP: List[str] = []
+        self.date: Optional[str] = None
+        self.mp: bool = True
+        self.age: Optional[str] = None
+        self.HRE: str = None
+        self.china: str = None
+        self.crusade: str = None
 
 class statsChannel(AbstractChannel):
-    def __init__(self, user, initChannel):
+    def __init__(self, user: DiscUser, initChannel: Union[discord.TextChannel, discord.GroupChannel, discord.DMChannel]):
         self.user = user
         self.interactChannel = None
         self.displayChannel = initChannel
         self.saveFile = None
-        self.politicalImage = None
-        self.playersImage = Image.open("src//BlankPlayerMap.png")
+        self.politicalImage: Image = None
+        self.playersImage: Image = Image.open("src//BlankPlayerMap.png")
         self.game = saveGame()
         self.modMsg = None
         self.doneMod = False
-    async def asyncInit(self):
+    async def asyncInit(self) -> self:
+        """Does of the init stuff that needs to happen async. Returns self."""
+
         if self.user.dm_channel is None:
             await self.user.create_dm()
         self.interactChannel = self.user.dm_channel
         await self.interactChannel.send("**Send EITHER an uncompressed .eu4 save file\nor a direct link to an uncompressed .eu4 save file:**\nYou can do this by uploading to https://www.filesend.jp/l/en-US/ \n then right clicking on the DOWNLOAD to Copy Link Address.")
         return self
-    def modPromptStr(self):
+    def modPromptStr(self) -> str:
+        """Makes and returns a string giving information for player list modification."""
+
         prompt = "**Current players list:**```"
         for x in self.game.countries:
             prompt += "\n"+x.tag+ ": "+ x.player
@@ -273,6 +288,8 @@ class statsChannel(AbstractChannel):
         prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nremove TAG**\n"
         return prompt
     async def readFile(self):
+        """Gets all data from self.saveFile and saves it to the self.game"""
+
         lines = self.saveFile.readlines()
         brackets = []
         
@@ -417,7 +434,9 @@ class statsChannel(AbstractChannel):
             raise Exception("This probably isn't a valid .eu4 uncompressed save file from " + self.user.mention)
         #Sort Data:
         self.game.countries.sort(key=lambda x: x.development, reverse=True)
-    async def generateImage(self):
+    async def generateImage(self) -> Image:
+        """Returns a stats Image based off the self.game data."""
+
         imgFinal = Image.open("src//finalTemplate.png")
         mapFinal = self.politicalImage.copy()
         #End Data Selection
@@ -548,9 +567,9 @@ class statsChannel(AbstractChannel):
             imgDraw.text((4880,60), day + " December " + year, (255, 255, 255), font)
         return imgFinal
     
-    async def responsive(self, message):
+    async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel and message.author.bot == False
-    async def process(self, message):
+    async def process(self, message: discord.Message):
         if message.content.upper() == prefix + "CANCEL":
             await self.interactChannel.send("**Cancelling the stats operation.**")
             interactions.remove(self)
@@ -559,7 +578,7 @@ class statsChannel(AbstractChannel):
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".eu4"):
                 try:
                     self.saveFile = StringIO((await message.attachments[0].read()).decode('ansi'))
-                except UnicodeError as error:
+                except:
                     await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the ANSI encoding.\n**Please try another file or change the file's encoding and try again.**")
                     self.saveFile = None
                     return
@@ -569,7 +588,7 @@ class statsChannel(AbstractChannel):
                 if response.status_code == 200: #200 == requests.codes.ok
                     try:
                         self.saveFile = StringIO(response.content.decode('ansi'))
-                    except UnicodeError as error:
+                    except:
                         await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the ANSI encoding.\n**Please try another file or change the file's encoding and try again.**")
                         self.saveFile = None
                         return
@@ -631,9 +650,9 @@ class statsChannel(AbstractChannel):
                         break
                     elif self.game.countries[len(self.game.countries)-1] == nat: #This means we are on the last one and elif- it's still not on the list.
                         await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
-    async def msgdel(self, msgID):
+    async def msgdel(self, msgID: Union[str, int]):
         pass
-    async def userdel(self, user):
+    async def userdel(self, user: DiscUser):
         if user == self.user:
             try:
                 await self.interactChannel.send("You left the " + self.displayChannel.guild.name + " discord server, so this interaction is cancelled.")
@@ -645,20 +664,22 @@ class statsChannel(AbstractChannel):
 
 
 class asiReserve:
-    def __init__(self, user):
-        self.user = user
+    """A user's reservation for an ASI game."""
+
+    def __init__(self, user: DiscUser):
+        self.user: DiscUser = user
         self.picks = None
 
 class asiresChannel(AbstractChannel): # This is custom for my discord group. Anybody else can ignore it or do what you will.
-    def __init__(self, user, initChannel):
+    def __init__(self, user: DiscUser, initChannel: Union[discord.TextChannel, discord.GroupChannel, discord.DMChannel]):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
         self.textID = None
-        self.reserves = []
-    async def responsive(self, message):
+        self.reserves: List[asiReserve] = []
+    async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
-    async def process(self, message):
+    async def process(self, message: discord.Message):
         text = message.content.strip("\n\t ")
         if text.upper() == prefix + "HELP":
                 stringHelp = "__**Command help for " + message.channel.mention + ":**__"
@@ -748,11 +769,11 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
             self.textID = (await self.displayChannel.send(content=string)).id
         else:
             await (await (self.displayChannel).fetch_message(self.textID)).edit(content=string)
-    async def remove(self, user):
+    async def remove(self, user: DiscUser):
         for res in self.reserves:
             if res.user == user:
                 self.reserves.remove(res)
-    async def add(self, user, text):
+    async def add(self, user: DiscUser, text: str):
         picks = text.split(",")
         if not len(picks) == 3:
             await sendUserMessage(user, "Your reserve in " + self.interactChannel.mention + " needs to be 3 elements in the format 'a,b,c'")
@@ -769,11 +790,11 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         res.picks = tags
         await self.remove(user)
         self.reserves.append(res)
-    async def msgdel(self, msgID):
+    async def msgdel(self, msgID: Union[str, int]):
         if msgID == self.textID:
             self.textID = None
             await self.updateText()
-    async def userdel(self, user):
+    async def userdel(self, user: DiscUser):
         await self.remove(user)
         await self.updateText()
 
@@ -781,7 +802,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
 
 
 # DISCORD CODE
-interactions = []
+interactions: List[AbstractChannel] = []
 
 @client.event
 async def on_ready():
@@ -789,7 +810,7 @@ async def on_ready():
     print("Prefix: " + os.getenv("PREFIX") + "\n")
 
 @client.event
-async def on_message(message):
+async def on_message(message: discord.Message):
     if not message.author.bot:
         text = message.content.strip("\n\t ")
         for interaction in interactions: # Should be only abstractChannel descendants
@@ -841,12 +862,12 @@ async def on_raw_message_delete(payload):
         await c.msgdel(payload.message_id)
 
 @client.event
-async def on_member_remove(member):
+async def on_member_remove(member: DiscUser):
     for c in interactions:
         await c.userdel(member)
 
 @client.event
-async def on_guild_remove(guild):
+async def on_guild_remove(guild: discord.Guild):
     for c in interactions:
         if (hasattr(c.displayChannel, 'guild') and c.displayChannel.guild == guild) or (hasattr(c.interactChannel, 'guild') and c.interactChannel.guild == guild):
             interactions.remove(c)

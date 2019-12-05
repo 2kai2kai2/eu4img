@@ -1,7 +1,8 @@
 #This will need to be updated. Currently for 1.28
 from PIL import Image, ImageDraw
+from typing import Union, Tuple, List, Optional
 
-def country(text):
+def country(text: str) -> Optional[str]:
     srcFile = open("src\\countries_l_english.yml")
     lines = srcFile.readlines()
     srcFile.close
@@ -16,7 +17,7 @@ def country(text):
     # text is unknown
     return None
 
-def tagToName(tag):
+def tagToName(tag: str) -> Optional[str]:
     srcFile = open("src\\countries_l_english.yml")
     lines = srcFile.readlines()
     srcFile.close
@@ -26,7 +27,7 @@ def tagToName(tag):
                 return line[8:].split("\"", 1)[0].strip("\" \t\n")
     return None
 
-def province(id):
+def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     srcFile = open("src\\positions.txt", "r")
     lines = srcFile.readlines()
     beyond = 0
@@ -41,7 +42,7 @@ def province(id):
             beyond = 1
             continue
         
-def flag(tag):
+def flag(tag: str) -> Image:
     index = open("src\\flagfiles.txt", "r")
     line = index.read()
     a = line.partition(tag) #Separate into a 3-tuple around tag
@@ -55,7 +56,7 @@ def flag(tag):
     flagimg.load()
     return flagimg
 
-def provinceArea(provinceID):
+def provinceArea(provinceID: Union[str, int]) -> str:
     srcFile = open("src\\area.txt", "r")
     lines = srcFile.readlines()
     currentArea = None
@@ -68,7 +69,7 @@ def provinceArea(provinceID):
     # Was not found
     raise ValueError(str(provinceID) + " was not a valid province.")
 
-def region(areaName):
+def region(areaName: str) -> str:
     srcFile = open("src\\region.txt", "r")
     lines = srcFile.readlines()
     currentRegion = None
@@ -81,7 +82,7 @@ def region(areaName):
     # Was not found
     raise ValueError(str(areaName) + " was not a valid area.")
 
-def superregion(regionName):
+def superregion(regionName: str) -> str:
     srcFile = open("src\\superregion.txt", "r")
     lines = srcFile.readlines()
     currentSuperregion = None
@@ -94,7 +95,7 @@ def superregion(regionName):
     # Was not found
     raise ValueError(str(regionName) + " was not a valid region.")
 
-def continent(provinceID):
+def continent(provinceID: Union[str, int]) -> str:
     srcFile = open("src\\continent.txt", "r")
     lines = srcFile.readlines()
     currentContinent = None
@@ -142,7 +143,7 @@ class dataReq:
                     raise ValueError("PROVINCE RELIGION ORIGINAL request for " + self.key + " was the wrong type.")
             # More things
         # More datatypes
-def provinceData(*requests):
+def provinceData(*requests: dataReq) -> List[dataReq]:
     data = requests
     lines = open("src\\save_1444.eu4").readlines()
     brackets = []

@@ -2,38 +2,45 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 import EU4Lib
 from dotenv import load_dotenv
+from typing import List, Optional
 
 class Nation:
-    def __init__(self, player, tag):
+    """A Nation for the nation reserve channel interaction."""
+
+    def __init__(self, player: str, tag: str):
         self.player = player
         self.tag = tag
-        self.capitalID = 0
+        self.capitalID: int = 0
 
 class Reserve:
-    def __init__(self, name):
-        self.nations = [] # list of Nation objects
-        self.name = name #str
-    def add(self, nation):
+    """Represents a reservation list for a specific game. The name should be the id of the channel it represents."""
+
+    def __init__(self, name: str):
+        self.nations: List[Nation] = [] # list of Nation objects
+        self.name = name
+    def add(self, nation: Nation):
         self.nations.append(nation)
-    def remove(self, tag):
+    def remove(self, tag: str):
         for i in self.nations:
             if i.tag == tag:
                 self.nations.remove(i)
-    def removePlayer(self, name):
+    def removePlayer(self, name: str):
         for i in self.nations:
             if i.player == name:
                 self.nations.remove(i)
-    def getSaveText(self):
+    def getSaveText(self) -> str:
         string = str(self.name) + "\n"
         for nation in self.nations:
             string += "\t" + nation.tag + " " + nation.player + "\n"
         return string
 
 
-def getSavedReserves():
-    reserves = []
+def getSavedReserves() -> List[Reserve]:
+    """Gets the list of all Reserves saved on file."""
+
+    reserves: List[Reserve] = []
     f = open("savedreservationgames.txt", "r")
-    currentReserve = None
+    currentReserve: Optional[Reserve] = None
     while True:
         line = f.readline()
         if line is None or line == "": #--File has ended.
@@ -53,13 +60,17 @@ def getSavedReserves():
     f.close()
     return reserves
 
-def getReserve(id):
+def getReserve(id: str) -> Optional[Reserve]:
+    """Gets a specific Reserve saved on file based on its name/channel id"""
+
     for r in getSavedReserves():
         if r.name == id:
             return r
     return None
 
-def writeNewReservation(id):
+def writeNewReservation(id: str):
+    """Saves a new empty Reserve on file."""
+
     if not os.path.isfile("savedreservationgames.txt"):
         f = open("savedreservationgames.txt", "w")
         f.write(Reserve(id).getSaveText())
@@ -78,7 +89,15 @@ def writeNewReservation(id):
         f.write(text)
         f.close()
 
-def saveAdd(id, nation):
+def saveAdd(id, nation: Nation) -> int:
+    """Saves a Nation to a Reserve on file. Returns a value based on this:
+    0 = Failed; Reserve id not found (Should be rare)
+    1 = Success; New reservation
+    2 = Success; Replaced old reservation
+    3 = Failed; Nation taken by other
+    4 = Failed; Nation taken by same player (no notif)
+    """
+
     reserves = getSavedReserves()
     change = 0
     # 0 = Failed; Reserve id not found (Should be rare)
@@ -112,7 +131,11 @@ def saveAdd(id, nation):
     f.close()
     return change
 
-def saveRemove(id, user):
+def saveRemove(id, user: str) -> bool:
+    """Removes a user's nation from a Reserve on file.
+    Returns a bool based on whether this made a change.
+    """
+
     reserves = getSavedReserves()
     change = False
     for r in reserves:
@@ -128,9 +151,12 @@ def saveRemove(id, user):
     return change
 
 
-#Start Data Selection
-def createMap(reserve): #input a Reserve object
-    countries = reserve.nations # List of Nation objects
+def createMap(reserve: Reserve) -> Image:
+    """Creates a map based on a Reserve object with x's on all the capitals of reserved Nations.
+    Returns an Image object.
+    """
+
+    countries: List[Nation] = reserve.nations
     mapFinal = Image.open("src//map_1444.png")
     srcFile = open("src\\save_1444.eu4", "r")
     lines = srcFile.readlines()
@@ -152,7 +178,7 @@ def createMap(reserve): #input a Reserve object
         elif "}" in line:
             try:
                 brackets.pop()
-            except IndexError:
+            except IndexError: # This shouldn't happen.
                 print("No brackets to delete.")
                 print("Line", linenum, ":", line)
         #Get rid of long, useless sections
