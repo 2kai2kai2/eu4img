@@ -17,6 +17,7 @@ serverID: str = os.getenv("DISCORD_SERVER")
 prefix: str = os.getenv("PREFIX")
 
 DiscUser = Union[discord.User, discord.Member]
+DiscTextChannels = Union[discord.TextChannel, discord.DMChannel, discord.GroupChannel]
 
 def imageToFile(img: Image) -> discord.File:
     """Comverts PIL Images into discord File objects."""
@@ -89,7 +90,7 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscU
 
 class AbstractChannel(ABC):
     @abstractmethod
-    def __init__(self, user: DiscUser, initChannel: Union[discord.TextChannel, discord.GroupChannel, discord.DMChannel]):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
         self.user = user
         self.interactChannel = initChannel
         self.displayChannel = initChannel
@@ -107,12 +108,12 @@ class AbstractChannel(ABC):
         pass
 
 class ReserveChannel(AbstractChannel):
-    def __init__(self, user: DiscUser, initChannel: Union[discord.TextChannel, discord.GroupChannel, discord.DMChannel]):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
-        self.textID = None
-        self.imgID = None
+        self.textID: Optional[int] = None
+        self.imgID: Optional[int] =None
         EU4Reserve.writeNewReservation(self.interactChannel.id)
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
@@ -169,13 +170,13 @@ class ReserveChannel(AbstractChannel):
             await message.delete()
         else:
             await message.delete()
-    def setTextID(self, textID):
+    def setTextID(self, textID: int):
         self.textID = textID
-    def getTextID(self):
+    def getTextID(self) -> int:
         return self.textID
-    def setImgID(self, imgID):
+    def setImgID(self, imgID: int):
         self.imgID = imgID
-    def getImgID(self):
+    def getImgID(self) -> int:
         return self.imgID
     async def updateText(self):
         reserve = EU4Reserve.getReserve(str(self.interactChannel.id))
@@ -229,7 +230,7 @@ class ReserveChannel(AbstractChannel):
             await self.removePlayer(user)
     
 class Nation:
-    def __init__(self, player):
+    def __init__(self, player: str):
         self.player = player
         self.tag: Optional[str] = None
         self.development: int = 0
@@ -248,7 +249,7 @@ class Nation:
 
 class saveGame():
     def __init__(self):
-        self.countries = []
+        self.countries: List[Nation] = []
         self.playertags: List[str] = []
         self.dlc: List[str] = []
         self.GP: List[str] = []
@@ -260,7 +261,7 @@ class saveGame():
         self.crusade: str = None
 
 class statsChannel(AbstractChannel):
-    def __init__(self, user: DiscUser, initChannel: Union[discord.TextChannel, discord.GroupChannel, discord.DMChannel]):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
         self.user = user
         self.interactChannel = None
         self.displayChannel = initChannel
@@ -283,9 +284,9 @@ class statsChannel(AbstractChannel):
 
         prompt = "**Current players list:**```"
         for x in self.game.countries:
-            prompt += "\n"+x.tag+ ": "+ x.player
+            prompt += "\n" + EU4Lib.tagToName(x.tag)+ ": "+ x.player
         #prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nadd TAG playername\nremove TAG**\n"
-        prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nremove TAG**\n"
+        prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nremove [nation]**\n"
         return prompt
     async def readFile(self):
         """Gets all data from self.saveFile and saves it to the self.game"""
@@ -636,11 +637,11 @@ class statsChannel(AbstractChannel):
             #    self.game.countries.append(Nation(name))
             #    self.game.countries[len(self.game.countries)-1].tag = tag.upper().strip("\t \n")
             #    self.game.playertags.append(tag.upper().strip("\t \n"))
-                
             elif message.content.strip("\n\t ").startswith("remove "):
-                tag = message.content.strip("\n\t ").partition(" ")[2].strip("\t\n ")
-                if len(tag) != 3:
-                    await self.interactChannel.send("Tag length is incorrect. Canceling action.")
+                name = message.content.strip("\n\t ").partition(" ")[2].strip("\t\n ")
+                tag = EU4Lib.country(name)
+                if tag is None:
+                    await self.interactChannel.send("Did not recognize " + tag.upper() + " as a valid nation.")
                     return
                 for nat in self.game.countries:
                     if nat.tag.upper().strip("\t \n") == tag.upper().strip("\t \n"):
@@ -671,11 +672,11 @@ class asiReserve:
         self.picks = None
 
 class asiresChannel(AbstractChannel): # This is custom for my discord group. Anybody else can ignore it or do what you will.
-    def __init__(self, user: DiscUser, initChannel: Union[discord.TextChannel, discord.GroupChannel, discord.DMChannel]):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
-        self.textID = None
+        self.textID: Optional[int] = None
         self.reserves: List[asiReserve] = []
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
@@ -843,21 +844,21 @@ async def on_message(message: discord.Message):
                 interactions.append(c)
 
 @client.event
-async def on_guild_channel_delete(channel):
+async def on_guild_channel_delete(channel: DiscTextChannels):
     for c in interactions:
         if c.displayChannel == channel or c.interactChannel == channel:
             interactions.remove(c)
             del(c)
 
 @client.event
-async def on_private_channel_delete(channel):
+async def on_private_channel_delete(channel: DiscTextChannels):
     for c in interactions:
         if c.displayChannel == channel or c.interactChannel == channel:
             interactions.remove(c)
             del(c)
 
 @client.event
-async def on_raw_message_delete(payload):
+async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
     for c in interactions:
         await c.msgdel(payload.message_id)
 

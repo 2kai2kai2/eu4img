@@ -3,6 +3,11 @@ from PIL import Image, ImageDraw
 from typing import Union, Tuple, List, Optional
 
 def country(text: str) -> Optional[str]:
+    """Returns the tag of a nation from the name of the nation.
+    Some nations may have multiple valid names.
+    If the nation is not recognized, returns None.
+    """
+
     srcFile = open("src\\countries_l_english.yml")
     lines = srcFile.readlines()
     srcFile.close
@@ -18,6 +23,10 @@ def country(text: str) -> Optional[str]:
     return None
 
 def tagToName(tag: str) -> Optional[str]:
+    """Returns the name of a nation based on its tag.
+    If the tag is not recognized, returns None.
+    """
+    
     srcFile = open("src\\countries_l_english.yml")
     lines = srcFile.readlines()
     srcFile.close
@@ -28,6 +37,10 @@ def tagToName(tag: str) -> Optional[str]:
     return None
 
 def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
+    """Gets the location of a province on a screenshot map.
+    Returns a tuple of floats, (x, y).
+    """
+    
     srcFile = open("src\\positions.txt", "r")
     lines = srcFile.readlines()
     beyond = 0
@@ -43,6 +56,10 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
             continue
         
 def flag(tag: str) -> Image:
+    """Gets an Image of the flag of the specified nation.
+    Returns Image of size (128, 128).
+    """
+    
     index = open("src\\flagfiles.txt", "r")
     line = index.read()
     a = line.partition(tag) #Separate into a 3-tuple around tag
@@ -57,6 +74,10 @@ def flag(tag: str) -> Image:
     return flagimg
 
 def provinceArea(provinceID: Union[str, int]) -> str:
+    """Returns the area (state) name of a specified province's id.
+    Raises an error if the province is not found.
+    """
+    
     srcFile = open("src\\area.txt", "r")
     lines = srcFile.readlines()
     currentArea = None
@@ -70,6 +91,11 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     raise ValueError(str(provinceID) + " was not a valid province.")
 
 def region(areaName: str) -> str:
+    """Returns the region name of a specified area.
+    The argument may be the string returned by the provinceArea() method.
+    Raises an error if the area is not found.
+    """
+    
     srcFile = open("src\\region.txt", "r")
     lines = srcFile.readlines()
     currentRegion = None
@@ -83,6 +109,11 @@ def region(areaName: str) -> str:
     raise ValueError(str(areaName) + " was not a valid area.")
 
 def superregion(regionName: str) -> str:
+    """Returns the superregion name of a specified region.
+    The argument may be the string returned by the region() method.
+    Raises an error if the region is not found.
+    """
+    
     srcFile = open("src\\superregion.txt", "r")
     lines = srcFile.readlines()
     currentSuperregion = None
@@ -96,6 +127,10 @@ def superregion(regionName: str) -> str:
     raise ValueError(str(regionName) + " was not a valid region.")
 
 def continent(provinceID: Union[str, int]) -> str:
+    """Returns the continent name from a specified province's id.
+    Raises an error if the province is not found.
+    """
+    
     srcFile = open("src\\continent.txt", "r")
     lines = srcFile.readlines()
     currentContinent = None
@@ -114,7 +149,7 @@ class dataReq:
     REQUEST_PROVINCE_TRADE = 1
     REQUEST_PROVINCE_CULTURE_ORIGINAL = 2
     REQUEST_PROVINCE_RELIGION_ORIGINAL = 3
-    def __init__(self, datatype, key, request):
+    def __init__(self, datatype: int, key: str, request: int):
         self.datatype = datatype
         self.key = key
         self.request = request
