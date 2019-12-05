@@ -265,7 +265,7 @@ class statsChannel(AbstractChannel):
         self.user = user
         self.interactChannel = None
         self.displayChannel = initChannel
-        self.saveFile = None
+        self.hasReadFile = False
         self.politicalImage: Image = None
         self.playersImage: Image = Image.open("src//BlankPlayerMap.png")
         self.game = saveGame()
@@ -288,10 +288,10 @@ class statsChannel(AbstractChannel):
         #prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nadd TAG playername\nremove TAG**\n"
         prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nremove [nation]**\n"
         return prompt
-    async def readFile(self):
-        """Gets all data from self.saveFile and saves it to the self.game"""
+    async def readFile(self, file):
+        """Gets all data from file and saves it to the self.game"""
 
-        lines = self.saveFile.readlines()
+        lines = file.readlines()
         brackets = []
         
         #Reading save file...
@@ -575,36 +575,37 @@ class statsChannel(AbstractChannel):
             await self.interactChannel.send("**Cancelling the stats operation.**")
             interactions.remove(self)
             del(self)
-        elif self.saveFile is None:
+        elif not self.hasReadFile:
+            saveFile: Optional[StringIO] = None
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".eu4"):
                 try:
-                    self.saveFile = StringIO((await message.attachments[0].read()).decode('ansi'))
+                    saveFile = StringIO((await message.attachments[0].read()).decode('ansi'))
                 except:
                     await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the ANSI encoding.\n**Please try another file or change the file's encoding and try again.**")
-                    self.saveFile = None
                     return
             else: #str
                 saveURL = message.content.strip("\n\t ")
                 response = requests.get(saveURL)
                 if response.status_code == 200: #200 == requests.codes.ok
                     try:
-                        self.saveFile = StringIO(response.content.decode('ansi'))
+                        saveFile = StringIO(response.content.decode('ansi'))
                     except:
                         await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the ANSI encoding.\n**Please try another file or change the file's encoding and try again.**")
-                        self.saveFile = None
                         return
                 else:
                     await self.interactChannel.send("Something went wrong. Please try a different link.")
                     return
             await self.interactChannel.send("**Recieved save file. Processing...**")
             try:
-                await self.readFile()
+                await self.readFile(saveFile)
             except:
                 await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Is it uncompressed?\n**Please try another file.**")
-                self.saveFile = None
                 return
-            await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
-        elif (self.saveFile is not None) and (self.politicalImage is None):
+            else:
+                await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
+                self.hasReadFile = True
+                del(saveFile)
+        elif self.hasReadFile and (self.politicalImage is None):
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".png"):
                 politicalFile = BytesIO()
                 await message.attachments[0].save(politicalFile)
@@ -614,7 +615,7 @@ class statsChannel(AbstractChannel):
                     self.politicalImage = None
                     return
                 self.modMsg = await self.interactChannel.send(self.modPromptStr())
-        elif (self.saveFile is not None) and (self.politicalImage is not None) and (not self.doneMod):
+        elif self.hasReadFile and (self.politicalImage is not None) and (not self.doneMod):
             if message.content.strip("\n\t ") == "done":
                 self.doneMod == True
                 try:
