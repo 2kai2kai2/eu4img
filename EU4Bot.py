@@ -270,7 +270,7 @@ class statsChannel(AbstractChannel):
         self.game = saveGame()
         self.modMsg = None
         self.doneMod = False
-    async def asyncInit(self) -> self:
+    async def asyncInit(self):
         """Does of the init stuff that needs to happen async. Returns self."""
 
         if self.user.dm_channel is None:
@@ -542,29 +542,29 @@ class statsChannel(AbstractChannel):
         month = self.game.date.partition(".")[2].partition(".")[0].strip("\t \n")
         day = self.game.date.partition(".")[2].partition(".")[2].strip("\t \n")
         if month == "1":
-            imgDraw.text((4880,60), day + " January " + year, (255, 255, 255), font)
+            imgDraw.text((4880,60), day + " January " + year, (255, 255, 255), font) #Good
         elif month == "2":
-            imgDraw.text((4880,60), day + " Feburary " + year, (255, 255, 255), font)
+            imgDraw.text((4880-40,60), day + " Feburary " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "3":
-            imgDraw.text((4880,60), day + " March " + year, (255, 255, 255), font)
+            imgDraw.text((4880-20,60), day + " March " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "4":
-            imgDraw.text((4880,60), day + " April " + year, (255, 255, 255), font)
+            imgDraw.text((4880-20,60), day + " April " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "5":
-            imgDraw.text((4880,60), day + " May " + year, (255, 255, 255), font)
+            imgDraw.text((4880+50,60), day + " May " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "6":
-            imgDraw.text((4880,60), day + " June " + year, (255, 255, 255), font)
+            imgDraw.text((4880+50,60), day + " June " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "7":
-            imgDraw.text((4880,60), day + " July " + year, (255, 255, 255), font)
+            imgDraw.text((4880+50,60), day + " July " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "8":
-            imgDraw.text((4880,60), day + " August " + year, (255, 255, 255), font)
+            imgDraw.text((4880,60), day + " August " + year, (255, 255, 255), font) # Good
         elif month == "9":
-            imgDraw.text((4880,60), day + " September " + year, (255, 255, 255), font)
+            imgDraw.text((4880-45,60), day + " September " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "10":
-            imgDraw.text((4880,60), day + " October " + year, (255, 255, 255), font)
+            imgDraw.text((4880-25,60), day + " October " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "11":
-            imgDraw.text((4880,60), day + " November " + year, (255, 255, 255), font)
+            imgDraw.text((4880-60,60), day + " November " + year, (255, 255, 255), font) # Shift changed; need testing
         elif month == "12":
-            imgDraw.text((4880,60), day + " December " + year, (255, 255, 255), font)
+            imgDraw.text((4880-60,60), day + " December " + year, (255, 255, 255), font) # Shift changed; need testing
         return imgFinal
     
     async def responsive(self, message: discord.Message) -> bool:
