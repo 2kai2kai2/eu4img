@@ -672,6 +672,20 @@ class asiReserve:
         self.user: DiscUser = user
         self.picks = None
 
+class asiFaction:
+    """Represents a faction for an ASI game."""
+
+    def __init__(self, name: str, territory: List[str], maxPlayers: int = 256):
+        self.name = name
+        self.territory = territory
+        self.maxPlayers = maxPlayers
+        self.taken = 0
+    def isInTerritory(self, provinceID: Union[str, int]) -> bool:
+        for x in self.territory:
+            if EU4Lib.isIn(provinceID, x):
+                return True
+        return False
+
 class asiresChannel(AbstractChannel): # This is custom for my discord group. Anybody else can ignore it or do what you will.
     def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
         self.user = None
@@ -679,6 +693,17 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         self.displayChannel = initChannel
         self.textID: Optional[int] = None
         self.reserves: List[asiReserve] = []
+        self.factions: List[asiFaction] = []
+        self.factions.append(asiFaction("West", ["france_region", "british_isles_region", "iberia_region"], 4))
+        self.factions.append(asiFaction("East", ["low_countries_region", "north_german_region", "south_german_region", "italy_region", "scandinavia_region", "poland_region", "baltic_region", "russia_region", "ruthenia_region", "carpathia_region"]))
+        self.factions.append(asiFaction("Mid", ["balkan_region", "near_east_superregion", "persia_superregion", "egypt_region", "maghreb_region"]))
+        self.factions.append(asiFaction("India", ["india_superregion", "burma_region"]))
+        self.factions.append(asiFaction("Asia", ["china_superregion", "tartary_superregion", "far_east_superregion", "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion"], 3))
+    def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
+        for faction in self.factions:
+            if faction.isInTerritory(provinceID):
+                return faction
+        return None
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
     async def process(self, message: discord.Message):
@@ -701,15 +726,61 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author): # END
             await message.delete()
             finalReserves = [] # List of EU4Reserve.Nation objects
+            tagCapitals = dict()
+            # Add all possibly reserved nations to the tagCapitals dictionary with a capital of -1
+            for res in self.reserves:
+                for tag in res.picks:
+                    if tagCapitals.get(tag.upper()) is None:
+                        tagCapitals[tag.upper()] = -1
+            # Get the actual capitals and add to tagCapitals.
+            srcFile = open("src\\save_1444.eu4", "r")
+            lines = srcFile.readlines()
+            brackets = []
+            linenum = 0
+            for line in lines:
+                linenum+=1
+                if "{" in line:
+                    if line.count("{") == line.count("}"):
+                        continue
+                    elif line.count("}") == 0 and line.count("{") == 1:
+                        brackets.append(line.rstrip("\n "))
+                    elif line.count("}") == 0 and line.count("{") > 1:
+                        for x in range(line.count("{")):
+                            brackets.append("{") #TODO: fix this so it has more
+                    else:
+                        print("Unexpected brackets at line #" + str(linenum) + ": " + line)
+                elif "}" in line:
+                    try:
+                        brackets.pop()
+                    except IndexError: # This shouldn't happen.
+                        print("No brackets to delete.")
+                        print("Line", linenum, ":", line)
+                #Get rid of long, useless sections
+                elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
+                    continue
+                elif len(brackets) > 1 and brackets[0] == "countries={":
+                    for x in tagCapitals:
+                        if x in brackets[1]:
+                            #Here we have all the stats for country x on the players list
+                            if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
+                                tagCapitals[x] = int(line.strip("\tcapitl=\n"))
+            srcFile.close()
+            # Shuffle
             shuffle(self.reserves)
+            # Draft Reserves
             for res in self.reserves:
                 finaltag = None
                 for tag in res.picks:
-                    for x in finalReserves:
-                        if x.tag.upper() == tag.upper():
+                    resFaction = self.getFaction(tagCapitals[tag.upper()])
+                    if (resFaction is None) or (resFaction.taken >= resFaction.maxPlayers): # if faction is full, skip to next one
+                        continue
+                    for x in finalReserves: # If already taken, don't add (skip)
+                        if (x.tag.upper() == tag.upper()):
+                            print("nah")
                             break
                     else: # This means they get this tag
                         finaltag = tag
+                        resFaction.taken += 1
                         break
                 finalReserves.append(EU4Reserve.Nation(res.user.mention, finaltag))
             # At this point the finalReserves list is complete with all finished reserves. If a player had no reserves they could take, their tag is None

@@ -143,6 +143,23 @@ def continent(provinceID: Union[str, int]) -> str:
     # Was not found
     raise ValueError(str(provinceID) + " was not a valid province.")
 
+def isIn(provinceID: Union[str, int], group: str) -> bool:
+    """Checks if the province is within the given area, region, superregion, or continent."""
+
+    provarea = provinceArea(provinceID)
+    if provarea == group:
+        return True
+    provregion = region(provarea)
+    if provregion == group:
+        return True
+    provsuperregion = superregion(provregion)
+    if provsuperregion == group:
+        return True
+    provcontinent = continent(provinceID)
+    if provcontinent == group:
+        return True
+    return False
+
 class dataReq:
     DATATYPE_PROVINCEDAT = 0
     REQUEST_PROVINCE_NAME = 0
