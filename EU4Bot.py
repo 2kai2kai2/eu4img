@@ -668,9 +668,10 @@ class statsChannel(AbstractChannel):
 class asiReserve:
     """A user's reservation for an ASI game."""
 
-    def __init__(self, user: DiscUser):
+    def __init__(self, user: DiscUser, priority: bool = False):
         self.user: DiscUser = user
-        self.picks = None
+        self.picks: List[str] = None
+        self.priority = priority
 
 class asiFaction:
     """Represents a faction for an ASI game."""
@@ -716,6 +717,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                 if checkResAdmin(message.guild, message.author): # Here we send info about commands only for admins
                     stringHelp += "\n**" + prefix + "END**\nStops allowing reservations and stops the bot's channel management.\nThen runs and displays the draft. Draft may need to be rearranged manually to ensure game balance."
                     stringHelp += "\n**" + prefix + "ADMRES [nation1], [nation2], [nation3] [@user]**\nReserves picks on behalf of a player on the server.\nMake sure to actually @ the player."
+                    stringHelp += "\n**" + prefix + "EXECRES [nation] [optional @user]**\nReserves a pick on behalf of yourself or another player on the server.\nEnsures that this player gets the reservation first."
                     stringHelp += "\n**" + prefix + "ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
                     stringHelp += "\n**" + prefix + "UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
                 await message.delete()
@@ -765,6 +767,12 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                             if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
                                 tagCapitals[x] = int(line.strip("\tcapitl=\n"))
             srcFile.close()
+            # Draft Executive Reserves
+            for res in self.reserves:
+                if res.priority:
+                    finalReserves.append(EU4Reserve.Nation(res.user.mention, res.picks[0].upper()))
+                    self.getFaction(tagCapitals[res.picks[0].upper()]).taken += 1
+                    self.reserves.remove(res)
             # Shuffle
             shuffle(self.reserves)
             # Draft Reserves
@@ -776,7 +784,6 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                         continue
                     for x in finalReserves: # If already taken, don't add (skip)
                         if (x.tag.upper() == tag.upper()):
-                            print("nah")
                             break
                     else: # This means they get this tag
                         finaltag = tag
@@ -818,6 +825,32 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
             else:
                 await sendUserMessage(message.author, "Your reservation in " + self.displayChannel.mention + " needs to @ a player.")
             await message.delete()
+        elif text.upper().startswith(prefix + "EXECRES") and checkResAdmin(message.guild, message.author): # ADMRES [nation] @[optional_player]
+            res = ""
+            user: Optional[DiscUser] = None
+            if len(message.mentions) == 0:
+                res = text.split(" ", 1)[1].strip("\n\t ")
+                user = message.author
+            else:
+                res = text.split(" ", 1)[1].replace(message.mentions[0].mention, "").strip("\n\t ")
+                user = message.mentions[0]
+            pick = EU4Lib.country(res)
+            if pick is None: # Nation is invalid; tag not found.
+                await sendUserMessage(message.author, "Your reservation of " + res.strip("\n\t ") + " in " + self.interactChannel.mention + " for " + message.mentions[0].mention + " was not a recognized nation.")
+                await message.delete()
+                return
+            for r in self.reserves: # Check if it is already exec reserved
+                if r.priority and r.picks[0].upper() == pick.upper():
+                    await sendUserMessage(message.author, EU4Lib.tagToName(pick) + " is already executive-reserved in " + message.channel.mention)
+                    await message.delete()
+                    return
+            # Now reserve
+            await message.delete()
+            reserve = asiReserve(user, priority = True)
+            reserve.picks = [pick]
+            await self.remove(user)
+            self.reserves.append(reserve)
+            await self.updateText()
         elif text.upper() == prefix + "DELRESERVE" or text.upper() == prefix + "DELETERESERVE": # DELRESERVE
             await self.remove(message.author)
             await message.delete()
@@ -837,7 +870,10 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
             string += "\n*It's so empty here...*"
         else:
             for x in self.reserves:
-                string += "\n" + x.user.mention + ": " + EU4Lib.tagToName(x.picks[0]) + ", " + EU4Lib.tagToName(x.picks[1]) + ", " + EU4Lib.tagToName(x.picks[2])
+                if x.priority:
+                    string += "\n" + x.user.mention + ": **" + EU4Lib.tagToName(x.picks[0]) + "**"
+                else:
+                    string += "\n" + x.user.mention + ": " + EU4Lib.tagToName(x.picks[0]) + ", " + EU4Lib.tagToName(x.picks[1]) + ", " + EU4Lib.tagToName(x.picks[2])
         if self.textID is None:
             self.textID = (await self.displayChannel.send(content=string)).id
         else:
