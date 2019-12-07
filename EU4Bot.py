@@ -23,9 +23,9 @@ def imageToFile(img: Image) -> discord.File:
     """Comverts PIL Images into discord File objects."""
 
     file = BytesIO()
-    img.save(file, "JPEG")
+    img.save(file, "PNG")
     file.seek(0)
-    return discord.File(file, "img.jpg")
+    return discord.File(file, "img.png")
 
 async def sendUserMessage(user: Union[str, int, DiscUser], message: str) -> discord.Message:
     """Sends a user a specified DM via discord. Returns the discord Message object sent."""
@@ -440,7 +440,6 @@ class statsChannel(AbstractChannel):
         """Returns a stats Image based off the self.game data."""
 
         imgFinal = Image.open("src//finalTemplate.png")
-        #mapFinal = Image.blend(Image.open("src//heightmap.jpg"), self.politicalImage.copy(), (2.0/3.0))
         mapFinal = self.politicalImage.copy()
         #End Data Selection
         await self.interactChannel.send("**Processing...**")
