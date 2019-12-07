@@ -2,154 +2,282 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 import EU4Lib
 from dotenv import load_dotenv
-from typing import List, Optional
+from typing import List, Optional, Union
+import json
+from abc import ABC, abstractmethod
 
-class Nation:
+""" JSON Formatting
+In Python, this becomes a dict.
+
+
+{
+    "<ChannelID>": {
+        "kind": "reserve",
+        "reserves": [
+        {
+            "player": "<PlayerMention>",
+            "tag": "<TAG>"
+        },
+        {...}
+        ]
+    },
+    "<ChannelID>": {
+        "kind": "asi",
+        "reserves": [
+            {
+                "player": "<PlayerMention>",
+                "priority": false,
+                "picks": [
+                    "<TAG>",
+                    "<TAG>",
+                    "<TAG>"
+                ]
+            },
+            {
+                "player": "<PlayerMention>",
+                "priority": true,
+                "picks": [
+                    "<TAG>"
+                ]
+            }
+        ]
+    }
+}
+"""
+
+class AbstractPick(ABC):
+    def __init__(self, player: str):
+        pass
+    @abstractmethod
+    def toDict(self) -> dict:
+        pass
+
+class reservePick(AbstractPick):
     """A Nation for the nation reserve channel interaction."""
 
     def __init__(self, player: str, tag: str):
         self.player = player
         self.tag = tag
         self.capitalID: int = 0
+    def toDict(self) -> dict:
+        return {"player": self.player, "tag": self.tag}
 
-class Reserve:
+class asiPick(AbstractPick):
+    """A user's reservation for an ASI game."""
+
+    def __init__(self, player: str, priority: bool = False):
+        self.player: str = player
+        self.picks: List[str] = None
+        self.priority = priority
+    def toDict(self) -> dict:
+        return {"player": self.player, "priority": self.priority, "picks": self.picks}
+
+class AbstractReserve(ABC):
+    @abstractmethod
+    def __init__(self, name: str):
+        self.players: list = []
+        self.name = name # Should be channelID
+    @abstractmethod
+    def add(self, pick: AbstractPick) -> int:
+        """Codes:
+        1 = Success; New Reservation
+        2 = Success; Replaced old reservation
+        3 = Failed; Nation taken by other (ONLY for priority)
+        4 = Failed; Nation taken by self (ONLY for priority)
+        """
+        
+        pass
+    @abstractmethod
+    def removePlayer(self, name: str) -> bool:
+        pass
+    @abstractmethod
+    def delete(self):
+        pass
+    @abstractmethod
+    def toDict(self) -> dict:
+        pass
+
+class Reserve(AbstractReserve):
     """Represents a reservation list for a specific game. The name should be the id of the channel it represents."""
 
     def __init__(self, name: str):
-        self.nations: List[Nation] = [] # list of Nation objects
+        self.nations: List[reservePick] = [] # list of Nation objects
         self.name = name
-    def add(self, nation: Nation):
+    def add(self, nation: reservePick) -> int:
+        """Codes:
+        1 = Success; New Reservation
+        2 = Success; Replaced old reservation
+        3 = Failed; Nation taken by other
+        4 = Failed; Nation taken by self
+        """
+
+        addInt = 1
+        for pick in self.nations:
+            if pick.tag.upper() == nation.tag.upper():
+                if pick.player == nation.player:
+                    return 4
+                else:
+                    return 3
+            elif pick.player == nation.player:
+                addInt = 2
         self.nations.append(nation)
+        return addInt
     def remove(self, tag: str):
         for i in self.nations:
             if i.tag == tag:
                 self.nations.remove(i)
-    def removePlayer(self, name: str):
+    def removePlayer(self, name: str) -> bool:
         for i in self.nations:
             if i.player == name:
                 self.nations.remove(i)
+                return True
+        return False
     def getSaveText(self) -> str:
         string = str(self.name) + "\n"
         for nation in self.nations:
             string += "\t" + nation.tag + " " + nation.player + "\n"
         return string
+    def delete(self):
+        pass
+    def toDict(self) -> dict:
+        pickDictList = []
+        for pick in self.nations:
+            pickDictList.append(pick.toDict())
+        return {"kind": "reserve", "reserves": pickDictList}
 
+class ASIReserve(AbstractReserve):
+    def __init__(self, name: str):
+        self.players: List[asiPick] = []
+        self.name = name # Should be channelID
+    def add(self, pick: asiPick) -> int:
+        """Codes:
+        1 = Success; New Reservation
+        2 = Success; Replaced old reservation
+        3 = Failed; Nation taken by other (ONLY for priority)
+        4 = Failed; Nation taken by self (ONLY for priority)
+        """
 
-def getSavedReserves() -> List[Reserve]:
-    """Gets the list of all Reserves saved on file."""
+        addInt = 1
+        for player in self.players:
+            if pick.priority and player.priority and pick.picks[0] == player.picks[0]:
+                if pick.player == player.player:
+                    return 4
+                else:
+                    return 3
+            elif pick.player == player.player:
+                addInt = 2
+        self.players.append(pick)
+        return addInt
+    def removePlayer(self, name: str) -> bool:
+        for pick in self.players:
+            if pick.player == name:
+                self.players.remove(pick)
+                return True
+        return False
+    def delete(self):
+        pass
+    def toDict(self) -> dict:
+        pickDictList = []
+        for pick in self.players:
+            pickDictList.append(pick.toDict())
+        return {"kind": "asi", "reserves": pickDictList}
 
-    reserves: List[Reserve] = []
-    f = open("savedreservationgames.txt", "r")
-    currentReserve: Optional[Reserve] = None
-    while True:
-        line = f.readline()
-        if line is None or line == "": #--File has ended.
-            if currentReserve is not None:
-                reserves.append(currentReserve)
-            return reserves
-        elif line.startswith("\t"): #--This line is a new nation entry
-            things = line.strip("\n\t ").split(" ", 1)
-            currentReserve.add(Nation(things[1], things[0]))
-            del(things)
-        elif not line.startswith("\t") and not line.startswith(" ") and not line == "\n": #-- This line is a new reservation entry`
-            if currentReserve is not None:
-                reserves.append(currentReserve)
-            currentReserve = Reserve(line.strip("\n\t "))
-        else:
-            pass # Uh this shouldn't happen unless the file is formatted incorrectly.
-    f.close()
-    return reserves
+def load() -> List[AbstractReserve]:
+    try:
+        with open("ressave.json", "r") as x:
+            jsonLoad: dict = json.load(x)
+        if len(jsonLoad) == 0:
+            return []
+    except FileNotFoundError: # There are no reserves.
+        return []
+    except json.decoder.JSONDecodeError:
+        print("Something is wrong with the save json formatting. You can try to delete the file to reset.")
+        return []
+    resList = []
+    for res in jsonLoad:
+        if jsonLoad[res]["kind"] == "reserve":
+            r = Reserve(res)
+            for pick in jsonLoad[res]["reserves"]:
+                r.add(reservePick(pick["player"], pick["tag"]))
+            resList.append(r)
+        elif jsonLoad[res]["kind"] == "asi":
+            r = ASIReserve(res)
+            for pick in jsonLoad[res]["reserves"]:
+                asirespick = asiPick(pick["player"], pick["priority"])
+                asirespick.picks = pick["picks"]
+                r.add(asirespick)
+            resList.append(r)
+    return resList
 
-def getReserve(id: str) -> Optional[Reserve]:
-    """Gets a specific Reserve saved on file based on its name/channel id"""
+def save(reserves: List[AbstractReserve]):
+    jsonSave = {}
+    for res in reserves:
+        jsonSave[res.name] = res.toDict()
+    with open("ressave.json", "w") as x:
+        json.dump(jsonSave, x)
 
-    for r in getSavedReserves():
-        if r.name == id:
-            return r
-    return None
+def getReserve(name: str) -> AbstractReserve:
+    resList = load()
+    for res in resList:
+        if res.name == str(name):
+            return res
 
-def writeNewReservation(id: str):
-    """Saves a new empty Reserve on file."""
+def deleteReserve(reserve: Union[str, AbstractReserve]):
+    name = ""
+    if isinstance(reserve, str):
+        name = reserve
+    elif isinstance(reserve, AbstractReserve):
+        name = reserve.name
+    resList = load()
+    for x in resList:
+        if x.name == name:
+            resList.remove(x)
+            break
+    save(resList)
 
-    if not os.path.isfile("savedreservationgames.txt"):
-        f = open("savedreservationgames.txt", "w")
-        f.write(Reserve(id).getSaveText())
-        f.close()
-    else:
-        reservations = getSavedReserves()
-        for r in reservations:
-            if r.name == str(id):
-                reservations.remove(r)
-        reservations.append(Reserve(id))
-        
-        text = ""
-        for r in reservations:
-            text += r.getSaveText()
-        f = open("savedreservationgames.txt", "w")
-        f.write(text)
-        f.close()
+def deletePick(reserve: Union[str, AbstractReserve], player: str) -> bool:
+    name = ""
+    if isinstance(reserve, str):
+        name = reserve
+    elif isinstance(reserve, AbstractReserve):
+        name = reserve.name
+    resList = load()
+    didStuff = False
+    for x in resList:
+        if x.name == name:
+            didStuff = x.removePlayer(player)
+            break
+    save(resList)
+    return didStuff
 
-def saveAdd(id, nation: Nation) -> int:
-    """Saves a Nation to a Reserve on file. Returns a value based on this:
-    0 = Failed; Reserve id not found (Should be rare)
-    1 = Success; New reservation
+def addReserve(reserve: AbstractReserve):
+    resList = load()
+    resList.append(reserve)
+    save(resList)
+
+def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick):
+    """Codes:
+    0 = Failed; Reserve not found
+    1 = Success; New Reservation
     2 = Success; Replaced old reservation
     3 = Failed; Nation taken by other
-    4 = Failed; Nation taken by same player (no notif)
+    4 = Failed; Nation taken by self
     """
 
-    reserves = getSavedReserves()
-    change = 0
-    # 0 = Failed; Reserve id not found (Should be rare)
-    # 1 = Success; New reservation
-    # 2 = Success; Replaced old reservation
-    # 3 = Failed; Nation taken by other
-    # 4 = Failed; Nation taken by same player (no notif)
-    for r in reserves:
-        if r.name == str(id):
-            change = 1 # 1 - unless changed
-            for nat in r.nations: #Go through delete reservation if already reserved
-                if nat.tag == nation.tag:
-                    if nat.player == nation.player:
-                        return 4 # 4 - No changes
-                    else:
-                        return 3 # 3 - No changes
-            for nat in r.nations: #Go through delete reservation if already reserved
-                if nat.player == nation.player:
-                    r.nations.remove(nat)
-                    change = 2 # 2
-            #Then add the reservation
-            r.add(nation)
-            break # There should only be 1 of the same id
-    if change == 0:
-        return 0 # 0 - If nothing happened, no need to rewrite
-    text = ""
-    for r in reserves:
-        text += r.getSaveText()
-    f = open("savedreservationgames.txt", "w")
-    f.write(text)
-    f.close()
-    return change
-
-def saveRemove(id, user: str) -> bool:
-    """Removes a user's nation from a Reserve on file.
-    Returns a bool based on whether this made a change.
-    """
-
-    reserves = getSavedReserves()
-    change = False
-    for r in reserves:
-        if r.name == str(id):
-            r.removePlayer(user)
-            change = True
-    text = ""
-    for r in reserves:
-        text += r.getSaveText()
-    f = open("savedreservationgames.txt", "w")
-    f.write(text)
-    f.close()
-    return change
-
+    name = ""
+    if isinstance(reserve, str):
+        name = reserve
+    elif isinstance(reserve, AbstractReserve):
+        name = reserve.name
+    resList = load()
+    addInt = 0
+    for x in resList:
+        if x.name == name:
+            # We have the reserve here. Now different things for each 
+            addInt = x.add(pick)
+            break
+    save(resList)
+    return addInt
 
 def createMap(reserve: Reserve) -> Image:
     """Creates a map based on a Reserve object with x's on all the capitals of reserved Nations.
@@ -197,3 +325,4 @@ def createMap(reserve: Reserve) -> Image:
         mapFinal.paste(imgX, (int(loc[0]-imgX.size[0]/2), int(loc[1]-imgX.size[1]/2)), imgX)
         # I hope this doesn't break if a capital is too close to the edge
     return mapFinal
+

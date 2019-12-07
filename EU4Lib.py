@@ -82,7 +82,7 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     lines = srcFile.readlines()
     currentArea = None
     for line in lines:
-        if " = {" in line:
+        if " = {" in line and not "\tcolor = {" in line:
             currentArea = line.split(" ")[0].strip("\t ={\n")
         else:
             if str(provinceID) in line.split():
