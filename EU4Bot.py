@@ -475,20 +475,20 @@ class statsChannel(AbstractChannel):
         #The top has 5632x1119
         fontsmall = ImageFont.load_default()
         font = ImageFont.load_default()
-        fontbig = ImageFont.load_default()
+        #fontbig = ImageFont.load_default()
         try:
             fontsmall = ImageFont.truetype("FONT.TTF", 50)
             font = ImageFont.truetype("FONT.TTF", 100)
-            fontbig = ImageFont.truetype("FONT.TTF", 180)
+            #fontbig = ImageFont.truetype("FONT.TTF", 180)
         except(FileNotFoundError, IOError):
             try:
                 fontsmall = ImageFont.truetype("GARA.TTF", 50)
                 font = ImageFont.truetype("GARA.TTF", 100)
-                fontbig = ImageFont.truetype("GARA.TTF",180)
+                #fontbig = ImageFont.truetype("GARA.TTF",180)
             except(FileNotFoundError, IOError):
                 fontsmall = ImageFont.load_default()
                 font = ImageFont.load_default()
-                fontbig = ImageFont.load_default()
+                #fontbig = ImageFont.load_default()
         imgDraw = ImageDraw.Draw(imgFinal)
         #================MULTIPLAYER================#
         if True:#mp == True:
@@ -536,7 +536,6 @@ class statsChannel(AbstractChannel):
                     #max_sailors
                 else:
                     pass
-                    #print(nat.tag + " does not fit!")
         #================SINGLEPLAYER================#
         else:
             pass
@@ -646,7 +645,7 @@ class statsChannel(AbstractChannel):
                 name = message.content.strip("\n\t ").partition(" ")[2].strip("\t\n ")
                 tag = EU4Lib.country(name)
                 if tag is None:
-                    await self.interactChannel.send("Did not recognize " + tag.upper() + " as a valid nation.")
+                    await self.interactChannel.send("Did not recognize " + name + " as a valid nation.")
                     return
                 for nat in self.game.countries:
                     if nat.tag.upper().strip("\t \n") == tag.upper().strip("\t \n"):

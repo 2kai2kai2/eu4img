@@ -6,7 +6,14 @@ from typing import List, Optional, Union
 import json
 from abc import ABC, abstractmethod
 
-""" JSON Formatting
+""" Data Structure - Python side
+AbstractReserve ("Reserve")
+    players: List[AbstractPick ("Pick")]
+        player: str; user mention
+    name: str; Channel ID as a str
+"""
+
+""" Data Structure - JSON Formatting
 In Python, this becomes a dict.
 
 
@@ -56,7 +63,7 @@ class reservePick(AbstractPick):
     """A Nation for the nation reserve channel interaction."""
 
     def __init__(self, player: str, tag: str):
-        self.player = player
+        self.player: str = player
         self.tag = tag
         self.capitalID: int = 0
     def toDict(self) -> dict:
@@ -101,7 +108,7 @@ class Reserve(AbstractReserve):
     """Represents a reservation list for a specific game. The name should be the id of the channel it represents."""
 
     def __init__(self, name: str):
-        self.nations: List[reservePick] = [] # list of Nation objects
+        self.players: List[reservePick] = [] # list of reservePick objects
         self.name = name
     def add(self, nation: reservePick) -> int:
         """Codes:
@@ -112,7 +119,7 @@ class Reserve(AbstractReserve):
         """
 
         addInt = 1
-        for pick in self.nations:
+        for pick in self.players:
             if pick.tag.upper() == nation.tag.upper():
                 if pick.player == nation.player:
                     return 4
@@ -120,28 +127,25 @@ class Reserve(AbstractReserve):
                     return 3
             elif pick.player == nation.player:
                 addInt = 2
-        self.nations.append(nation)
+        self.players.append(nation)
         return addInt
-    def remove(self, tag: str):
-        for i in self.nations:
+    def remove(self, tag: str) -> bool:
+        for i in self.players:
             if i.tag == tag:
-                self.nations.remove(i)
-    def removePlayer(self, name: str) -> bool:
-        for i in self.nations:
-            if i.player == name:
-                self.nations.remove(i)
+                self.players.remove(i)
                 return True
         return False
-    def getSaveText(self) -> str:
-        string = str(self.name) + "\n"
-        for nation in self.nations:
-            string += "\t" + nation.tag + " " + nation.player + "\n"
-        return string
+    def removePlayer(self, name: str) -> bool:
+        for i in self.players:
+            if i.player == name:
+                self.players.remove(i)
+                return True
+        return False
     def delete(self):
         pass
     def toDict(self) -> dict:
         pickDictList = []
-        for pick in self.nations:
+        for pick in self.players:
             pickDictList.append(pick.toDict())
         return {"kind": "reserve", "reserves": pickDictList}
 
@@ -280,11 +284,11 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick):
     return addInt
 
 def createMap(reserve: Reserve) -> Image:
-    """Creates a map based on a Reserve object with x's on all the capitals of reserved Nations.
+    """Creates a map based on a Reserve object with x's on all the capitals of reserved reservePicks.
     Returns an Image object.
     """
 
-    countries: List[Nation] = reserve.nations
+    countries: List[reservePick] = reserve.players
     mapFinal = Image.open("src//map_1444.png")
     srcFile = open("src\\save_1444.eu4", "r")
     lines = srcFile.readlines()

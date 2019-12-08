@@ -8,14 +8,16 @@ def country(text: str) -> Optional[str]:
     If the nation is not recognized, returns None.
     """
 
+    # Read out the countries file
     srcFile = open("src\\countries_l_english.yml")
     lines = srcFile.readlines()
-    srcFile.close
+    srcFile.close()
+    # If it could be a tag, check for that.
     if len(text) == 3:
         for line in lines:
             if line[1:4] == text.upper():
                 return text
-    # text is not just a tag
+    # text is not a recognized tag, search names
     for line in lines:
        if ('"' + text.lower() + '"') in line.lower():
            return line[1:4]
@@ -27,13 +29,17 @@ def tagToName(tag: str) -> Optional[str]:
     If the tag is not recognized, returns None.
     """
     
+    # Read out the countries file
     srcFile = open("src\\countries_l_english.yml")
     lines = srcFile.readlines()
-    srcFile.close
+    srcFile.close()
+    # If it could be a valid tag
     if len(tag) == 3:
+        # Then search for it and return the first thing in quotes on that line
         for line in lines:
             if line[1:4] == tag.upper():
                 return line[8:].split("\"", 1)[0].strip("\" \t\n")
+    # Tag was not found or is not valid 3-character str
     return None
 
 def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
@@ -41,17 +47,34 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     Returns a tuple of floats, (x, y).
     """
     
+    # Read file
     srcFile = open("src\\positions.txt", "r")
     lines = srcFile.readlines()
+    srcFile.close()
+    """Format of the file:
+    1={
+        position={
+            3085.000 1723.000 3086.000 1730.000 3084.500 1729.000 3095.000 1724.500 3082.000 1730.000 3080.000 1736.000 0.000 0.000 
+        }
+        rotation={
+            0.000 0.000 0.087 -0.698 0.000 0.000 0.000 
+        }
+        height={
+            0.000 0.000 1.000 0.000 0.000 0.000 0.000 
+        }
+    }
+    
+    So we want the 3085.000 1723.000 from the 1={ because the first two are the location of the city in the province
+    """
     beyond = 0
     for line in lines:
-        if beyond == 2:
+        if beyond == 2: # Two after the province, this is the line with the position.
             vals = line.strip("\t\n ").split(" ")
-            return (float(vals[0]), 2048-float(vals[1]))
-        if beyond == 1:
+            return (float(vals[0]), 2048-float(vals[1])) # need to subtract the y value because the position starts from the bottom rather than the top like images
+        if beyond == 1: # One after the province, wait one more line for the position
             beyond = 2
             continue
-        if line.strip("\n ") == (str(id)+"={"):
+        if line.strip("\n ") == (str(id)+"={"): # So we have the province... Wait two lines for the position
             beyond = 1
             continue
         
@@ -60,15 +83,19 @@ def flag(tag: str) -> Image:
     Returns Image of size (128, 128).
     """
     
-    index = open("src\\flagfiles.txt", "r")
-    line = index.read()
+    # Read file
+    srcFile = open("src\\flagfiles.txt", "r")
+    line = srcFile.read()
+    srcFile.close()
+    # Get the number for the order of the flag; starts at 0
     a = line.partition(tag) #Separate into a 3-tuple around tag
     flagnum = a[0].count(".tga") #Get image number starting at 0
-    #Each flag file is 16x16 so a total of 256 each
-    #Each flag icon is 128x128 pixels
+    # Get the file based on 256 flags per
     flagfile = Image.open("src\\flagfiles_" + str(int(flagnum/256)) + ".tga")
+    # Get the location of the flag within the file
     x = 128*((flagnum%256)%16)
     y = 128*int((flagnum%256)/16)
+    # Get the actual flag image and return it
     flagimg = flagfile.crop((x, y, x+127, y+127))
     flagimg.load()
     return flagimg
@@ -78,12 +105,17 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     Raises an error if the province is not found.
     """
     
+    # Read file
     srcFile = open("src\\area.txt", "r")
     lines = srcFile.readlines()
+    srcFile.close()
+    # Search file
     currentArea = None
     for line in lines:
+        # Set the current area for when it goes again and has the provinces
         if " = {" in line and not "\tcolor = {" in line:
             currentArea = line.split(" ")[0].strip("\t ={\n")
+        # If it's the right province, return the area
         else:
             if str(provinceID) in line.split():
                 return currentArea
@@ -96,12 +128,17 @@ def region(areaName: str) -> str:
     Raises an error if the area is not found.
     """
     
+    # Read file
     srcFile = open("src\\region.txt", "r")
     lines = srcFile.readlines()
+    srcFile.close()
+    # Search File
     currentRegion = None
     for line in lines:
+        # Get the region for the next lines
         if " = {" in line and not line.startswith("\t"):
             currentRegion = line.split(" ")[0].strip("\t ={\n")
+        # If it's the right area, return the region
         else:
             if line.strip("\n\t ") == areaName:
                 return currentRegion
@@ -114,12 +151,17 @@ def superregion(regionName: str) -> str:
     Raises an error if the region is not found.
     """
     
+    # Read file
     srcFile = open("src\\superregion.txt", "r")
     lines = srcFile.readlines()
+    srcFile.close()
+    # Search file
     currentSuperregion = None
     for line in lines:
+        # Get the superregion for the next lines
         if " = {" in line and not line.startswith("\t"):
             currentSuperregion = line.split(" ")[0].strip("\t ={\n")
+        # If it's the right region, return the superregion
         else:
             if line.strip("\n\t ") == regionName:
                 return currentSuperregion
@@ -131,12 +173,17 @@ def continent(provinceID: Union[str, int]) -> str:
     Raises an error if the province is not found.
     """
     
+    # Read file
     srcFile = open("src\\continent.txt", "r")
     lines = srcFile.readlines()
+    srcFile.close()
+    # Search file
     currentContinent = None
     for line in lines:
+        # Get the continent for the following lines
         if " = {" in line:
             currentContinent = line.split(" ")[0].strip("\t ={\n")
+        # If it's the right province, return the continent
         else:
             if str(provinceID) in line.split():
                 return currentContinent
@@ -146,6 +193,7 @@ def continent(provinceID: Union[str, int]) -> str:
 def isIn(provinceID: Union[str, int], group: str) -> bool:
     """Checks if the province is within the given area, region, superregion, or continent."""
 
+    # Because area, region, and superregion has the suffix with _area, etc. each can't be confused with the other.
     provarea = provinceArea(provinceID)
     if provarea == group:
         return True
@@ -210,12 +258,10 @@ def provinceData(*requests: dataReq) -> List[dataReq]:
             elif line.count("}") == 0 and line.count("{") == 1:
                 brackets.append(line.rstrip("\n "))
             elif line.count("}") == 0 and line.count("{") > 1:
-                for x in range(line.count("{")):
-                    brackets.append("{") #TODO: fix this so it has more
+                brackets.append("{" * line.count("{")) #TODO: fix this so it has more stuff
             else:
                 #print("Unexpected brackets at line #" + str(linenum) + ": " + line)
                 pass
-            #print("{")
         elif "}" in line:
             try:
                 brackets.pop()
@@ -223,8 +269,6 @@ def provinceData(*requests: dataReq) -> List[dataReq]:
                 #print("No brackets to delete.")
                 #print("Line", linenum, ":", line)
                 pass
-            #print("}")
-        #Get rid of long, useless sections
         elif len(brackets) == 2 and "provinces={" == brackets[0]:
             for request in data:
                 if request.response is None and request.datatype == dataReq.DATATYPE_PROVINCEDAT and ("-" + str(request.key) + "={") == brackets[1]:
@@ -236,8 +280,8 @@ def provinceData(*requests: dataReq) -> List[dataReq]:
                         request.respond(line.split("=", 1)[1].strip("\n\t "))
                     elif request.request == dataReq.REQUEST_PROVINCE_RELIGION_ORIGINAL and line.startswith("\t\toriginal_religion="):
                         request.respond(line.split("=", 1)[1].strip("\n\t "))
-        elif len(brackets) < 0 and ("trade={" == brackets[1]  or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
-            continue
+        #elif len(brackets) < 0 and ("trade={" == brackets[1]  or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
+        #    continue
         else:
             pass
     return data
