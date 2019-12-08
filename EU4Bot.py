@@ -285,7 +285,10 @@ class statsChannel(AbstractChannel):
 
         prompt = "**Current players list:**```"
         for x in self.game.countries:
-            prompt += "\n" + EU4Lib.tagToName(x.tag)+ ": "+ x.player
+            if EU4Lib.tagToName(x.tag) is None:
+                prompt += "\n" + x.tag + ": " + x.player
+            else:
+                prompt += "\n" + EU4Lib.tagToName(x.tag)+ ": " + x.player
         #prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nadd TAG playername\nremove TAG**\n"
         prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nremove [nation]**\n"
         return prompt
