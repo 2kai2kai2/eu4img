@@ -225,6 +225,7 @@ def getReserve(name: str) -> AbstractReserve:
     for res in resList:
         if res.name == str(name):
             return res
+    return None
 
 def deleteReserve(reserve: Union[str, AbstractReserve]):
     name = ""

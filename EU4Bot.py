@@ -219,7 +219,7 @@ class ReserveChannel(AbstractChannel):
         if msgID == self.textID:
             self.textID = None
             await self.updateText()
-            await (await self.interactChannel.fetch_message(self.getImgID())).delete()
+            await (await self.interactChannel.fetch_message(self.getImgID())).delete() # This will call msgdel again for the img
         if msgID == self.imgID:
             self.imgID = None
             reserve = EU4Reserve.getReserve(str(self.interactChannel.id))
@@ -430,15 +430,16 @@ class statsChannel(AbstractChannel):
                                 #Add 1 for each ship
                                 elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
                                     x.navy += 1
-
+        # Finalize data
         for x in self.game.countries: #Remove dead countries from players list
-            if x.development == 0:
+            if x is None or x.development == 0:
                 self.game.playertags.remove(x.tag)
                 self.game.countries.remove(x)
         if self.game.GP == [] or self.game.date == None or self.game.age == None: # These signify that it's probably not a valid save file.
             raise Exception("This probably isn't a valid .eu4 uncompressed save file from " + self.user.mention)
         #Sort Data:
         self.game.countries.sort(key=lambda x: x.development, reverse=True)
+
     async def generateImage(self) -> Image:
         """Returns a stats Image based off the self.game data."""
 
@@ -539,7 +540,6 @@ class statsChannel(AbstractChannel):
         #================SINGLEPLAYER================#
         else:
             pass
-            #print("Unfortunately, Singleplayer does not work yet. ):")
         #================END  SECTION================#
         #Date
         year = self.game.date.partition(".")[0].strip("\t \n")
@@ -572,13 +572,13 @@ class statsChannel(AbstractChannel):
         return imgFinal
     
     async def responsive(self, message: discord.Message) -> bool:
-        return message.channel == self.interactChannel and message.author.bot == False
+        return message.channel == self.interactChannel and not message.author.bot
     async def process(self, message: discord.Message):
         if message.content.upper() == prefix + "CANCEL":
             await self.interactChannel.send("**Cancelling the stats operation.**")
             interactions.remove(self)
             del(self)
-        elif not self.hasReadFile:
+        elif not self.hasReadFile: # First step - get .eu4 file
             saveFile: Optional[StringIO] = None
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".eu4"):
                 try:
@@ -602,31 +602,44 @@ class statsChannel(AbstractChannel):
             try:
                 await self.readFile(saveFile)
             except:
-                await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Is it uncompressed?\n**Please try another file.**")
+                await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**")
                 return
             else:
                 await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
                 self.hasReadFile = True
                 del(saveFile)
-        elif self.hasReadFile and (self.politicalImage is None):
-            if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".png"):
+        elif self.hasReadFile and (self.politicalImage is None): # Second step - get .png file
+            if len(message.attachments) == 0: # Check there is a file
+                await self.interactChannel.send("File not recieved. Please send a file as a message attachment.")
+            elif not message.attachments[0].filename.endswith(".png"): # Needs to be a .png file
+                await self.interactChannel.send("File ending needs to be .png. Please send a .png EU4 player mapmode screenshot.")
+            else: # This means that all the checks succeeded
                 politicalFile = BytesIO()
                 await message.attachments[0].save(politicalFile)
                 self.politicalImage = Image.open(politicalFile)
+                del(politicalFile)
                 if self.politicalImage.size != (5632, 2048):
                     await self.interactChannel.send("**Your image was not the right size.** (5632, 2048)\nDid you submit a Political Mapmode screenshot? (f10)\n**Please try another image.**")
                     self.politicalImage = None
-                    return
-                self.modMsg = await self.interactChannel.send(self.modPromptStr())
-        elif self.hasReadFile and (self.politicalImage is not None) and (not self.doneMod):
+                else:
+                    self.modMsg = await self.interactChannel.send(self.modPromptStr())
+
+        elif self.hasReadFile and (self.politicalImage is not None) and (not self.doneMod): # Third step - player list modification
             if message.content.strip("\n\t ") == "done":
                 self.doneMod == True
+                img = None
+                # Create the Image and convert to discord.File
                 try:
-                    await self.displayChannel.send(file = imageToFile(await self.generateImage()))
+                    img = imageToFile(await self.generateImage())
                 except:
                     await self.interactChannel.send("**Image generation failed!**\nPerhaps something was wrong with one of the files?\n**Try " + prefix + "stats again after checking that the files are valid and unchanged from their creation.**")
-                else:
-                    await self.interactChannel.send("**Image posted to " + self.displayChannel.mention + "**")
+                else: # That was successful, now post!
+                    try: 
+                        await self.displayChannel.send(file = img)
+                    except discord.Forbidden: # If we're not allowed to send on the server, just give it in dms. They can post it themselves; this will reduce the server load
+                        await self.interactChannel.send("**Unable to send the image to " + self.displayChannel.mention + " due to lack of permissions. Posting image here:**\nYou can right-click and copy link then post that.", file = imageToFile(img))
+                    else:
+                        await self.interactChannel.send("**Image posted to " + self.displayChannel.mention + "**")
                 interactions.remove(self)
                 del(self)
             #elif message.content.strip("\n\t ").startswith("add "):
@@ -645,7 +658,7 @@ class statsChannel(AbstractChannel):
                 name = message.content.strip("\n\t ").partition(" ")[2].strip("\t\n ")
                 tag = EU4Lib.country(name)
                 if tag is None:
-                    await self.interactChannel.send("Did not recognize " + name + " as a valid nation.")
+                    await self.interactChannel.send("Did not recognize \"" + name + "\" as a valid nation.")
                     return
                 for nat in self.game.countries:
                     if nat.tag.upper().strip("\t \n") == tag.upper().strip("\t \n"):
@@ -653,18 +666,19 @@ class statsChannel(AbstractChannel):
                         self.game.playertags.remove(nat.tag)
                         await self.modMsg.edit(content = self.modPromptStr())
                         break
-                    elif self.game.countries[len(self.game.countries)-1] == nat: #This means we are on the last one and elif- it's still not on the list.
+                    elif self.game.countries[len(self.game.countries)-1] == nat: #This means we are on the last one and elif so it's still not on the list.
                         await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
     async def msgdel(self, msgID: Union[str, int]):
         pass
     async def userdel(self, user: DiscUser):
         if user == self.user:
             try:
-                await self.interactChannel.send("You left the " + self.displayChannel.guild.name + " discord server, so this interaction is cancelled.")
+                await self.interactChannel.send("You left the " + self.displayChannel.guild.name + " discord server, so this stats interaction has been cancelled.")
             except: # This means the account was deleted. Oh well.
                 pass
-            interactions.remove(self)
-            del(self)
+            finally:
+                interactions.remove(self)
+                del(self)
 
 
 class asiFaction:
@@ -676,8 +690,8 @@ class asiFaction:
         self.maxPlayers = maxPlayers
         self.taken = 0
     def isInTerritory(self, provinceID: Union[str, int]) -> bool:
-        for x in self.territory:
-            if EU4Lib.isIn(provinceID, x):
+        for land in self.territory:
+            if EU4Lib.isIn(provinceID, land):
                 return True
         return False
 
@@ -722,8 +736,8 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author): # END
             await message.delete()
             reserves = EU4Reserve.getReserve(str(self.displayChannel.id)).players
-            finalReserves = [] # List of EU4Reserve.Nation objects
-            tagCapitals = dict()
+            finalReserves: List[EU4Reserve.reservePick] = []
+            tagCapitals = dict() # This stores the capitals of all possible tags, so that their factions can be determined.
             # Add all possibly reserved nations to the tagCapitals dictionary with a capital of -1
             for res in reserves:
                 for tag in res.picks:
@@ -792,7 +806,11 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                 if res.tag is None:
                     string += "\n" + str(count) + " " + res.player + ": *[all taken]*"
                 else:
-                    string += "\n" + str(count) + " " + res.player + ": " + EU4Lib.tagToName(res.tag)
+                    t = EU4Lib.tagToName(res.tag)
+                    if t is not None:
+                        string += "\n" + str(count) + " " + res.player + ": " + t
+                    else:
+                        string += "\n" + str(count) + " " + res.player + ": " + res.tag
                 count += 1
             await self.displayChannel.send(string)
             # aaand we're done!
@@ -899,9 +917,6 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
     async def userdel(self, user: DiscUser):
         await self.remove(user)
         await self.updateText()
-
-#Start Data Selection
-
 
 # DISCORD CODE
 interactions: List[AbstractChannel] = []
