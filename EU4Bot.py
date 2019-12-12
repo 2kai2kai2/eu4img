@@ -113,24 +113,24 @@ class ReserveChannel(AbstractChannel):
         self.interactChannel = initChannel
         self.displayChannel = initChannel
         self.textID: Optional[int] = None
-        self.imgID: Optional[int] =None
+        self.imgID: Optional[int] = None
         EU4Reserve.addReserve(EU4Reserve.Reserve(str(self.interactChannel.id)))
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
     async def process(self, message: discord.Message):
         text = message.content.strip("\n\t ")
         if text.upper() == prefix + "HELP":
-                stringHelp = "__**Command help for " + message.channel.mention + ":**__"
-                stringHelp += "\n**" + prefix + "HELP**\nGets you this information!"
-                stringHelp += "\n**" + prefix + "RESERVE [nation]**\nReserves a nation or overwrites your previous reservation. Don't include the brackets."
-                stringHelp += "\n**" + prefix + "DELRESERVE**\nCancels your reservation."
-                if checkResAdmin(message.guild, message.author): # Here we send info about commands only for admins
-                    stringHelp += "\n**" + prefix + "END**\nStops allowing reservations and stops the bot's channel management.\nThis should be done by the time the game starts."
-                    stringHelp += "\n**" + prefix + "ADMRES [nation] [@user]**\nReserves a nation on behalf of a player on the server.\nMake sure to actually @ the player."
-                    stringHelp += "\n**" + prefix + "ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
-                    stringHelp += "\n**" + prefix + "UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
-                await message.delete()
-                await sendUserMessage(message.author, stringHelp)
+            stringHelp = "__**Command help for " + message.channel.mention + ":**__"
+            stringHelp += "\n**" + prefix + "HELP**\nGets you this information!"
+            stringHelp += "\n**" + prefix + "RESERVE [nation]**\nReserves a nation or overwrites your previous reservation. Don't include the brackets."
+            stringHelp += "\n**" + prefix + "DELRESERVE**\nCancels your reservation."
+            if checkResAdmin(message.guild, message.author): # Here we send info about commands only for admins
+                stringHelp += "\n**" + prefix + "END**\nStops allowing reservations and stops the bot's channel management.\nThis should be done by the time the game starts."
+                stringHelp += "\n**" + prefix + "ADMRES [nation] [@user]**\nReserves a nation on behalf of a player on the server.\nMake sure to actually @ the player."
+                stringHelp += "\n**" + prefix + "ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
+                stringHelp += "\n**" + prefix + "UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
+            await message.delete()
+            await sendUserMessage(message.author, stringHelp)
         elif text.upper() == prefix + "UPDATE" and checkResAdmin(message.guild, message.author): # UPDATE
             await message.delete()
             await self.updateText()
@@ -182,10 +182,10 @@ class ReserveChannel(AbstractChannel):
     async def updateText(self):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id))
         string = "How to reserve: " + prefix + "reserve [nation]\nTo unreserve: " + prefix + "delreserve\n**Current players list:**"
-        if reserve is None or len(reserve.nations) == 0:
+        if reserve is None or len(reserve.players) == 0:
             string = string + "\n*It's so empty here...*"
         else:
-            for x in reserve.nations:
+            for x in reserve.players:
                 string = string + "\n" + x.player + ": " + EU4Lib.tagToName(x.tag)
         if self.textID is None:
             self.setTextID((await self.displayChannel.send(content=string)).id)
@@ -268,7 +268,8 @@ class statsChannel(AbstractChannel):
         self.displayChannel = initChannel
         self.hasReadFile = False
         self.politicalImage: Image = None
-        self.playersImage: Image = Image.open("src//BlankPlayerMap.png")
+        #self.playersImage: Image = Image.open("src//BlankPlayerMap.png")
+        self.playersImage = None
         self.game = saveGame()
         self.modMsg = None
         self.doneMod = False
@@ -447,33 +448,32 @@ class statsChannel(AbstractChannel):
         mapFinal = self.politicalImage.copy()
         #End Data Selection
         await self.interactChannel.send("**Processing...**")
-        #Start Map Creation
+        # Modify the image
         mapDraw = ImageDraw.Draw(mapFinal)
-        for x in range(mapFinal.size[0]):
-            for y in range(mapFinal.size[1]):
-                #Get color for each pixel
-                #In EU4 player mapmode screenshots,
-                #Water: (68, 107, 163)
-                #AI: (127, 127, 127)
-                #Wasteland: (94, 94, 94)
-                color = self.playersImage.getpixel((x, y))
-                if color == (68, 107, 163) or color == (127, 127, 127) or color == (94, 94, 94):
+        if self.playersImage is not None: # If there's a player image - current eu4 update the screenshot is broken
+            for x in range(mapFinal.size[0]):
+                for y in range(mapFinal.size[1]):
+                    #Get color for each pixel
+                    #In EU4 player mapmode screenshots,
+                    #Water: (68, 107, 163)
+                    #AI: (127, 127, 127)
+                    #Wasteland: (94, 94, 94)
+                    color = self.playersImage.getpixel((x, y))
+                    if color == (68, 107, 163) or color == (127, 127, 127) or color == (94, 94, 94):
+                        #print(round(100*x*y/totalPixels, 2), "% Done (", x, ", ", y, ")")
+                        continue
+                    else:
+                        #All pixels on the edge should be water and wasteland so not get past ^ if, although custom games may break this by not being real pixels
+                        #TODO: Make no borders for wasteland
+                        if color != self.playersImage.getpixel((x - 1, y - 1)) or color != self.playersImage.getpixel((x - 1, y)) or color != self.playersImage.getpixel((x - 1, y + 1)) or color != self.playersImage.getpixel((x, y - 1)) or color != self.playersImage.getpixel((x, y + 1)) or color != self.playersImage.getpixel((x + 1, y - 1)) or color != self.playersImage.getpixel((x + 1, y)) or color != self.playersImage.getpixel((x + 1, y + 1)):
+                            #Black for player borders
+                            mapDraw.point((x, y), (255-color[0], 255-color[1], 255-color[2]))
                     #print(round(100*x*y/totalPixels, 2), "% Done (", x, ", ", y, ")")
-                    continue
-                else:
-                    #All pixels on the edge should be water and wasteland so not get past ^ if, although custom games may break this by not being real pixels
-                    #TODO: Make no borders for wasteland
-                    if color != self.playersImage.getpixel((x - 1, y - 1)) or color != self.playersImage.getpixel((x - 1, y)) or color != self.playersImage.getpixel((x - 1, y + 1)) or color != self.playersImage.getpixel((x, y - 1)) or color != self.playersImage.getpixel((x, y + 1)) or color != self.playersImage.getpixel((x + 1, y - 1)) or color != self.playersImage.getpixel((x + 1, y)) or color != self.playersImage.getpixel((x + 1, y + 1)):
-                        #Black for player borders
-                        mapDraw.point((x, y), (255-color[0], 255-color[1], 255-color[2]))
-                #print(round(100*x*y/totalPixels, 2), "% Done (", x, ", ", y, ")")
-        #End Map Creation
-
         #Start Final Img Creation
         imgFinal.paste(mapFinal, (0, imgFinal.size[1]-mapFinal.size[1])) #Copy map into bottom of final image
         del(mapFinal)
-
         #The top has 5632x1119
+        # Getting fonts
         fontsmall = ImageFont.load_default()
         font = ImageFont.load_default()
         #fontbig = ImageFont.load_default()
@@ -672,10 +672,8 @@ class statsChannel(AbstractChannel):
         pass
     async def userdel(self, user: DiscUser):
         if user == self.user:
-            try:
+            try: # If this fails, it probably means the account was deleted. We still should delete.
                 await self.interactChannel.send("You left the " + self.displayChannel.guild.name + " discord server, so this stats interaction has been cancelled.")
-            except: # This means the account was deleted. Oh well.
-                pass
             finally:
                 interactions.remove(self)
                 del(self)
@@ -690,6 +688,8 @@ class asiFaction:
         self.maxPlayers = maxPlayers
         self.taken = 0
     def isInTerritory(self, provinceID: Union[str, int]) -> bool:
+        """Returns whether or not the given province is within this faction's territory."""
+
         for land in self.territory:
             if EU4Lib.isIn(provinceID, land):
                 return True
@@ -709,6 +709,10 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         self.factions.append(asiFaction("Asia", ["china_superregion", "tartary_superregion", "far_east_superregion", "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion"], 3))
         EU4Reserve.addReserve(EU4Reserve.ASIReserve(str(self.displayChannel.id)))
     def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
+        """**Returns the faction that owns a given province.**
+
+        This should only be one faction, but if more than one have the province in their territory list,, only the first faction with the territory on its list will be returned.
+        """
         for faction in self.factions:
             if faction.isInTerritory(provinceID):
                 return faction
