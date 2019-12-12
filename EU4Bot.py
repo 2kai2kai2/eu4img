@@ -108,13 +108,14 @@ class AbstractChannel(ABC):
         pass
 
 class ReserveChannel(AbstractChannel):
-    def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, Load = False):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
         self.textID: Optional[int] = None
         self.imgID: Optional[int] = None
-        EU4Reserve.addReserve(EU4Reserve.Reserve(str(self.interactChannel.id)))
+        if not Load: # If this is new, then make a new Reserve.
+            EU4Reserve.addReserve(EU4Reserve.Reserve(str(self.interactChannel.id)))
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
     async def process(self, message: discord.Message):
@@ -696,7 +697,7 @@ class asiFaction:
         return False
 
 class asiresChannel(AbstractChannel): # This is custom for my discord group. Anybody else can ignore it or do what you will.
-    def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, Load = False):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
@@ -707,7 +708,8 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         self.factions.append(asiFaction("Mid", ["balkan_region", "near_east_superregion", "persia_superregion", "egypt_region", "maghreb_region"]))
         self.factions.append(asiFaction("India", ["india_superregion", "burma_region"]))
         self.factions.append(asiFaction("Asia", ["china_superregion", "tartary_superregion", "far_east_superregion", "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion"], 3))
-        EU4Reserve.addReserve(EU4Reserve.ASIReserve(str(self.displayChannel.id)))
+        if not Load:
+            EU4Reserve.addReserve(EU4Reserve.ASIReserve(str(self.displayChannel.id)))
     def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
         """**Returns the faction that owns a given province.**
 
@@ -962,7 +964,21 @@ async def on_message(message: discord.Message):
                 await message.delete()
                 await c.updateText()
                 interactions.append(c)
-
+            elif text.upper() == prefix + "LOAD" and checkResAdmin(message.guild, message.author):
+                res = EU4Reserve.getReserve(str(message.channel.id))
+                if res is None:
+                    await sendUserMessage(message.author, "You tried to load a save in " + message.channel.mention + " but no save was found. Please try " + prefix + "NEW to create new reserves.")
+                elif isinstance(res, EU4Reserve.Reserve):
+                    c = ReserveChannel(message.author, message.channel, Load = True)
+                    await message.delete()
+                    await c.updateText()
+                    await c.updateImg()
+                    interactions.append(c)
+                elif isinstance(res, EU4Reserve.ASIReserve):
+                    c = asiresChannel(message.guild, message.channel, Load = True)
+                    await message.delete()
+                    await c.updateText()
+                    interactions.append(c)
 @client.event
 async def on_guild_channel_delete(channel: DiscTextChannels):
     for c in interactions:
