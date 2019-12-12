@@ -4,11 +4,11 @@ EU4img.zip
 #Files created upon testing
 __pycache__/
 final.png
-savedreservationgames.txt
 
 #Shortcuts
 save games.lnk
 Screenshots.lnk
 
 #Discord specifics
+ressave.json
 .env
