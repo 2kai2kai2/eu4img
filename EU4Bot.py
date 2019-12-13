@@ -11,7 +11,7 @@ from typing import Union, Optional, List
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
-#imgFinal = Image.open("src//finalTemplate.png")
+#imgFinal = Image.open("src/finalTemplate.png")
 client = discord.Client()
 serverID: str = os.getenv("DISCORD_SERVER")
 prefix: str = os.getenv("PREFIX")
@@ -269,7 +269,7 @@ class statsChannel(AbstractChannel):
         self.displayChannel = initChannel
         self.hasReadFile = False
         self.politicalImage: Image = None
-        #self.playersImage: Image = Image.open("src//BlankPlayerMap.png")
+        #self.playersImage: Image = Image.open("src/BlankPlayerMap.png")
         self.playersImage = None
         self.game = saveGame()
         self.modMsg = None
@@ -445,7 +445,7 @@ class statsChannel(AbstractChannel):
     async def generateImage(self) -> Image:
         """Returns a stats Image based off the self.game data."""
 
-        imgFinal = Image.open("src//finalTemplate.png")
+        imgFinal = Image.open("src/finalTemplate.png")
         mapFinal = self.politicalImage.copy()
         #End Data Selection
         await self.interactChannel.send("**Processing...**")
@@ -506,21 +506,21 @@ class statsChannel(AbstractChannel):
                     #x+128: Player
                     imgDraw.text((x+128, y), nat.player, (255, 255, 255), font)
                     #x+760: Army size
-                    imgFinal.paste(Image.open("src//army.png"), (x+760, y))
+                    imgFinal.paste(Image.open("src/army.png"), (x+760, y))
                     armydisplay = str(round(nat.army/1000, 1))
                     if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
                         armydisplay = armydisplay.partition(".")[0]
                     armydisplay = armydisplay + "k"
                     imgDraw.text((x+760+128, y), armydisplay, (255, 255, 255), font)
                     #x+1100: Navy size
-                    imgFinal.paste(Image.open("src//navy.png"), (x+1100, y))
+                    imgFinal.paste(Image.open("src/navy.png"), (x+1100, y))
                     imgDraw.text((x+1100+128, y), str(nat.navy), (255, 255, 255), font)
                     #x+1440: Development
-                    imgFinal.paste(Image.open("src//development.png"), (x+1440, y))
+                    imgFinal.paste(Image.open("src/development.png"), (x+1440, y))
                     imgDraw.text((x+1440+128, y), str(nat.development), (255, 255, 255), font)
                     #x+1780: Income/Expense
                     monthlyProfit = nat.totalIncome-nat.totalExpense
-                    imgIncome = Image.open("src//income.png")
+                    imgIncome = Image.open("src/income.png")
                     if monthlyProfit < 0:
                         imgIncome = imgIncome.crop((128, 0, 255, 127))
                         imgFinal.paste(imgIncome, (x+1780, y))
@@ -750,7 +750,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                     if tagCapitals.get(tag.upper()) is None:
                         tagCapitals[tag.upper()] = -1
             # Get the actual capitals and add to tagCapitals.
-            srcFile = open("src\\save_1444.eu4", "r")
+            srcFile = open("src\save_1444.eu4", "r")
             lines = srcFile.readlines()
             brackets = []
             linenum = 0

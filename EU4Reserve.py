@@ -290,8 +290,8 @@ def createMap(reserve: Reserve) -> Image:
     """
 
     countries: List[reservePick] = reserve.players
-    mapFinal = Image.open("src//map_1444.png")
-    srcFile = open("src\\save_1444.eu4", "r")
+    mapFinal = Image.open("src/map_1444.png")
+    srcFile = open("src/save_1444.eu4", "r")
     lines = srcFile.readlines()
     brackets = []
     linenum = 0
@@ -324,7 +324,7 @@ def createMap(reserve: Reserve) -> Image:
                     if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
                             x.capitalID = int(line.strip("\tcapitl=\n"))
     srcFile.close()
-    imgX = Image.open("src//xIcon.png")
+    imgX = Image.open("src/xIcon.png")
     for x in countries:
         loc = EU4Lib.province(x.capitalID)
         mapFinal.paste(imgX, (int(loc[0]-imgX.size[0]/2), int(loc[1]-imgX.size[1]/2)), imgX)

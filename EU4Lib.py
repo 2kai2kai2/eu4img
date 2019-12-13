@@ -9,7 +9,7 @@ def country(text: str) -> Optional[str]:
     """
 
     # Read out the countries file
-    srcFile = open("src\\countries_l_english.yml")
+    srcFile = open("src/countries_l_english.yml")
     lines = srcFile.readlines()
     srcFile.close()
     # If it could be a tag, check for that.
@@ -30,7 +30,7 @@ def tagToName(tag: str) -> Optional[str]:
     """
     
     # Read out the countries file
-    srcFile = open("src\\countries_l_english.yml")
+    srcFile = open("src/countries_l_english.yml")
     lines = srcFile.readlines()
     srcFile.close()
     # If it could be a valid tag
@@ -48,7 +48,7 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     """
     
     # Read file
-    srcFile = open("src\\positions.txt", "r")
+    srcFile = open("src/positions.txt", "r")
     lines = srcFile.readlines()
     srcFile.close()
     """Format of the file:
@@ -77,21 +77,22 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
         if line.strip("\n ") == (str(id)+"={"): # So we have the province... Wait two lines for the position
             beyond = 1
             continue
-        
+
+
 def flag(tag: str) -> Image:
     """Gets an Image of the flag of the specified nation.
     Returns Image of size (128, 128).
     """
     
     # Read file
-    srcFile = open("src\\flagfiles.txt", "r")
+    srcFile = open("src/flagfiles.txt", "r")
     line = srcFile.read()
     srcFile.close()
     # Get the number for the order of the flag; starts at 0
     a = line.partition(tag) #Separate into a 3-tuple around tag
     flagnum = a[0].count(".tga") #Get image number starting at 0
     # Get the file based on 256 flags per
-    flagfile = Image.open("src\\flagfiles_" + str(int(flagnum/256)) + ".tga")
+    flagfile = Image.open("src/flagfiles_" + str(int(flagnum/256)) + ".tga")
     # Get the location of the flag within the file
     x = 128*((flagnum%256)%16)
     y = 128*int((flagnum%256)/16)
@@ -106,7 +107,7 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     """
     
     # Read file
-    srcFile = open("src\\area.txt", "r")
+    srcFile = open("src/area.txt", "r")
     lines = srcFile.readlines()
     srcFile.close()
     # Search file
@@ -129,7 +130,7 @@ def region(areaName: str) -> str:
     """
     
     # Read file
-    srcFile = open("src\\region.txt", "r")
+    srcFile = open("src/region.txt", "r")
     lines = srcFile.readlines()
     srcFile.close()
     # Search File
@@ -152,7 +153,7 @@ def superregion(regionName: str) -> str:
     """
     
     # Read file
-    srcFile = open("src\\superregion.txt", "r")
+    srcFile = open("src/superregion.txt", "r")
     lines = srcFile.readlines()
     srcFile.close()
     # Search file
@@ -174,7 +175,7 @@ def continent(provinceID: Union[str, int]) -> str:
     """
     
     # Read file
-    srcFile = open("src\\continent.txt", "r")
+    srcFile = open("src/continent.txt", "r")
     lines = srcFile.readlines()
     srcFile.close()
     # Search file
@@ -245,7 +246,7 @@ class dataReq:
         # More datatypes
 def provinceData(*requests: dataReq) -> List[dataReq]:
     data = requests
-    lines = open("src\\save_1444.eu4").readlines()
+    lines = open("src//save_1444.eu4").readlines()
     brackets = []
     
     #Reading save file...
