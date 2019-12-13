@@ -291,7 +291,7 @@ def createMap(reserve: Reserve) -> Image:
 
     countries: List[reservePick] = reserve.players
     mapFinal = Image.open("src/map_1444.png")
-    srcFile = open("src/save_1444.eu4", "r", encoding = "ansi")
+    srcFile = open("src/save_1444.eu4", "r", encoding = "cp1252")
     lines = srcFile.readlines()
     brackets = []
     linenum = 0

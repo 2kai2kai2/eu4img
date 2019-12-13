@@ -246,7 +246,7 @@ class dataReq:
         # More datatypes
 def provinceData(*requests: dataReq) -> List[dataReq]:
     data = requests
-    lines = open("src/save_1444.eu4", encoding = "ansi").readlines()
+    lines = open("src/save_1444.eu4", encoding = "cp1252").readlines()
     brackets = []
     
     #Reading save file...
