@@ -48,7 +48,7 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     """
     
     # Read file
-    srcFile = open("src/positions.txt", "r")
+    srcFile = open("src/positions.txt", "r", encoding = "cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     """Format of the file:
