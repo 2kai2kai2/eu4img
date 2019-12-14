@@ -193,12 +193,13 @@ def load(conn = None) -> List[AbstractReserve]:
                 jsonLoad: dict = json.load(x)
         else:
             cur = conn.cursor()
-            cur.execute("SELECT * FROM data")
-            data = cur.fetchone()
-            if data is None:
+            try:
+                cur.execute("SELECT * FROM data")
+            except:
+                cur.execute("CREATE TABLE data (jsonstr varchar)")
                 return []
             else:
-                jsonLoad: dict = json.loads(data[0])
+                jsonLoad: dict = json.loads(cur.fetchone()[0])
             cur.close()
         if len(jsonLoad) == 0:
             return []
@@ -232,8 +233,12 @@ def save(reserves: List[AbstractReserve], conn = None):
             json.dump(jsonSave, x)
     else:
         cur = conn.cursor()
-        cur.execute("DELETE FROM data")
-        cur.execute("INSERT INTO data (jsonstr) VALUES (%s)", (json.dumps(jsonSave)))
+        try:
+            cur.execute("DELETE FROM data")
+        except:
+            cur.execute("CREATE TABLE data (jsonstr varchar)")
+        finally:
+            cur.execute("INSERT INTO data (jsonstr) VALUES (%s)", (json.dumps(jsonSave)))
         cur.close()
 
 def getReserve(name: str, conn = None) -> AbstractReserve:
