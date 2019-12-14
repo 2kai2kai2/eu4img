@@ -238,7 +238,7 @@ def save(reserves: List[AbstractReserve], conn = None):
         except:
             cur.execute("CREATE TABLE data (jsonstr varchar)")
         finally:
-            cur.execute("INSERT INTO data (jsonstr) VALUES (%s)", (json.dumps(jsonSave)))
+            cur.execute("INSERT INTO data (jsonstr) VALUES (%s)", [json.dumps(jsonSave)])
         cur.close()
 
 def getReserve(name: str, conn = None) -> AbstractReserve:
