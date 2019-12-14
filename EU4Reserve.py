@@ -3,7 +3,7 @@ import os
 import EU4Lib
 from dotenv import load_dotenv
 from typing import List, Optional, Union
-import json
+import json, psycopg2
 from abc import ABC, abstractmethod
 
 """ Data Structure - Python side
@@ -186,10 +186,20 @@ class ASIReserve(AbstractReserve):
             pickDictList.append(pick.toDict())
         return {"kind": "asi", "reserves": pickDictList}
 
-def load() -> List[AbstractReserve]:
+def load(conn = None) -> List[AbstractReserve]:
     try:
-        with open("ressave.json", "r") as x:
-            jsonLoad: dict = json.load(x)
+        if conn is None:
+            with open("ressave.json", "r") as x:
+                jsonLoad: dict = json.load(x)
+        else:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM data")
+            data = cur.fetchone()
+            if data is None:
+                return []
+            else:
+                jsonLoad: dict = json.loads(data[0])
+            cur.close()
         if len(jsonLoad) == 0:
             return []
     except FileNotFoundError: # There are no reserves.
@@ -213,54 +223,60 @@ def load() -> List[AbstractReserve]:
             resList.append(r)
     return resList
 
-def save(reserves: List[AbstractReserve]):
+def save(reserves: List[AbstractReserve], conn = None):
     jsonSave = {}
     for res in reserves:
         jsonSave[res.name] = res.toDict()
-    with open("ressave.json", "w") as x:
-        json.dump(jsonSave, x)
+    if conn is None:
+        with open("ressave.json", "w") as x:
+            json.dump(jsonSave, x)
+    else:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM data")
+        cur.execute("INSERT INTO data (jsonstr) VALUES (%s)", (json.dumps(jsonSave)))
+        cur.close()
 
-def getReserve(name: str) -> AbstractReserve:
-    resList = load()
+def getReserve(name: str, conn = None) -> AbstractReserve:
+    resList = load(conn = conn)
     for res in resList:
         if res.name == str(name):
             return res
     return None
 
-def deleteReserve(reserve: Union[str, AbstractReserve]):
+def deleteReserve(reserve: Union[str, AbstractReserve], conn = None):
     name = ""
     if isinstance(reserve, str):
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
-    resList = load()
+    resList = load(conn = conn)
     for x in resList:
         if x.name == name:
             resList.remove(x)
             break
-    save(resList)
+    save(resList, conn = conn)
 
-def deletePick(reserve: Union[str, AbstractReserve], player: str) -> bool:
+def deletePick(reserve: Union[str, AbstractReserve], player: str, conn = None) -> bool:
     name = ""
     if isinstance(reserve, str):
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
-    resList = load()
+    resList = load(conn = conn)
     didStuff = False
     for x in resList:
         if x.name == name:
             didStuff = x.removePlayer(player)
             break
-    save(resList)
+    save(resList, conn = conn)
     return didStuff
 
-def addReserve(reserve: AbstractReserve):
-    resList = load()
+def addReserve(reserve: AbstractReserve, conn = None):
+    resList = load(conn = conn)
     resList.append(reserve)
-    save(resList)
+    save(resList, conn = conn)
 
-def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick):
+def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn = None):
     """Codes:
     0 = Failed; Reserve not found
     1 = Success; New Reservation
@@ -274,14 +290,14 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick):
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
-    resList = load()
+    resList = load(conn = conn)
     addInt = 0
     for x in resList:
         if x.name == name:
             # We have the reserve here. Now different things for each 
             addInt = x.add(pick)
             break
-    save(resList)
+    save(resList, conn = conn)
     return addInt
 
 def createMap(reserve: Reserve) -> Image:

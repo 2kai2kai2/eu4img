@@ -7,7 +7,7 @@ import discord, requests
 from dotenv import load_dotenv
 from abc import ABC, abstractmethod
 from typing import Union, Optional, List
-
+import psycopg2
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
@@ -15,6 +15,16 @@ token: str = os.getenv('DISCORD_TOKEN')
 client = discord.Client()
 serverID: str = os.getenv("DISCORD_SERVER")
 prefix: str = os.getenv("PREFIX")
+try:
+    DATABASEURL = os.environ['DATABASE_URL']
+    conn = psycopg2.connect(DATABASEURL, sslmode='require')
+    conn.autocommit = True
+    #cur = conn.cursor()
+    #cur.execute("IF (EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = Reserves)) BEGIN END ELSE CREATE TABLE Reserves ()")
+    #conn.commit()
+except:
+    conn = None
+    
 
 DiscUser = Union[discord.User, discord.Member]
 DiscTextChannels = Union[discord.TextChannel, discord.DMChannel, discord.GroupChannel]
@@ -115,7 +125,7 @@ class ReserveChannel(AbstractChannel):
         self.textID: Optional[int] = None
         self.imgID: Optional[int] = None
         if not Load: # If this is new, then make a new Reserve.
-            EU4Reserve.addReserve(EU4Reserve.Reserve(str(self.interactChannel.id)))
+            EU4Reserve.addReserve(EU4Reserve.Reserve(str(self.interactChannel.id)), conn = conn)
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
     async def process(self, message: discord.Message):
@@ -139,7 +149,7 @@ class ReserveChannel(AbstractChannel):
         elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author): # END
             await message.delete()
             await self.displayChannel.send("*Reservations are now ended. Good Luck.*")
-            EU4Reserve.deleteReserve(str(self.displayChannel.id))
+            EU4Reserve.deleteReserve(str(self.displayChannel.id), conn = conn)
             interactions.remove(self)
             del(self)
         elif text.upper().startswith(prefix + "RESERVE "): # RESERVE [nation]
@@ -181,7 +191,7 @@ class ReserveChannel(AbstractChannel):
     def getImgID(self) -> int:
         return self.imgID
     async def updateText(self):
-        reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id))
+        reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
         string = "How to reserve: " + prefix + "reserve [nation]\nTo unreserve: " + prefix + "delreserve\n**Current players list:**"
         if reserve is None or len(reserve.players) == 0:
             string = string + "\n*It's so empty here...*"
@@ -193,7 +203,7 @@ class ReserveChannel(AbstractChannel):
         else:
             await (await (self.displayChannel).fetch_message(self.getTextID())).edit(content=string)
     async def updateImg(self):
-        reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id))
+        reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
         if reserve is None:
             reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
         if self.imgID is not None:
@@ -201,7 +211,7 @@ class ReserveChannel(AbstractChannel):
         else:
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
     async def add(self, nation: EU4Reserve.reservePick) -> int:
-        addInt = EU4Reserve.addPick(str(self.interactChannel.id), nation)
+        addInt = EU4Reserve.addPick(str(self.interactChannel.id), nation, conn = conn)
         if addInt == 1 or addInt == 2: # Success!
             await self.updateText()
             await self.updateImg()
@@ -213,7 +223,7 @@ class ReserveChannel(AbstractChannel):
     async def remove(self, tag: str):
         pass
     async def removePlayer(self, name: str):
-        if EU4Reserve.deletePick(str(self.interactChannel.id), name): # If it did anything
+        if EU4Reserve.deletePick(str(self.interactChannel.id), name, conn = conn): # If it did anything
             await self.updateText()
             await self.updateImg()
     async def msgdel(self, msgID: Union[str, int]):
@@ -223,7 +233,7 @@ class ReserveChannel(AbstractChannel):
             await (await self.interactChannel.fetch_message(self.getImgID())).delete() # This will call msgdel again for the img
         if msgID == self.imgID:
             self.imgID = None
-            reserve = EU4Reserve.getReserve(str(self.interactChannel.id))
+            reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
             if reserve is None:
                 reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
@@ -741,7 +751,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
             await self.updateText()
         elif text.upper() == prefix + "END" and checkResAdmin(message.guild, message.author): # END
             await message.delete()
-            reserves = EU4Reserve.getReserve(str(self.displayChannel.id)).players
+            reserves = EU4Reserve.getReserve(str(self.displayChannel.id), conn = conn).players
             finalReserves: List[EU4Reserve.reservePick] = []
             tagCapitals = dict() # This stores the capitals of all possible tags, so that their factions can be determined.
             # Add all possibly reserved nations to the tagCapitals dictionary with a capital of -1
@@ -820,7 +830,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                 count += 1
             await self.displayChannel.send(string)
             # aaand we're done!
-            EU4Reserve.deleteReserve(str(self.displayChannel.id))
+            EU4Reserve.deleteReserve(str(self.displayChannel.id), conn = conn)
             interactions.remove(self)
             del(self)
         elif text.upper().startswith(prefix + "RESERVE "):
@@ -864,7 +874,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
             reserve = EU4Reserve.asiPick(user.mention, priority = True)
             reserve.picks = [pick]
             await self.remove(user)
-            addInt = EU4Reserve.addPick(str(self.displayChannel.id), reserve)
+            addInt = EU4Reserve.addPick(str(self.displayChannel.id), reserve, conn = conn)
             if addInt == 3:
                 await sendUserMessage(message.author, EU4Lib.tagToName(pick) + " is already executive-reserved in " + message.channel.mention)
             elif addInt == 1 or addInt == 2:
@@ -884,7 +894,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
             await message.delete()
     async def updateText(self):
         string = "How to reserve: " + prefix + "reserve [nation1], [nation2], [nation3]\nTo unreserve: " + prefix + "delreserve\n**Current players list:**"
-        picks = EU4Reserve.getReserve(str(self.displayChannel.id)).players
+        picks = EU4Reserve.getReserve(str(self.displayChannel.id), conn = conn).players
         if len(picks) == 0:
             string += "\n*It's so empty here...*"
         else:
@@ -898,7 +908,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         else:
             await (await (self.displayChannel).fetch_message(self.textID)).edit(content=string)
     async def remove(self, user: DiscUser):
-        EU4Reserve.deletePick(str(self.displayChannel.id), user.mention)
+        EU4Reserve.deletePick(str(self.displayChannel.id), user.mention, conn = conn)
     async def add(self, user: DiscUser, text: str):
         picks = text.split(",")
         if not len(picks) == 3:
@@ -915,7 +925,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         res = EU4Reserve.asiPick(user.mention)
         res.picks = tags
         await self.remove(user)
-        EU4Reserve.addPick(str(self.displayChannel.id), res)
+        EU4Reserve.addPick(str(self.displayChannel.id), res, conn = conn)
     async def msgdel(self, msgID: Union[str, int]):
         if msgID == self.textID:
             self.textID = None
@@ -965,7 +975,7 @@ async def on_message(message: discord.Message):
                 await c.updateText()
                 interactions.append(c)
             elif text.upper() == prefix + "LOAD" and checkResAdmin(message.guild, message.author):
-                res = EU4Reserve.getReserve(str(message.channel.id))
+                res = EU4Reserve.getReserve(str(message.channel.id), conn = conn)
                 if res is None:
                     await sendUserMessage(message.author, "You tried to load a save in " + message.channel.mention + " but no save was found. Please try " + prefix + "NEW to create new reserves.")
                 elif isinstance(res, EU4Reserve.Reserve):
@@ -984,7 +994,7 @@ async def on_guild_channel_delete(channel: DiscTextChannels):
     for c in interactions:
         if c.displayChannel == channel or c.interactChannel == channel:
             if isinstance(c, ReserveChannel) or isinstance(c, asiresChannel):
-                EU4Reserve.deleteReserve(str(c.displayChannel.id))
+                EU4Reserve.deleteReserve(str(c.displayChannel.id), conn = conn)
             interactions.remove(c)
             del(c)
 
@@ -1010,7 +1020,7 @@ async def on_guild_remove(guild: discord.Guild):
     for c in interactions:
         if (hasattr(c.displayChannel, 'guild') and c.displayChannel.guild == guild) or (hasattr(c.interactChannel, 'guild') and c.interactChannel.guild == guild):
             if isinstance(c, ReserveChannel) or isinstance(c, asiresChannel):
-                EU4Reserve.deleteReserve(str(c.displayChannel.id))
+                EU4Reserve.deleteReserve(str(c.displayChannel.id), conn = conn)
             interactions.remove(c)
             del(c)
 
