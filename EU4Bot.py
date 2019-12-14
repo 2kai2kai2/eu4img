@@ -760,7 +760,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                     if tagCapitals.get(tag.upper()) is None:
                         tagCapitals[tag.upper()] = -1
             # Get the actual capitals and add to tagCapitals.
-            srcFile = open("src\save_1444.eu4", "r")
+            srcFile = open("src/save_1444.eu4", "r")
             lines = srcFile.readlines()
             brackets = []
             linenum = 0
