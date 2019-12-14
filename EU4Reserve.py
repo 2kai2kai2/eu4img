@@ -199,7 +199,11 @@ def load(conn = None) -> List[AbstractReserve]:
                 cur.execute("CREATE TABLE data (jsonstr varchar)")
                 return []
             else:
-                jsonLoad: dict = json.loads(cur.fetchone()[0])
+                inobj = cur.fetchone()
+                if inobj is None:
+                    return []
+                else:
+                    jsonLoad: dict = json.loads(inobj[0])
             cur.close()
         if len(jsonLoad) == 0:
             return []
