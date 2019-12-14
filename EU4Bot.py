@@ -719,7 +719,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         self.factions.append(asiFaction("India", ["india_superregion", "burma_region"]))
         self.factions.append(asiFaction("Asia", ["china_superregion", "tartary_superregion", "far_east_superregion", "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion"], 3))
         if not Load:
-            EU4Reserve.addReserve(EU4Reserve.ASIReserve(str(self.displayChannel.id)))
+            EU4Reserve.addReserve(EU4Reserve.ASIReserve(str(self.displayChannel.id)), conn = conn)
     def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
         """**Returns the faction that owns a given province.**
 
