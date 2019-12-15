@@ -1,6 +1,8 @@
 #This will need to be updated. Currently for 1.28
+from typing import List, Optional, Tuple, Union
+
 from PIL import Image, ImageDraw
-from typing import Union, Tuple, List, Optional
+
 
 def country(text: str) -> Optional[str]:
     """Returns the tag of a nation from the name of the nation.
@@ -193,7 +195,6 @@ def continent(provinceID: Union[str, int]) -> str:
 
 def isIn(provinceID: Union[str, int], group: str) -> bool:
     """Checks if the province is within the given area, region, superregion, or continent."""
-
     # Because area, region, and superregion has the suffix with _area, etc. each can't be confused with the other.
     provarea = provinceArea(provinceID)
     if provarea == group:
@@ -248,7 +249,7 @@ class dataReq:
 def provinceData(*requests: dataReq) -> List[dataReq]:
     data = requests
     lines = open("src/save_1444.eu4", encoding = "cp1252").readlines()
-    brackets = []
+    brackets: List[str] = []
     
     #Reading save file...
     linenum = 0

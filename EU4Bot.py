@@ -1,13 +1,17 @@
-from PIL import Image, ImageDraw, ImageFont
 import os
-from random import shuffle
-from io import BytesIO, StringIO
-import EU4Lib, EU4Reserve
-import discord, requests
-from dotenv import load_dotenv
 from abc import ABC, abstractmethod
-from typing import Union, Optional, List
+from io import BytesIO, StringIO
+from random import shuffle
+from typing import List, Optional, Union
+
+import discord
 import psycopg2
+import requests
+from dotenv import load_dotenv
+from PIL import Image, ImageDraw, ImageFont
+
+import EU4Lib
+import EU4Reserve
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
@@ -123,7 +127,7 @@ class ReserveChannel(AbstractChannel):
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
     async def process(self, message: discord.Message):
-        text = message.content.strip("\n\t ")
+        text: str = message.content.strip("\n\t ")
         if text.upper() == prefix + "HELP":
             stringHelp = "__**Command help for " + message.channel.mention + ":**__"
             stringHelp += "\n**" + prefix + "HELP**\nGets you this information!"
@@ -156,7 +160,7 @@ class ReserveChannel(AbstractChannel):
             await message.delete()
         elif text.upper().startswith(prefix + "ADMRES") and checkResAdmin(message.guild, message.author): # ADMRES [nation] @[player]
             if len(message.mentions) == 1:
-                res = text.split(" ", 1)[1].replace(message.mentions[0].mention, "").strip("\n\t ")
+                res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
                 tag = EU4Lib.country(res)
                 if tag is not None:
                     await self.add(EU4Reserve.reservePick(message.mentions[0].mention, tag.upper()))
@@ -298,8 +302,8 @@ class statsChannel(AbstractChannel):
         return prompt
     async def readFile(self, file):
         """Gets all data from file and saves it to the self.game"""
-        lines = file.readlines()
-        brackets = []
+        lines: List[str] = file.readlines()
+        brackets: List[str] = []
         
         #Reading save file...
         linenum = 0
@@ -433,10 +437,8 @@ class statsChannel(AbstractChannel):
 
     async def generateImage(self) -> Image:
         """Returns a stats Image based off the self.game data."""
-        imgFinal = Image.open("src/finalTemplate.png")
-        mapFinal = self.politicalImage.copy()
-        #End Data Selection
-        await self.interactChannel.send("**Processing...**")
+        imgFinal: Image = Image.open("src/finalTemplate.png")
+        mapFinal: Image = self.politicalImage.copy()
         # Modify the image
         mapDraw = ImageDraw.Draw(mapFinal)
         if self.playersImage is not None: # If there's a player image - current eu4 update the screenshot is broken
@@ -606,11 +608,13 @@ class statsChannel(AbstractChannel):
                 img = None
                 # Create the Image and convert to discord.File
                 try:
+                    await self.interactChannel.send("**Generating Image...**")
                     img = imageToFile(await self.generateImage())
                 except:
                     await self.interactChannel.send("**Image generation failed!**\nPerhaps something was wrong with one of the files?\n**Try " + prefix + "stats again after checking that the files are valid and unchanged from their creation.**")
                 else: # That was successful, now post!
-                    try: 
+                    try:
+                        await self.interactChannel.send("**Image generation complete...**")
                         await self.displayChannel.send(file = img)
                     except discord.Forbidden: # If we're not allowed to send on the server, just give it in dms. They can post it themselves; this will reduce the server load
                         await self.interactChannel.send("**Unable to send the image to " + self.displayChannel.mention + " due to lack of permissions. Posting image here:**\nYou can right-click and copy link then post that.", file = imageToFile(img))
@@ -801,7 +805,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
             await self.updateText()
         elif text.upper().startswith(prefix + "ADMRES") and checkResAdmin(message.guild, message.author): # ADMRES [nation1], [nation2], [nation3] @[player]
             if len(message.mentions) == 1:
-                res = text.split(" ", 1)[1].strip("\n\t ").replace(message.mentions[0].mention, "")
+                res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
                 picks = res.split(",")
                 if not len(picks) == 3:
                     await sendUserMessage(message.author, "Your reserve in " + self.interactChannel.mention + " for " + message.mentions[0].mention + " needs to be 3 elements in the format 'a,b,c'")
@@ -818,13 +822,11 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                 await sendUserMessage(message.author, "Your reservation in " + self.displayChannel.mention + " needs to @ a player.")
             await message.delete()
         elif text.upper().startswith(prefix + "EXECRES") and checkResAdmin(message.guild, message.author): # ADMRES [nation] @[optional_player]
-            res = ""
+            res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
             user: Optional[DiscUser] = None
             if len(message.mentions) == 0:
-                res = text.split(" ", 1)[1].strip("\n\t ")
                 user = message.author
             else:
-                res = text.split(" ", 1)[1].replace(message.mentions[0].mention, "").strip("\n\t ")
                 user = message.mentions[0]
             pick = EU4Lib.country(res)
             if pick is None: # Nation is invalid; tag not found.

@@ -1,10 +1,14 @@
-from PIL import Image, ImageDraw, ImageFont
+import json
 import os
-import EU4Lib
-from dotenv import load_dotenv
-from typing import List, Optional, Union
-import json, psycopg2
 from abc import ABC, abstractmethod
+from typing import List, Optional, Union
+
+import psycopg2
+from dotenv import load_dotenv
+from PIL import Image, ImageDraw, ImageFont
+
+import EU4Lib
+
 
 """ Data Structure - Python side
 AbstractReserve ("Reserve")
@@ -61,7 +65,6 @@ class AbstractPick(ABC):
 
 class reservePick(AbstractPick):
     """A Nation for the nation reserve channel interaction."""
-
     def __init__(self, player: str, tag: str):
         self.player: str = player
         self.tag = tag
@@ -71,7 +74,6 @@ class reservePick(AbstractPick):
 
 class asiPick(AbstractPick):
     """A user's reservation for an ASI game."""
-
     def __init__(self, player: str, priority: bool = False):
         self.player: str = player
         self.picks: List[str] = None
@@ -92,7 +94,6 @@ class AbstractReserve(ABC):
         3 = Failed; Nation taken by other (ONLY for priority)
         4 = Failed; Nation taken by self (ONLY for priority)
         """
-        
         pass
     @abstractmethod
     def removePlayer(self, name: str) -> bool:
@@ -106,7 +107,6 @@ class AbstractReserve(ABC):
 
 class Reserve(AbstractReserve):
     """Represents a reservation list for a specific game. The name should be the id of the channel it represents."""
-
     def __init__(self, name: str):
         self.players: List[reservePick] = [] # list of reservePick objects
         self.name = name
@@ -117,7 +117,6 @@ class Reserve(AbstractReserve):
         3 = Failed; Nation taken by other
         4 = Failed; Nation taken by self
         """
-
         addInt = 1
         for pick in self.players:
             if pick.tag.upper() == nation.tag.upper():
@@ -160,7 +159,6 @@ class ASIReserve(AbstractReserve):
         3 = Failed; Nation taken by other (ONLY for priority)
         4 = Failed; Nation taken by self (ONLY for priority)
         """
-
         addInt = 1
         for player in self.players:
             if pick.priority and player.priority and pick.picks[0] == player.picks[0]:
@@ -293,7 +291,6 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn = Non
     3 = Failed; Nation taken by other
     4 = Failed; Nation taken by self
     """
-
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -313,7 +310,6 @@ def createMap(reserve: Reserve) -> Image:
     """Creates a map based on a Reserve object with x's on all the capitals of reserved reservePicks.
     Returns an Image object.
     """
-
     countries: List[reservePick] = reserve.players
     mapFinal = Image.open("src/map_1444.png")
     srcFile = open("src/save_1444.eu4", "r", encoding = "cp1252")
@@ -355,4 +351,3 @@ def createMap(reserve: Reserve) -> Image:
         mapFinal.paste(imgX, (int(loc[0]-imgX.size[0]/2), int(loc[1]-imgX.size[1]/2)), imgX)
         # I hope this doesn't break if a capital is too close to the edge
     return mapFinal
-
