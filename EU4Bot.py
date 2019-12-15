@@ -485,22 +485,9 @@ class statsChannel(AbstractChannel):
         del(mapFinal)
         #The top has 5632x1119
         # Getting fonts
-        fontsmall = ImageFont.load_default()
-        font = ImageFont.load_default()
-        #fontbig = ImageFont.load_default()
-        try:
-            fontsmall = ImageFont.truetype("FONT.TTF", 50)
-            font = ImageFont.truetype("FONT.TTF", 100)
-            #fontbig = ImageFont.truetype("FONT.TTF", 180)
-        except(FileNotFoundError, IOError):
-            try:
-                fontsmall = ImageFont.truetype("GARA.TTF", 50)
-                font = ImageFont.truetype("GARA.TTF", 100)
-                #fontbig = ImageFont.truetype("GARA.TTF",180)
-            except(FileNotFoundError, IOError):
-                fontsmall = ImageFont.load_default()
-                font = ImageFont.load_default()
-                #fontbig = ImageFont.load_default()
+        fontsmall = ImageFont.truetype("src/GARA.TTF", 50)
+        font = ImageFont.truetype("src/GARA.TTF", 100)
+        #fontbig = ImageFont.truetype("src/GARA.TTF", 180)
         imgDraw = ImageDraw.Draw(imgFinal)
         #================MULTIPLAYER================#
         if True:#mp == True:
