@@ -904,7 +904,7 @@ interactions: List[AbstractChannel] = []
 @client.event
 async def on_ready():
     print("EU4 Reserve Bot!")
-    print("Prefix: " + os.getenv("PREFIX") + "\n")
+    print("Prefix: " + prefix + "\n")
     print("Loading previous Reserves...")
     reserves = EU4Reserve.load()
     rescount = 0
@@ -921,6 +921,7 @@ async def on_ready():
                 interactions.append(asiresChannel(None, reschannel, Load = True))
             rescount += 1
     print("Loaded " + str(rescount) + " channels and removed " + str(closedcount) + " no longer existing channels.")
+    await client.change_presence(activity = discord.Activity(type = discord.ActivityType.watching, name = "for new lands"))
 
 @client.event
 async def on_message(message: discord.Message):
