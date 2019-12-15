@@ -4,10 +4,10 @@ from typing import Union, Tuple, List, Optional
 
 def country(text: str) -> Optional[str]:
     """Returns the tag of a nation from the name of the nation.
+
     Some nations may have multiple valid names.
     If the nation is not recognized, returns None.
     """
-
     # Read out the countries file
     srcFile = open("src/countries_l_english.yml")
     lines = srcFile.readlines()
@@ -26,9 +26,9 @@ def country(text: str) -> Optional[str]:
 
 def tagToName(tag: str) -> Optional[str]:
     """Returns the name of a nation based on its tag.
+
     If the tag is not recognized, returns None.
     """
-    
     # Read out the countries file
     srcFile = open("src/countries_l_english.yml")
     lines = srcFile.readlines()
@@ -44,9 +44,9 @@ def tagToName(tag: str) -> Optional[str]:
 
 def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     """Gets the location of a province on a screenshot map.
+
     Returns a tuple of floats, (x, y).
     """
-    
     # Read file
     srcFile = open("src/positions.txt", "r", encoding = "cp1252")
     lines = srcFile.readlines()
@@ -81,9 +81,9 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
 
 def flag(tag: str) -> Image:
     """Gets an Image of the flag of the specified nation.
+
     Returns Image of size (128, 128).
     """
-    
     # Read file
     srcFile = open("src/flagfiles.txt", "r")
     line = srcFile.read()
@@ -103,9 +103,9 @@ def flag(tag: str) -> Image:
 
 def provinceArea(provinceID: Union[str, int]) -> str:
     """Returns the area (state) name of a specified province's id.
+
     Raises an error if the province is not found.
     """
-    
     # Read file
     srcFile = open("src/area.txt", "r")
     lines = srcFile.readlines()
@@ -125,10 +125,10 @@ def provinceArea(provinceID: Union[str, int]) -> str:
 
 def region(areaName: str) -> str:
     """Returns the region name of a specified area.
+
     The argument may be the string returned by the provinceArea() method.
     Raises an error if the area is not found.
     """
-    
     # Read file
     srcFile = open("src/region.txt", "r")
     lines = srcFile.readlines()
@@ -148,10 +148,10 @@ def region(areaName: str) -> str:
 
 def superregion(regionName: str) -> str:
     """Returns the superregion name of a specified region.
+
     The argument may be the string returned by the region() method.
     Raises an error if the region is not found.
     """
-    
     # Read file
     srcFile = open("src/superregion.txt", "r")
     lines = srcFile.readlines()
@@ -171,9 +171,9 @@ def superregion(regionName: str) -> str:
 
 def continent(provinceID: Union[str, int]) -> str:
     """Returns the continent name from a specified province's id.
+
     Raises an error if the province is not found.
     """
-    
     # Read file
     srcFile = open("src/continent.txt", "r")
     lines = srcFile.readlines()
@@ -244,6 +244,7 @@ class dataReq:
                     raise ValueError("PROVINCE RELIGION ORIGINAL request for " + self.key + " was the wrong type.")
             # More things
         # More datatypes
+
 def provinceData(*requests: dataReq) -> List[dataReq]:
     data = requests
     lines = open("src/save_1444.eu4", encoding = "cp1252").readlines()
@@ -261,14 +262,11 @@ def provinceData(*requests: dataReq) -> List[dataReq]:
             elif line.count("}") == 0 and line.count("{") > 1:
                 brackets.append("{" * line.count("{")) #TODO: fix this so it has more stuff
             else:
-                #print("Unexpected brackets at line #" + str(linenum) + ": " + line)
                 pass
         elif "}" in line:
             try:
                 brackets.pop()
             except IndexError:
-                #print("No brackets to delete.")
-                #print("Line", linenum, ":", line)
                 pass
         elif len(brackets) == 2 and "provinces={" == brackets[0]:
             for request in data:

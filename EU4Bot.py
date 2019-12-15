@@ -15,23 +15,19 @@ token: str = os.getenv('DISCORD_TOKEN')
 client = discord.Client()
 serverID: str = os.getenv("DISCORD_SERVER")
 prefix: str = os.getenv("PREFIX")
+# Get database if it exists; if not None and methods will open a json file.
 try:
     DATABASEURL = os.environ['DATABASE_URL']
     conn = psycopg2.connect(DATABASEURL, sslmode='require')
     conn.autocommit = True
-    #cur = conn.cursor()
-    #cur.execute("IF (EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = Reserves)) BEGIN END ELSE CREATE TABLE Reserves ()")
-    #conn.commit()
 except:
     conn = None
-    
 
 DiscUser = Union[discord.User, discord.Member]
 DiscTextChannels = Union[discord.TextChannel, discord.DMChannel, discord.GroupChannel]
 
 def imageToFile(img: Image) -> discord.File:
     """Comverts PIL Images into discord File objects."""
-
     file = BytesIO()
     img.save(file, "PNG")
     file.seek(0)
@@ -39,7 +35,6 @@ def imageToFile(img: Image) -> discord.File:
 
 async def sendUserMessage(user: Union[str, int, DiscUser], message: str) -> discord.Message:
     """Sends a user a specified DM via discord. Returns the discord Message object sent."""
-
     u = None
     if isinstance(user, str) or isinstance(user, int): # id
         u = client.get_user(int(user))
@@ -53,11 +48,11 @@ async def sendUserMessage(user: Union[str, int, DiscUser], message: str) -> disc
         await u.create_dm()
     msg = await u.dm_channel.send(message)
     return msg
+
 def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Optional[discord.Role]:
     """Converts a string into the role on a specified discord server.
     Use an '@role' string as the roleName argument. (@ is optional)
     Returns None if the role cannot be found."""
-
     # Get server object
     s = None
     if isinstance(server, str) or isinstance(server, int):
@@ -73,7 +68,6 @@ def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Opt
 
 def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscUser]) -> bool:
     """Returns whether or not a user has bot admin control roles as set in .env on a server."""
-
     # Get server object
     s = None
     if isinstance(server, str) or isinstance(server, int):
@@ -286,7 +280,6 @@ class statsChannel(AbstractChannel):
         self.doneMod = False
     async def asyncInit(self):
         """Does of the init stuff that needs to happen async. Returns self."""
-
         if self.user.dm_channel is None:
             await self.user.create_dm()
         self.interactChannel = self.user.dm_channel
@@ -294,7 +287,6 @@ class statsChannel(AbstractChannel):
         return self
     def modPromptStr(self) -> str:
         """Makes and returns a string giving information for player list modification."""
-
         prompt = "**Current players list:**```"
         for x in self.game.countries:
             if EU4Lib.tagToName(x.tag) is None:
@@ -306,7 +298,6 @@ class statsChannel(AbstractChannel):
         return prompt
     async def readFile(self, file):
         """Gets all data from file and saves it to the self.game"""
-
         lines = file.readlines()
         brackets = []
         
@@ -322,18 +313,13 @@ class statsChannel(AbstractChannel):
                 elif line.count("}") == 0 and line.count("{") > 1:
                     for x in range(line.count("{")):
                         brackets.append("{") #TODO: fix this so it has more
-                else:
-                    #print("Unexpected brackets at line #" + str(linenum) + ": " + line)
+                else: # Unexpected Brackets
                     pass
-                #print("{")
             elif "}" in line:
                 try:
                     brackets.pop()
-                except IndexError:
-                    #print("No brackets to delete.")
-                    #print("Line", linenum, ":", line)
+                except IndexError: # No brackets to close
                     pass
-                #print("}")
             #Get rid of long, useless sections
             elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
                 continue
@@ -361,7 +347,6 @@ class statsChannel(AbstractChannel):
                     #Where "   " is a tab \t
                     #This v adds a new Nation object and player name if there is none open.
                     if len(self.game.countries) == 0 or self.game.countries[len(self.game.countries)-1].tag is not None:
-                        #print("Adding: ", line.strip('\t"\n'))
                         self.game.countries.append(Nation(line.strip('\t"\n')))
                     #Add country code to most recent country (which, because of ^ will not have a tag)
                     else:
@@ -370,28 +355,22 @@ class statsChannel(AbstractChannel):
                                 self.game.countries.remove(x)
                         self.game.countries[len(self.game.countries)-1].tag = line.strip('\t"\n')
                         self.game.playertags.append(line.strip('\t"\n'))
-                        #print("Country: ", line.strip('\t"\n'))
                 #Get current age
                 elif "current_age=" in line and brackets == []:
                     self.game.age = line[12:].strip('"\n')
-                    #print("\nAge: " + age)
                 #Get top 8
                 elif "country=" in line and brackets == ["great_powers={", "\toriginal={"]:
                     if len(self.game.GP) < 8: #Make sure to not include leaving GPs
                         self.game.GP.append(line.strip('\tcountry="\n'))
-                        #print("Found GP: " + line.strip('\tcountry="\n'))
                 #Get HRE emperor tag
                 elif "\temperor=" in line and brackets == ["empire={"]:
                     self.game.HRE = line.strip('\temperor="\n')
-                    #print("Found HRE Emperor: " + HRETag)
                 #Get Celestial emperor tag
                 elif "emperor=" in line and brackets == ["celestial_empire={"]:
                     self.game.china = line.strip('\temperor="\n')
-                    #print("Found Celestial Empire: " + chinaTag)
                 #Get target of crusade ('---' if none)
                 elif "crusade_target=" in line and brackets == ["religion_instance_data={", "\tcatholic={", "\t\tpapacy={"]:
                     self.game.crusade = line.strip('\tcrusade_target="\n')
-                    #print("Found crusade target: " + crusade)
                 #Get papal controller
                 elif "previous_controller=" in line and brackets == ["religion_instance_data={", "\tcatholic={", "\t\tpapacy={"]:
                     continue
@@ -450,11 +429,10 @@ class statsChannel(AbstractChannel):
         if self.game.GP == [] or self.game.date == None or self.game.age == None: # These signify that it's probably not a valid save file.
             raise Exception("This probably isn't a valid .eu4 uncompressed save file from " + self.user.mention)
         #Sort Data:
-        self.game.countries.sort(key=lambda x: x.development, reverse=True)
+        self.game.countries.sort(key = lambda x: x.development, reverse = True)
 
     async def generateImage(self) -> Image:
         """Returns a stats Image based off the self.game data."""
-
         imgFinal = Image.open("src/finalTemplate.png")
         mapFinal = self.politicalImage.copy()
         #End Data Selection
@@ -676,10 +654,8 @@ class statsChannel(AbstractChannel):
                 interactions.remove(self)
                 del(self)
 
-
 class asiFaction:
     """Represents a faction for an ASI game."""
-
     def __init__(self, name: str, territory: List[str], maxPlayers: int = 256):
         self.name = name
         self.territory = territory
@@ -687,7 +663,6 @@ class asiFaction:
         self.taken = 0
     def isInTerritory(self, provinceID: Union[str, int]) -> bool:
         """Returns whether or not the given province is within this faction's territory."""
-
         for land in self.territory:
             if EU4Lib.isIn(provinceID, land):
                 return True
@@ -708,7 +683,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
         if not Load:
             EU4Reserve.addReserve(EU4Reserve.ASIReserve(str(self.displayChannel.id)), conn = conn)
     def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
-        """**Returns the faction that owns a given province.**
+        """Returns the faction that owns a given province.
 
         This should only be one faction, but if more than one have the province in their territory list,, only the first faction with the territory on its list will be returned.
         """
@@ -976,6 +951,7 @@ async def on_message(message: discord.Message):
                     await message.delete()
                     await c.updateText()
                     interactions.append(c)
+
 @client.event
 async def on_guild_channel_delete(channel: DiscTextChannels):
     for c in interactions:
