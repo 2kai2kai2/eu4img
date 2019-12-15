@@ -593,18 +593,18 @@ class statsChannel(AbstractChannel):
             saveFile: Optional[StringIO] = None
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".eu4"):
                 try:
-                    saveFile = StringIO((await message.attachments[0].read()).decode('ansi'))
+                    saveFile = StringIO((await message.attachments[0].read()).decode("cp1252"))
                 except:
-                    await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the ANSI encoding.\n**Please try another file or change the file's encoding and try again.**")
+                    await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**")
                     return
             else: #str
                 saveURL = message.content.strip("\n\t ")
                 response = requests.get(saveURL)
                 if response.status_code == 200: #200 == requests.codes.ok
                     try:
-                        saveFile = StringIO(response.content.decode('ansi'))
+                        saveFile = StringIO(response.content.decode("cp1252"))
                     except:
-                        await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the ANSI encoding.\n**Please try another file or change the file's encoding and try again.**")
+                        await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**")
                         return
                 else:
                     await self.interactChannel.send("Something went wrong. Please try a different link.")
