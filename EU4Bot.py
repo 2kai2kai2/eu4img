@@ -905,6 +905,22 @@ interactions: List[AbstractChannel] = []
 async def on_ready():
     print("EU4 Reserve Bot!")
     print("Prefix: " + os.getenv("PREFIX") + "\n")
+    print("Loading previous Reserves...")
+    reserves = EU4Reserve.load()
+    rescount = 0
+    closedcount = 0
+    for res in reserves:
+        reschannel = client.get_channel(int(res.name))
+        if reschannel is None:
+            EU4Reserve.deleteReserve(res, conn = conn)
+            closedcount += 1
+        else:
+            if isinstance(res, EU4Reserve.Reserve):
+                interactions.append(ReserveChannel(None, reschannel, Load = True))
+            elif isinstance(res, EU4Reserve.ASIReserve):
+                interactions.append(asiresChannel(None, reschannel, Load = True))
+            rescount += 1
+    print("Loaded " + str(rescount) + " channels and removed " + str(closedcount) + " no longer existing channels.")
 
 @client.event
 async def on_message(message: discord.Message):
