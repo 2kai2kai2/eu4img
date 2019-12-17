@@ -201,9 +201,9 @@ def load(conn = None) -> List[AbstractReserve]:
                 if inobj is None:
                     return []
                 else:
-                    print("loading " + inobj[0])
+                    #print("loading " + inobj[0])
                     jsonLoad: dict = json.loads(inobj[0])
-                    print(jsonLoad)
+                    #print(jsonLoad)
             cur.close()
         if len(jsonLoad) == 0:
             return []

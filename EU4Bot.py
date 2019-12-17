@@ -906,7 +906,7 @@ async def on_ready():
     print("EU4 Reserve Bot!")
     print("Prefix: " + prefix + "\n")
     print("Loading previous Reserves...")
-    reserves = EU4Reserve.load()
+    reserves = EU4Reserve.load(conn = conn)
     rescount = 0
     closedcount = 0
     for res in reserves:
