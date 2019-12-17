@@ -6,6 +6,7 @@ from typing import List, Optional, Union
 
 import discord
 import requests
+import psycopg2
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 
@@ -72,7 +73,7 @@ def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Opt
 def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscUser]) -> bool:
     """Returns whether or not a user has bot admin control roles as set in .env on a server."""
     # Get server object
-    s = None
+    s: discord.Guild = None
     if isinstance(server, str) or isinstance(server, int):
         s = client.get_guild(int(server))
     elif isinstance(server, discord.Guild):
@@ -81,7 +82,7 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscU
         print("ERROR: Could not find discord server to check for admin.")
         return False
     # Get member object
-    u = None
+    u: discord.Member = None
     if isinstance(user, str) or isinstance(user, int): # id
         u = s.get_member(int(user))
     elif isinstance(user, discord.User):
@@ -94,7 +95,7 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscU
         return False #pass uh something went wrong.. false i guess?
     #OK now check
     role = getRoleFromStr(s, os.getenv("MIN_ADMIN"))
-    return role is not None and role <= u.top_role
+    return (role is not None and role <= u.top_role) or u.top_role.id == s.roles[-1].id
 
 class AbstractChannel(ABC):
     @abstractmethod
