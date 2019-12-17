@@ -5,7 +5,6 @@ from random import shuffle
 from typing import List, Optional, Union
 
 import discord
-import psycopg2
 import requests
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
@@ -94,7 +93,8 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscU
         print(user)
         return False #pass uh something went wrong.. false i guess?
     #OK now check
-    return getRoleFromStr(s, os.getenv("MIN_ADMIN")) <= u.top_role
+    role = getRoleFromStr(s, os.getenv("MIN_ADMIN"))
+    return role is not None and role <= u.top_role
 
 class AbstractChannel(ABC):
     @abstractmethod
