@@ -58,7 +58,7 @@ In Python, this becomes a dict.
 
 class AbstractPick(ABC):
     def __init__(self, player: str):
-        pass
+        self.player = player
     @abstractmethod
     def toDict(self) -> dict:
         pass
@@ -258,12 +258,29 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn = None):
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
+    # the old system
     resList = load(conn = conn)
     for x in resList:
         if x.name == name:
             resList.remove(x)
             break
     save(resList, conn = conn)
+    # The new system
+    if conn is not None:
+        cur = conn.cursor()
+        try:
+            cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
+        except:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        try:
+            cur.execute("DELETE FROM ReservePicks WHERE reserve=%s", [name])
+        except:
+            cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+        try:
+            cur.execute("DELETE FROM ASIPicks WHERE reserve=%s", [name])
+        except:
+            cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
+        cur.close()
 
 def deletePick(reserve: Union[str, AbstractReserve], player: str, conn = None) -> bool:
     name = ""
@@ -271,6 +288,7 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn = None) -
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
+    # The old system
     resList = load(conn = conn)
     didStuff = False
     for x in resList:
@@ -278,12 +296,38 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn = None) -
             didStuff = x.removePlayer(player)
             break
     save(resList, conn = conn)
+    # The new system
+    if conn is not None:
+        cur = conn.cursor()
+        try:
+            cur.execute("DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
+        except:
+            cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+        try:
+            cur.execute("DELETE FROM ASIPicks WHERE reserve=%s AND player=%s", [name, player])
+        except:
+            cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
+        cur.close()
     return didStuff
 
 def addReserve(reserve: AbstractReserve, conn = None):
+    # The old system
     resList = load(conn = conn)
     resList.append(reserve)
     save(resList, conn = conn)
+    # The new system
+    if conn is not None:
+        cur = conn.cursor()
+        try:
+            if isinstance(reserve, Reserve):
+                kind = "reserve"
+            elif isinstance(reserve, ASIReserve):
+                kind = "asi"
+            # TODO setup the specData
+            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [reserve.name, kind, [], []])
+        except:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        cur.close()
 
 def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn = None):
     """Codes:
@@ -298,6 +342,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn = Non
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
+    # The old system
     resList = load(conn = conn)
     addInt = 0
     for x in resList:
@@ -306,6 +351,31 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn = Non
             addInt = x.add(pick)
             break
     save(resList, conn = conn)
+    # The new system
+    if conn is not None:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
+        except:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        else:
+            res = cur.fetchone()
+            if res is None:
+                pass # return 0 addInt
+            else:
+                if res[1] == "reserve" and isinstance(pick, reservePick):
+                    try:
+                        cur.execute("INSERT INTO ReservePicks (reserve, player, tag) VALUES (%s, %s, %s)", [res[0], pick.player, pick.tag])
+                    except:
+                        cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+                elif res[1] == "asi" and isinstance(pick, asiPick):
+                    try:
+                        if not pick.priority:
+                            cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, 'NULL', 'NULL')", [res[0], pick.player, pick.picks[0]])
+                        else:
+                            cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, %s, %s)", [res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2]])
+                    except:
+                        cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
     return addInt
 
 def createMap(reserve: Reserve) -> Image:
