@@ -184,13 +184,13 @@ class ASIReserve(AbstractReserve):
             pickDictList.append(pick.toDict())
         return {"kind": "asi", "reserves": pickDictList}
 
-def load(conn = None) -> List[AbstractReserve]:
+def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[AbstractReserve]:
     try:
         if conn is None:
             with open("ressave.json", "r") as x:
                 jsonLoad: dict = json.load(x)
         else:
-            cur = conn.cursor()
+            cur: psycopg2.extensions.cursor = conn.cursor()
             try:
                 cur.execute("SELECT * FROM data")
             except:
@@ -228,7 +228,7 @@ def load(conn = None) -> List[AbstractReserve]:
             resList.append(r)
     return resList
 
-def save(reserves: List[AbstractReserve], conn = None):
+def save(reserves: List[AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
     jsonSave = {}
     for res in reserves:
         jsonSave[res.name] = res.toDict()
@@ -236,7 +236,7 @@ def save(reserves: List[AbstractReserve], conn = None):
         with open("ressave.json", "w") as x:
             json.dump(jsonSave, x)
     else:
-        cur = conn.cursor()
+        cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("DELETE FROM data")
         except:
@@ -245,14 +245,52 @@ def save(reserves: List[AbstractReserve], conn = None):
             cur.execute("INSERT INTO data (jsonstr) VALUES (%s)", [json.dumps(jsonSave)])
         cur.close()
 
-def getReserve(name: str, conn = None) -> AbstractReserve:
+def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None) -> AbstractReserve:
+    # The old system
     resList = load(conn = conn)
     for res in resList:
         if res.name == str(name):
             return res
+    # The new system
+    if conn is not None:
+        cur: psycopg2.extensions.cursor = conn.cursor()
+        try:
+            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
+        except:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        else:
+            resTup = cur.fetchone()
+            if resTup is None:
+                pass
+            else:
+                if resTup[1] == "reserve":
+                    res = Reserve(name)
+                    # Put other data stuff here for ban and specData.
+                    try:
+                        cur.execute("SELECT * FROM ReservePicks WHERE reserve=%s", [name])
+                    except:
+                        cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+                    else:
+                        for pick in cur.fetchall():
+                            res.add(reservePick(pick[1], pick[2]))
+                elif resTup[1] == "asi":
+                    res = ASIReserve(name)
+                    # Put other data stuff here for ban and specData.
+                    try:
+                        cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s", [name])
+                    except:
+                        cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
+                    else:
+                        for pick in cur.fetchall():
+                            pickObj = asiPick(pick[1], (pick[3] == "" and pick[4] == ""))
+                            if pickObj.priority:
+                                pickObj.picks = [pick[2]]
+                            else:
+                                pickObj.picks = [pick[2], pick[3], pick[4]]
+                            res.add(pickObj)
     return None
 
-def deleteReserve(reserve: Union[str, AbstractReserve], conn = None):
+def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -267,7 +305,7 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn = None):
     save(resList, conn = conn)
     # The new system
     if conn is not None:
-        cur = conn.cursor()
+        cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
         except:
@@ -282,7 +320,7 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn = None):
             cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
         cur.close()
 
-def deletePick(reserve: Union[str, AbstractReserve], player: str, conn = None) -> bool:
+def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional[psycopg2.extensions.connection] = None) -> bool:
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -298,7 +336,7 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn = None) -
     save(resList, conn = conn)
     # The new system
     if conn is not None:
-        cur = conn.cursor()
+        cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
         except:
@@ -310,14 +348,14 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn = None) -
         cur.close()
     return didStuff
 
-def addReserve(reserve: AbstractReserve, conn = None):
+def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.connection] = None):
     # The old system
     resList = load(conn = conn)
     resList.append(reserve)
     save(resList, conn = conn)
     # The new system
     if conn is not None:
-        cur = conn.cursor()
+        cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             if isinstance(reserve, Reserve):
                 kind = "reserve"
@@ -329,7 +367,7 @@ def addReserve(reserve: AbstractReserve, conn = None):
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         cur.close()
 
-def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn = None):
+def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Optional[psycopg2.extensions.connection] = None):
     """Codes:
     0 = Failed; Reserve not found
     1 = Success; New Reservation
@@ -353,7 +391,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn = Non
     save(resList, conn = conn)
     # The new system
     if conn is not None:
-        cur = conn.cursor()
+        cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
         except:
