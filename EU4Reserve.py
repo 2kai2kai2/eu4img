@@ -445,6 +445,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                         playerres = cur.fetchone()
                         if tagres == playerres:
                             addInt = 4
+                            print("4")
                         elif tagres is None and playerres is None:  # Nobody else has priority reserved this; player has not reserved
                             if pick.priority:
                                 cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, 'NULL', 'NULL')", [res[0], pick.player, pick.picks[0]])
@@ -459,6 +460,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                             addInt = 2
                         else: # Another player has reserved this priority. tagres is not None and tagres != playerres.
                             addInt = 3
+                            print("3")
                     except:
                         cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
     return addInt
