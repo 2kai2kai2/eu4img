@@ -247,12 +247,13 @@ def save(reserves: List[AbstractReserve], conn: Optional[psycopg2.extensions.con
 
 def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None) -> AbstractReserve:
     # The old system
-    resList = load(conn = conn)
-    for res in resList:
-        if res.name == str(name):
-            return res
+    if conn is None:
+        resList = load(conn = conn)
+        for res in resList:
+            if res.name == str(name):
+                return res
     # The new system
-    if conn is not None:
+    else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
@@ -260,9 +261,7 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         else:
             resTup = cur.fetchone()
-            if resTup is None:
-                pass
-            else:
+            if resTup is not None: # There is a reserve on file
                 if resTup[1] == "reserve":
                     res = Reserve(name)
                     # Put other data stuff here for ban and specData.
@@ -273,6 +272,7 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                     else:
                         for pick in cur.fetchall():
                             res.add(reservePick(pick[1], pick[2]))
+                        return res
                 elif resTup[1] == "asi":
                     res = ASIReserve(name)
                     # Put other data stuff here for ban and specData.
@@ -282,12 +282,14 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                         cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
                     else:
                         for pick in cur.fetchall():
-                            pickObj = asiPick(pick[1], (pick[3] == "" and pick[4] == ""))
+                            pickObj = asiPick(pick[1], (pick[3] == "NULL" and pick[4] == "NULL"))
                             if pickObj.priority:
                                 pickObj.picks = [pick[2]]
                             else:
                                 pickObj.picks = [pick[2], pick[3], pick[4]]
                             res.add(pickObj)
+                        return res
+        cur.close()
     return None
 
 def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
@@ -297,14 +299,15 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
     # the old system
-    resList = load(conn = conn)
-    for x in resList:
-        if x.name == name:
-            resList.remove(x)
-            break
-    save(resList, conn = conn)
+    if conn is None:
+        resList = load(conn = conn)
+        for x in resList:
+            if x.name == name:
+                resList.remove(x)
+                break
+        save(resList, conn = conn)
     # The new system
-    if conn is not None:
+    else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
@@ -326,23 +329,34 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
-    # The old system
-    resList = load(conn = conn)
     didStuff = False
-    for x in resList:
-        if x.name == name:
-            didStuff = x.removePlayer(player)
-            break
-    save(resList, conn = conn)
+    # The old system
+    if conn is None:
+        resList = load(conn = conn)
+        for x in resList:
+            if x.name == name:
+                didStuff = x.removePlayer(player)
+                break
+        save(resList, conn = conn)
     # The new system
-    if conn is not None:
+    else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
-            cur.execute("DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
+            # See if there are any that meet the requirments
+            cur.execute("SELECT FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
+            if len(cur.fetchall()) != 0:
+                # If so, delete them and didStuff is true
+                cur.execute("DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
+                didStuff = True
         except:
             cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
         try:
-            cur.execute("DELETE FROM ASIPicks WHERE reserve=%s AND player=%s", [name, player])
+            # See if there are any that meet the requirments
+            cur.execute("SELECT FROM ASIPicks WHERE reserve=%s AND player=%s", [name, player])
+            if len(cur.fetchall()) != 0:
+                # If so, delete them and didStuff is true
+                cur.execute("DELETE FROM ASIPicks WHERE reserve=%s AND player=%s", [name, player])
+                didStuff = True
         except:
             cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
         cur.close()
@@ -350,11 +364,12 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
 
 def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.connection] = None):
     # The old system
-    resList = load(conn = conn)
-    resList.append(reserve)
-    save(resList, conn = conn)
+    if conn is None:
+        resList = load(conn = conn)
+        resList.append(reserve)
+        save(resList, conn = conn)
     # The new system
-    if conn is not None:
+    else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             if isinstance(reserve, Reserve):
@@ -380,38 +395,70 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
-    # The old system
-    resList = load(conn = conn)
     addInt = 0
-    for x in resList:
-        if x.name == name:
-            # We have the reserve here. Now different things for each 
-            addInt = x.add(pick)
-            break
-    save(resList, conn = conn)
+    # The old system
+    if conn is None:
+        resList = load(conn = conn)
+        for x in resList:
+            if x.name == name:
+                # We have the reserve here. Now different things for each 
+                addInt = x.add(pick)
+                break
+        save(resList, conn = conn)
     # The new system
-    if conn is not None:
+    else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
         except:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+            # addInt is 0
         else:
             res = cur.fetchone()
             if res is None:
-                pass # return 0 addInt
+                pass
+                # addInt is 0
             else:
                 if res[1] == "reserve" and isinstance(pick, reservePick):
                     try:
-                        cur.execute("INSERT INTO ReservePicks (reserve, player, tag) VALUES (%s, %s, %s)", [res[0], pick.player, pick.tag])
+                        cur.execute("SELECT * FROM ReservePicks WHERE reserve=%s AND tag=%s", [res[0], pick.tag])
+                        tagres = cur.fetchone()
+                        cur.execute("SELECT * FROM ReservePicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
+                        playerres = cur.fetchone()
+                        if tagres is None and playerres is None:  # Nobody else has reserved this; player has not reserved
+                            cur.execute("INSERT INTO ReservePicks (reserve, player, tag) VALUES (%s, %s, %s)", [res[0], pick.player, pick.tag])
+                            addInt = 1
+                        elif tagres is None and playerres is not None: # Nobody else has reserved this, but player has another reservation
+                            cur.execute("INSERT INTO ReservePicks (reserve, player, tag) VALUES (%s, %s, %s)", [res[0], pick.player, pick.tag])
+                            addInt = 2
+                        elif tagres == playerres: # This player has already reserved this
+                            addInt = 4
+                        else: # Another player has reserved this. tagres is not None and tagres != playerres.
+                            addInt = 3
                     except:
                         cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
                 elif res[1] == "asi" and isinstance(pick, asiPick):
                     try:
-                        if not pick.priority:
-                            cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, 'NULL', 'NULL')", [res[0], pick.player, pick.picks[0]])
-                        else:
-                            cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, %s, %s)", [res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2]])
+                        cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s AND tag1=%s AND tag2='NULL'", [res[0], pick.picks[0]])
+                        tagres = cur.fetchone() # Any priority reserve of the first res
+                        cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
+                        playerres = cur.fetchone()
+                        if tagres == playerres:
+                            addInt = 4
+                        elif tagres is None and playerres is None:  # Nobody else has priority reserved this; player has not reserved
+                            if pick.priority:
+                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, 'NULL', 'NULL')", [res[0], pick.player, pick.picks[0]])
+                            else:
+                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, %s, %s)", [res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2]])
+                            addInt = 1
+                        elif tagres is None and playerres is not None: # Nobody else has priority reserved this, but player has another reservation
+                            if pick.priority:
+                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, 'NULL', 'NULL')", [res[0], pick.player, pick.picks[0]])
+                            else:
+                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, %s, %s)", [res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2]])
+                            addInt = 2
+                        else: # Another player has reserved this priority. tagres is not None and tagres != playerres.
+                            addInt = 3
                     except:
                         cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
     return addInt
