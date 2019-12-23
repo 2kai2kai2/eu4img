@@ -185,49 +185,61 @@ class ASIReserve(AbstractReserve):
         return {"kind": "asi", "reserves": pickDictList}
 
 def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[AbstractReserve]:
-    try:
-        if conn is None:
-            with open("ressave.json", "r") as x:
-                jsonLoad: dict = json.load(x)
-        else:
-            cur: psycopg2.extensions.cursor = conn.cursor()
-            try:
-                cur.execute("SELECT * FROM data")
-            except:
-                cur.execute("CREATE TABLE data (jsonstr varchar)")
-                return []
+    if conn is None:
+        try:
+            if conn is None:
+                with open("ressave.json", "r") as x:
+                    jsonLoad: dict = json.load(x)
             else:
-                inobj = cur.fetchone()
-                if inobj is None:
+                cur: psycopg2.extensions.cursor = conn.cursor()
+                try:
+                    cur.execute("SELECT * FROM data")
+                except:
+                    cur.execute("CREATE TABLE data (jsonstr varchar)")
                     return []
                 else:
-                    #print("loading " + inobj[0])
-                    jsonLoad: dict = json.loads(inobj[0])
-                    #print(jsonLoad)
-            cur.close()
-        if len(jsonLoad) == 0:
+                    inobj = cur.fetchone()
+                    if inobj is None:
+                        return []
+                    else:
+                        #print("loading " + inobj[0])
+                        jsonLoad: dict = json.loads(inobj[0])
+                        #print(jsonLoad)
+                cur.close()
+            if len(jsonLoad) == 0:
+                return []
+        except FileNotFoundError: # There are no reserves.
             return []
-    except FileNotFoundError: # There are no reserves.
-        return []
-    except json.decoder.JSONDecodeError:
-        print("Something is wrong with the save json formatting. You can try to delete the file to reset.")
-        return []
-    resList = []
-    for res in jsonLoad:
-        if jsonLoad[res]["kind"] == "reserve":
-            r = Reserve(res)
-            for pick in jsonLoad[res]["reserves"]:
-                r.add(reservePick(pick["player"], pick["tag"]))
-            resList.append(r)
-        elif jsonLoad[res]["kind"] == "asi":
-            r = ASIReserve(res)
-            for pick in jsonLoad[res]["reserves"]:
-                asirespick = asiPick(pick["player"], pick["priority"])
-                asirespick.picks = pick["picks"]
-                r.add(asirespick)
-            resList.append(r)
-    return resList
-
+        except json.decoder.JSONDecodeError:
+            print("Something is wrong with the save json formatting. You can try to delete the file to reset.")
+            return []
+        resList = []
+        for res in jsonLoad:
+            if jsonLoad[res]["kind"] == "reserve":
+                r = Reserve(res)
+                for pick in jsonLoad[res]["reserves"]:
+                    r.add(reservePick(pick["player"], pick["tag"]))
+                resList.append(r)
+            elif jsonLoad[res]["kind"] == "asi":
+                r = ASIReserve(res)
+                for pick in jsonLoad[res]["reserves"]:
+                    asirespick = asiPick(pick["player"], pick["priority"])
+                    asirespick.picks = pick["picks"]
+                    r.add(asirespick)
+                resList.append(r)
+        return resList
+    else: # With the new SQL format, this should only be called if there is a connection when everything is being loaded initially.
+        resList = []
+        cur: psycopg2.extensions.cursor = conn.cursor()
+        try:
+            cur.execute("SELECT * FROM Reserves")
+        except:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        else:
+            for res in cur.fetchall():
+                resList.append(getReserve(res[0], conn = conn))
+        cur.close()
+        return resList
 def save(reserves: List[AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
     jsonSave = {}
     for res in reserves:
@@ -443,7 +455,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                         tagres = cur.fetchone() # Any priority reserve of the first res
                         cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
                         playerres = cur.fetchone()
-                        if tagres == playerres:
+                        if tagres == playerres and tagres is not None:
                             addInt = 4
                             print("4")
                         elif tagres is None and playerres is None:  # Nobody else has priority reserved this; player has not reserved
