@@ -187,25 +187,8 @@ class ASIReserve(AbstractReserve):
 def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[AbstractReserve]:
     if conn is None:
         try:
-            if conn is None:
-                with open("ressave.json", "r") as x:
-                    jsonLoad: dict = json.load(x)
-            else:
-                cur: psycopg2.extensions.cursor = conn.cursor()
-                try:
-                    cur.execute("SELECT * FROM data")
-                except:
-                    cur.execute("CREATE TABLE data (jsonstr varchar)")
-                    return []
-                else:
-                    inobj = cur.fetchone()
-                    if inobj is None:
-                        return []
-                    else:
-                        #print("loading " + inobj[0])
-                        jsonLoad: dict = json.loads(inobj[0])
-                        #print(jsonLoad)
-                cur.close()
+            with open("ressave.json", "r") as x:
+                jsonLoad: dict = json.load(x)
             if len(jsonLoad) == 0:
                 return []
         except FileNotFoundError: # There are no reserves.
@@ -240,27 +223,17 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
                 resList.append(getReserve(res[0], conn = conn))
         cur.close()
         return resList
-def save(reserves: List[AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
+def save(reserves: List[AbstractReserve]):
     jsonSave = {}
     for res in reserves:
         jsonSave[res.name] = res.toDict()
-    if conn is None:
-        with open("ressave.json", "w") as x:
-            json.dump(jsonSave, x)
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("DELETE FROM data")
-        except:
-            cur.execute("CREATE TABLE data (jsonstr varchar)")
-        finally:
-            cur.execute("INSERT INTO data (jsonstr) VALUES (%s)", [json.dumps(jsonSave)])
-        cur.close()
+    with open("ressave.json", "w") as x:
+        json.dump(jsonSave, x)
 
 def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None) -> AbstractReserve:
     # The old system
     if conn is None:
-        resList = load(conn = conn)
+        resList = load()
         for res in resList:
             if res.name == str(name):
                 return res
@@ -310,15 +283,15 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
-    # the old system
+    # File
     if conn is None:
-        resList = load(conn = conn)
+        resList = load()
         for x in resList:
             if x.name == name:
                 resList.remove(x)
                 break
-        save(resList, conn = conn)
-    # The new system
+        save(resList)
+    # SQL
     else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
@@ -342,15 +315,15 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
     didStuff = False
-    # The old system
+    # File
     if conn is None:
-        resList = load(conn = conn)
+        resList = load()
         for x in resList:
             if x.name == name:
                 didStuff = x.removePlayer(player)
                 break
-        save(resList, conn = conn)
-    # The new system
+        save(resList)
+    # SQL
     else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
@@ -375,12 +348,12 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
     return didStuff
 
 def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.connection] = None):
-    # The old system
+    # File
     if conn is None:
-        resList = load(conn = conn)
+        resList = load()
         resList.append(reserve)
-        save(resList, conn = conn)
-    # The new system
+        save(resList)
+    # SQL
     else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
@@ -408,16 +381,15 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
     addInt = 0
-    # The old system
+    # FIle
     if conn is None:
-        resList = load(conn = conn)
+        resList = load()
         for x in resList:
             if x.name == name:
-                # We have the reserve here. Now different things for each 
                 addInt = x.add(pick)
                 break
-        save(resList, conn = conn)
-    # The new system
+        save(resList)
+    # SQL
     else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:

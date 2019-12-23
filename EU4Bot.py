@@ -831,7 +831,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                 user = message.mentions[0]
             pick = EU4Lib.country(res)
             if pick is None: # Nation is invalid; tag not found.
-                await sendUserMessage(message.author, "Your reservation of " + res.strip("\n\t ") + " in " + self.interactChannel.mention + " for " + message.mentions[0].mention + " was not a recognized nation.")
+                await sendUserMessage(message.author, "Your reservation of " + res.strip("\n\t ") + " in " + self.interactChannel.mention + " for " + user.mention + " was not a recognized nation.")
                 await message.delete()
                 return
             # Now reserve
