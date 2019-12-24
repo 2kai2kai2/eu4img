@@ -117,12 +117,12 @@ class AbstractChannel(ABC):
         pass
 
 class ReserveChannel(AbstractChannel):
-    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, Load = False):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, Load = False, textID: Optional[int] = None, imgID: Optional[int] = None):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
-        self.textID: Optional[int] = None
-        self.imgID: Optional[int] = None
+        self.textID: Optional[int] = textID
+        self.imgID: Optional[int] = imgID
         if not Load: # If this is new, then make a new Reserve.
             EU4Reserve.addReserve(EU4Reserve.Reserve(str(self.interactChannel.id)), conn = conn)
     async def responsive(self, message: discord.Message) -> bool:
@@ -182,11 +182,11 @@ class ReserveChannel(AbstractChannel):
         else:
             await message.delete()
     def setTextID(self, textID: int):
-        self.textID = textID
+        self.textID = int(textID)
     def getTextID(self) -> int:
         return self.textID
     def setImgID(self, imgID: int):
-        self.imgID = imgID
+        self.imgID = int(imgID)
     def getImgID(self) -> int:
         return self.imgID
     async def updateText(self):
@@ -199,16 +199,18 @@ class ReserveChannel(AbstractChannel):
                 string = string + "\n" + x.player + ": " + EU4Lib.tagToName(x.tag)
         if self.textID is None:
             self.setTextID((await self.displayChannel.send(content=string)).id)
+            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), textmsg=self.getTextID(), conn=conn)
         else:
             await (await (self.displayChannel).fetch_message(self.getTextID())).edit(content=string)
     async def updateImg(self):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
         if reserve is None:
             reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
-        if self.imgID is not None:
-            await (await self.interactChannel.fetch_message(self.getImgID())).delete()
-        else:
+        if self.imgID is None:
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
+            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=self.getImgID(), conn=conn)
+        else:
+            await (await self.interactChannel.fetch_message(self.getImgID())).delete()
     async def add(self, nation: EU4Reserve.reservePick) -> int:
         addInt = EU4Reserve.addPick(str(self.interactChannel.id), nation, conn = conn)
         if addInt == 1 or addInt == 2: # Success!
@@ -236,6 +238,7 @@ class ReserveChannel(AbstractChannel):
             if reserve is None:
                 reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
+            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=self.getImgID(), conn=conn)
     async def userdel(self, user: DiscUser):
         if (hasattr(self.displayChannel, 'guild') and self.displayChannel.guild == user.guild) or (hasattr(self.interactChannel, 'guild') and self.interactChannel.guild == user.guild):
             await self.removePlayer(user)
@@ -674,11 +677,11 @@ class asiFaction:
         return False
 
 class asiresChannel(AbstractChannel): # This is custom for my discord group. Anybody else can ignore it or do what you will.
-    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, Load = False):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, Load = False, textID: int = None):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
-        self.textID: Optional[int] = None
+        self.textID: Optional[int] = textID
         self.factions: List[asiFaction] = []
         self.factions.append(asiFaction("West", ["france_region", "british_isles_region", "iberia_region", "corsica_sardinia_area", "piedmont_area", "liguria_area", "tuscany_area", "naples_area", "calabria_area", "sicily_area"], 4))
         self.factions.append(asiFaction("East", ["low_countries_region", "north_german_region", "south_german_region", "scandinavia_region", "poland_region", "baltic_region", "russia_region", "ruthenia_region", "carpathia_region", "venetia_area", "lombardy_area", "emilia_romagna_area", "apulia_area", "central_italy_area"]))
@@ -870,6 +873,7 @@ class asiresChannel(AbstractChannel): # This is custom for my discord group. Any
                     string += "\n" + x.player + ": " + EU4Lib.tagToName(x.picks[0]) + ", " + EU4Lib.tagToName(x.picks[1]) + ", " + EU4Lib.tagToName(x.picks[2])
         if self.textID is None:
             self.textID = (await self.displayChannel.send(content=string)).id
+            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), textmsg=self.textID, conn=conn)
         else:
             await (await (self.displayChannel).fetch_message(self.textID)).edit(content=string)
     async def remove(self, user: DiscUser):
@@ -911,15 +915,47 @@ async def on_ready():
     rescount = 0
     closedcount = 0
     for res in reserves:
-        reschannel = client.get_channel(int(res.name))
+        reschannel: DiscTextChannels = client.get_channel(int(res.name))
         if reschannel is None:
             EU4Reserve.deleteReserve(res, conn = conn)
             closedcount += 1
         else:
             if isinstance(res, EU4Reserve.Reserve):
-                interactions.append(ReserveChannel(None, reschannel, Load = True))
+                # Check that the textmsg still exists
+                try:
+                    await reschannel.fetch_message(res.textmsg)
+                except: # The message either doesn't exist or can't be reached by the bot
+                    textmsg = None
+                else: # The message is accessable.
+                    textmsg = res.textmsg
+                # Check that the imgmsg still exists
+                try:
+                    await reschannel.fetch_message(res.imgmsg)
+                except: # The message either doesn't exist or can't be reached by the bot
+                    imgmsg = None
+                else: # The message is accessable.
+                    imgmsg = res.imgmsg
+                # Create
+                interactions.append(ReserveChannel(None, reschannel, Load = True, textID=textmsg, imgID=imgmsg))
+                # Update if anything was deleted
+                if textmsg is None:
+                    await interactions[-1].updateText()
+                    await interactions[-1].updateImg()
+                elif imgmsg is None:
+                    await interactions[-1].updateImg()
             elif isinstance(res, EU4Reserve.ASIReserve):
-                interactions.append(asiresChannel(None, reschannel, Load = True))
+                # Check that the textmsg still exists
+                try:
+                    await reschannel.fetch_message(res.textmsg)
+                except: # The message either doesn't exist or can't be reached by the bot
+                    textmsg = None
+                else: # The message is accessable.
+                    textmsg = res.textmsg
+                # Create
+                interactions.append(asiresChannel(None, reschannel, Load = True, textID=textmsg))
+                # Update if anything was deleted
+                if textmsg is None:
+                    await interactions[-1].updateText()
             rescount += 1
     print("Loaded " + str(rescount) + " channels and removed " + str(closedcount) + " no longer existing channels.")
     await client.change_presence(activity = discord.Activity(type = discord.ActivityType.watching, name = "for new lands"))

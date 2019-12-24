@@ -24,6 +24,8 @@ In Python, this becomes a dict.
 {
     "<ChannelID>": {
         "kind": "reserve",
+        "textmsg": 1234567890,
+        "imgmsg": 1234567890,
         "reserves": [
         {
             "player": "<PlayerMention>",
@@ -34,6 +36,7 @@ In Python, this becomes a dict.
     },
     "<ChannelID>": {
         "kind": "asi",
+        "textmsg": 1234567890,
         "reserves": [
             {
                 "player": "<PlayerMention>",
@@ -86,6 +89,7 @@ class AbstractReserve(ABC):
     def __init__(self, name: str):
         self.players: list = []
         self.name = name # Should be channelID
+        self.textmsg: Optional[int] = None
     @abstractmethod
     def add(self, pick: AbstractPick) -> int:
         """Codes:
@@ -110,6 +114,8 @@ class Reserve(AbstractReserve):
     def __init__(self, name: str):
         self.players: List[reservePick] = [] # list of reservePick objects
         self.name = name
+        self.textmsg: Optional[int] = None
+        self.imgmsg: Optional[int] = None
     def add(self, nation: reservePick) -> int:
         """Codes:
         1 = Success; New Reservation
@@ -146,12 +152,13 @@ class Reserve(AbstractReserve):
         pickDictList = []
         for pick in self.players:
             pickDictList.append(pick.toDict())
-        return {"kind": "reserve", "reserves": pickDictList}
+        return {"kind": "reserve", "textmsg": self.textmsg, "imgmsg": self.imgmsg, "reserves": pickDictList}
 
 class ASIReserve(AbstractReserve):
     def __init__(self, name: str):
         self.players: List[asiPick] = []
         self.name = name # Should be channelID
+        self.textmsg: Optional[int] = None
     def add(self, pick: asiPick) -> int:
         """Codes:
         1 = Success; New Reservation
@@ -182,7 +189,7 @@ class ASIReserve(AbstractReserve):
         pickDictList = []
         for pick in self.players:
             pickDictList.append(pick.toDict())
-        return {"kind": "asi", "reserves": pickDictList}
+        return {"kind": "asi", "textmsg": self.textmsg, "reserves": pickDictList}
 
 def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[AbstractReserve]:
     if conn is None:
@@ -200,11 +207,14 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
         for res in jsonLoad:
             if jsonLoad[res]["kind"] == "reserve":
                 r = Reserve(res)
+                r.textmsg = jsonLoad[res]["textmsg"]
+                r.imgmsg = jsonLoad[res]["imgmsg"]
                 for pick in jsonLoad[res]["reserves"]:
                     r.add(reservePick(pick["player"], pick["tag"]))
                 resList.append(r)
             elif jsonLoad[res]["kind"] == "asi":
                 r = ASIReserve(res)
+                r.textmsg = jsonLoad[res]["textmsg"]
                 for pick in jsonLoad[res]["reserves"]:
                     asirespick = asiPick(pick["player"], pick["priority"])
                     asirespick.picks = pick["picks"]
@@ -249,7 +259,9 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
             if resTup is not None: # There is a reserve on file
                 if resTup[1] == "reserve":
                     res = Reserve(name)
-                    # Put other data stuff here for ban and specData.
+                    res.textmsg = int(resTup[3][0])
+                    res.imgmsg = int(resTup[3][1])
+                    # Put other data stuff here for ban.
                     try:
                         cur.execute("SELECT * FROM ReservePicks WHERE reserve=%s", [name])
                     except:
@@ -257,10 +269,12 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                     else:
                         for pick in cur.fetchall():
                             res.add(reservePick(pick[1], pick[2]))
+                        cur.close()
                         return res
                 elif resTup[1] == "asi":
                     res = ASIReserve(name)
-                    # Put other data stuff here for ban and specData.
+                    res.textmsg = int(resTup[3][0])
+                    # Put other data stuff here for ban.
                     try:
                         cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s", [name])
                     except:
@@ -273,9 +287,52 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                             else:
                                 pickObj.picks = [pick[2], pick[3], pick[4]]
                             res.add(pickObj)
+                        cur.close()
                         return res
         cur.close()
     return None
+
+def updateMessageIDs(reserve: Union[str, AbstractReserve], textmsg: int = None, imgmsg: int = None, conn: Optional[psycopg2.extensions.connection] = None):
+    if textmsg is None and imgmsg is None:
+        return
+    name = ""
+    if isinstance(reserve, str):
+        name = reserve
+    elif isinstance(reserve, AbstractReserve):
+        name = reserve.name
+    # File
+    if conn is None:
+        resList = load()
+        for x in resList:
+            if x.name == name:
+                if textmsg is not None:
+                    x.textmsg = textmsg
+                if imgmsg is not None and isinstance(x, Reserve):
+                    x.imgmsg = imgmsg
+                break
+        save(resList)
+    else:
+        cur: psycopg2.extensions.cursor = conn.cursor()
+        try:
+            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
+        except:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        else:
+            res = cur.fetchone()
+            if res is not None:
+                newspecData = []
+                if textmsg is None: # This call is not editing textmsg; get previous value
+                    newspecData.append(res[3][0])
+                else: # This call is editing textmsg
+                    newspecData.append(str(textmsg))
+                if res[1] == "reserve":
+                    if imgmsg is None:
+                        newspecData.append(res[3][1])
+                    else:
+                        newspecData.append(str(imgmsg))
+                cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], res[2], newspecData])
+            else:
+                pass # Oh no! you're editing a nonexistant entry. Let's do nothing.
 
 def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
     name = ""
@@ -357,12 +414,15 @@ def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.conn
     else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
+            specData: List[str] = []
             if isinstance(reserve, Reserve):
                 kind = "reserve"
+                specData.append(str(reserve.textmsg))
+                specData.append(str(reserve.imgmsg))
             elif isinstance(reserve, ASIReserve):
                 kind = "asi"
-            # TODO setup the specData
-            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [reserve.name, kind, [], []])
+                specData.append(str(reserve.textmsg))
+            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [reserve.name, kind, [], specData])
         except:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         cur.close()
