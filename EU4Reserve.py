@@ -15,11 +15,11 @@ AbstractReserve ("Reserve")
     players: List[AbstractPick ("Pick")]
         player: str; user mention
     name: str; Channel ID as a str
+    textmsg: int; the msg ID in the channel
 """
 
 """ Data Structure - JSON Formatting
 In Python, this becomes a dict.
-
 
 {
     "<ChannelID>": {
@@ -57,6 +57,32 @@ In Python, this becomes a dict.
         ]
     }
 }
+"""
+
+""" Data Structure - SQL Database
+Reserves
++------+------+-------+----------+
+| name | kind | ban   | specdata |
+| str  | str  | str[] | str[]    |
++------+------+-------+----------+
+specdata:
+    Reserve - [<textmsgID>, <imgmsgID>]
+    ASIReserve - [<textmsgID>]
+
+ReservePicks
++---------+--------+-----+
+| reserve | player | tag |
+| str     | str    | str |
++---------+--------+-----+
+reserve refers to the name of the Reserve in the Reserves table this pick is for.
+
+ASIPicks
++---------+--------+------+------+------+
+| reserve | player | tag1 | tag2 | tag3 |
+| str     | str    | str  | str  | str  |
++---------+--------+------+------+------+
+reserve refers to the name of the ASIReserve in the Reserves table this pick is for.
+If the pick is priority, tag2 and tag3 are 'NULL' (a str).
 """
 
 class AbstractPick(ABC):
@@ -192,6 +218,14 @@ class ASIReserve(AbstractReserve):
         return {"kind": "asi", "textmsg": self.textmsg, "reserves": pickDictList}
 
 def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[AbstractReserve]:
+    """Loads the full list of reserves.
+    
+    If conn is specified, it uses that database connection. Otherwise, it loads from the json.
+    
+    Should only be used with a database connection if ALL reserves are needed. That is pretty much just on startup.
+    For json load, this is the only way of getting stuff from on file. Other methods such as getReserve() call this.
+    """
+    # Note that for json save this is referenced by getReserve, whereas for SQL save it references getReserve. If this got messed up, things would be bad.
     if conn is None:
         try:
             with open("ressave.json", "r") as x:
@@ -226,7 +260,7 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("SELECT * FROM Reserves")
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         else:
             for res in cur.fetchall():
@@ -235,6 +269,7 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
         return resList
 
 def save(reserves: List[AbstractReserve]):
+    """Overwrites the json save file with the given reserve list."""
     jsonSave = {}
     for res in reserves:
         jsonSave[res.name] = res.toDict()
@@ -242,18 +277,24 @@ def save(reserves: List[AbstractReserve]):
         json.dump(jsonSave, x)
 
 def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None) -> AbstractReserve:
-    # The old system
+    """Gets an AbstractReserve saved based on the name given.
+
+    If conn is given, the psycopg2 connection will be used to access the database. Otherwise, the json file method will be used.
+    
+    If no reserve can be found by the given name, None will be returned.
+    """
+    # File
     if conn is None:
         resList = load()
         for res in resList:
             if res.name == str(name):
                 return res
-    # The new system
+    # SQL
     else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         else:
             resTup = cur.fetchone()
@@ -261,17 +302,19 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                 if resTup[1] == "reserve":
                     res = Reserve(name)
                     try:
+                        # Get the textmsg ID
                         res.textmsg = int(resTup[3][0])
                     except: # Probably means the textmsg is not yet set
                         res.textmsg = None
                     try:
+                        # Get the imgmsg ID
                         res.imgmsg = int(resTup[3][1])
                     except: # Probably means the imgmsg is not yet set
                         res.imgmsg = None
-                    # Put other data stuff here for ban.
+                    # TODO: Put other data stuff here for ban.
                     try:
                         cur.execute("SELECT * FROM ReservePicks WHERE reserve=%s", [name])
-                    except:
+                    except psycopg2.Error:
                         cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
                     else:
                         for pick in cur.fetchall():
@@ -281,13 +324,14 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                 elif resTup[1] == "asi":
                     res = ASIReserve(name)
                     try:
+                        # Get the textmsg ID
                         res.textmsg = int(resTup[3][0])
                     except: # Probably means the textmsg is not yet set
                         res.textmsg = None
-                    # Put other data stuff here for ban.
+                    # TODO: Put other data stuff here for ban.
                     try:
                         cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s", [name])
-                    except:
+                    except psycopg2.Error:
                         cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
                     else:
                         for pick in cur.fetchall():
@@ -303,8 +347,15 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
     return None
 
 def updateMessageIDs(reserve: Union[str, AbstractReserve], textmsg: int = None, imgmsg: int = None, conn: Optional[psycopg2.extensions.connection] = None):
+    """Updates the saved message IDs for the given reserve.
+    
+    For normal Reserve, this is both textmsg and imgmsg. Either or both may be given as optional arguments, and only those given will be changed.
+    
+    In ASIReserve, the same applies but ASIReserve does not have imgmsg, so entering this for an ASIReserve will be ignored."""
+    # If they haven't given either to change, do nothing
     if textmsg is None and imgmsg is None:
         return
+    # Get the reserve name
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -321,31 +372,35 @@ def updateMessageIDs(reserve: Union[str, AbstractReserve], textmsg: int = None, 
                     x.imgmsg = imgmsg
                 break
         save(resList)
+    # SQL
     else:
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         else:
             res = cur.fetchone()
             if res is not None:
+                # Write the new specData list
                 newspecData = []
                 if textmsg is None: # This call is not editing textmsg; get previous value
                     newspecData.append(res[3][0])
                 else: # This call is editing textmsg
                     newspecData.append(str(textmsg))
-                if res[1] == "reserve":
+                if res[1] == "reserve": # Only reserve has an imgmsg
                     if imgmsg is None:
                         newspecData.append(res[3][1])
                     else:
                         newspecData.append(str(imgmsg))
+                # Update on the database
                 cur.execute("DELETE FROM Reserves WHERE name=%s", [res[0]])
                 cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], res[2], newspecData])
             else:
                 pass # Oh no! you're editing a nonexistant entry. Let's do nothing.
 
 def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
+    """Deletes a Reserve from on save"""
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -364,25 +419,28 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         try:
             cur.execute("DELETE FROM ReservePicks WHERE reserve=%s", [name])
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
         try:
             cur.execute("DELETE FROM ASIPicks WHERE reserve=%s", [name])
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
         cur.close()
 
 def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional[psycopg2.extensions.connection] = None) -> bool:
+    """Deletes a player's pick from a specified reserve on save.
+    
+    Returns a bool of whether or not a change occured. (False means that there was no pick to begin with)"""
     name = ""
     if isinstance(reserve, str):
         name = reserve
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
-    didStuff = False
+    didStuff = False # This value is returned at the end of whether changes were made.
     # File
     if conn is None:
         resList = load()
@@ -394,28 +452,31 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
     # SQL
     else:
         cur: psycopg2.extensions.cursor = conn.cursor()
+        # Delete from ReservePicks
         try:
-            # See if there are any that meet the requirments
+            # See if there are any that meet the requirements
             cur.execute("SELECT FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
             if len(cur.fetchall()) != 0:
-                # If so, delete them and didStuff is true
+                # If so, delete them and didStuff is true. Otherwise didStuff continues to be False
                 cur.execute("DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
                 didStuff = True
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+        # Delete from ASIPicks
         try:
-            # See if there are any that meet the requirments
+            # See if there are any that meet the requirements
             cur.execute("SELECT FROM ASIPicks WHERE reserve=%s AND player=%s", [name, player])
             if len(cur.fetchall()) != 0:
-                # If so, delete them and didStuff is true
+                # If so, delete them and didStuff is true. Otherwise didStuff continues its previous value
                 cur.execute("DELETE FROM ASIPicks WHERE reserve=%s AND player=%s", [name, player])
                 didStuff = True
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
         cur.close()
     return didStuff
 
 def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.connection] = None):
+    """Adds a new reserve on save."""
     # File
     if conn is None:
         resList = load()
@@ -423,6 +484,7 @@ def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.conn
         save(resList)
     # SQL
     else:
+        # Setup the specData based on the given reserve
         specData: List[str] = []
         if isinstance(reserve, Reserve):
             kind = "reserve"
@@ -431,16 +493,19 @@ def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.conn
         elif isinstance(reserve, ASIReserve):
             kind = "asi"
             specData.append(str(reserve.textmsg))
+        # Update on the database
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
             cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [reserve.name, kind, [], specData])
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         cur.close()
 
-def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Optional[psycopg2.extensions.connection] = None):
-    """Codes:
+def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Optional[psycopg2.extensions.connection] = None) -> int:
+    """Adds a pick to a specified reserve and returns a code based on the result.
+    
+    Codes:
     0 = Failed; Reserve not found
     1 = Success; New Reservation
     2 = Success; Replaced old reservation
@@ -466,7 +531,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except:
+        except psycopg2.Error:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
             # addInt is 0
         else:
@@ -492,7 +557,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                             addInt = 4
                         else: # Another player has reserved this. tagres is not None and tagres != playerres.
                             addInt = 3
-                    except:
+                    except psycopg2.Error:
                         cur.execute("CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
                 elif res[1] == "asi" and isinstance(pick, asiPick):
                     try:
@@ -500,7 +565,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                         tagres = cur.fetchone() # Any priority reserve of the first res
                         cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
                         playerres = cur.fetchone()
-                        if tagres == playerres and tagres is not None:
+                        if tagres == playerres and tagres is not None: # The player has priority reserved this already
                             addInt = 4
                         elif tagres is None and playerres is None:  # Nobody else has priority reserved this; player has not reserved
                             if pick.priority:
@@ -515,9 +580,9 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                             else:
                                 cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, %s, %s)", [res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2]])
                             addInt = 2
-                        else: # Another player has reserved this priority. tagres is not None and tagres != playerres.
+                        else: # Another player has priority reserved this. (tagres is not None and tagres != playerres)
                             addInt = 3
-                    except:
+                    except psycopg2.Error:
                         cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
     return addInt
 
