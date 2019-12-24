@@ -259,8 +259,14 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
             if resTup is not None: # There is a reserve on file
                 if resTup[1] == "reserve":
                     res = Reserve(name)
-                    res.textmsg = int(resTup[3][0])
-                    res.imgmsg = int(resTup[3][1])
+                    try:
+                        res.textmsg = int(resTup[3][0])
+                    except: # Probably means the textmsg is not yet set
+                        res.textmsg = None
+                    try:
+                        res.imgmsg = int(resTup[3][1])
+                    except: # Probably means the imgmsg is not yet set
+                        res.imgmsg = None
                     # Put other data stuff here for ban.
                     try:
                         cur.execute("SELECT * FROM ReservePicks WHERE reserve=%s", [name])
@@ -273,7 +279,10 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                         return res
                 elif resTup[1] == "asi":
                     res = ASIReserve(name)
-                    res.textmsg = int(resTup[3][0])
+                    try:
+                        res.textmsg = int(resTup[3][0])
+                    except: # Probably means the textmsg is not yet set
+                        res.textmsg = None
                     # Put other data stuff here for ban.
                     try:
                         cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s", [name])
