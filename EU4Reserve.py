@@ -233,6 +233,7 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
                 resList.append(getReserve(res[0], conn = conn))
         cur.close()
         return resList
+
 def save(reserves: List[AbstractReserve]):
     jsonSave = {}
     for res in reserves:
@@ -339,6 +340,7 @@ def updateMessageIDs(reserve: Union[str, AbstractReserve], textmsg: int = None, 
                         newspecData.append(res[3][1])
                     else:
                         newspecData.append(str(imgmsg))
+                cur.execute("DELETE FROM Reserves WHERE name=%s", [res[0]])
                 cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], res[2], newspecData])
             else:
                 pass # Oh no! you're editing a nonexistant entry. Let's do nothing.
@@ -421,16 +423,17 @@ def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.conn
         save(resList)
     # SQL
     else:
+        specData: List[str] = []
+        if isinstance(reserve, Reserve):
+            kind = "reserve"
+            specData.append(str(reserve.textmsg))
+            specData.append(str(reserve.imgmsg))
+        elif isinstance(reserve, ASIReserve):
+            kind = "asi"
+            specData.append(str(reserve.textmsg))
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
-            specData: List[str] = []
-            if isinstance(reserve, Reserve):
-                kind = "reserve"
-                specData.append(str(reserve.textmsg))
-                specData.append(str(reserve.imgmsg))
-            elif isinstance(reserve, ASIReserve):
-                kind = "asi"
-                specData.append(str(reserve.textmsg))
+            cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
             cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [reserve.name, kind, [], specData])
         except:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
@@ -450,7 +453,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
     elif isinstance(reserve, AbstractReserve):
         name = reserve.name
     addInt = 0
-    # FIle
+    # File
     if conn is None:
         resList = load()
         for x in resList:
@@ -482,6 +485,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                             cur.execute("INSERT INTO ReservePicks (reserve, player, tag) VALUES (%s, %s, %s)", [res[0], pick.player, pick.tag])
                             addInt = 1
                         elif tagres is None and playerres is not None: # Nobody else has reserved this, but player has another reservation
+                            cur.execute("DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
                             cur.execute("INSERT INTO ReservePicks (reserve, player, tag) VALUES (%s, %s, %s)", [res[0], pick.player, pick.tag])
                             addInt = 2
                         elif tagres == playerres: # This player has already reserved this
@@ -505,6 +509,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                                 cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, %s, %s)", [res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2]])
                             addInt = 1
                         elif tagres is None and playerres is not None: # Nobody else has priority reserved this, but player has another reservation
+                            cur.execute("DELETE FROM ASIPicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
                             if pick.priority:
                                 cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, 'NULL', 'NULL')", [res[0], pick.player, pick.picks[0]])
                             else:
