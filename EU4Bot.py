@@ -638,6 +638,16 @@ class statsChannel(AbstractChannel):
                     imgDraw.text((round(x + 437.5 - imgDraw.textsize(nameStr, fontmini)[0]/2), y + 12), nameStr, (255, 255, 255), fontmini, align = "center")
                     dateStr = playerWar.startDate.split(".")[0] + "-" + playerWar.endDate.split(".")[0]
                     imgDraw.text((round(x + 437.5 - imgDraw.textsize(dateStr, fontmini)[0]/2), y + 115), dateStr, (255, 255, 255), fontmini, align = "center")
+                    # Draw result
+                    if playerWar.result == 1: # WP
+                        WPIcon = Image.open("src/icon_peace.png")
+                        imgFinal.paste(WPIcon, (x + 437 - 32, y + 140), WPIcon)
+                    elif playerWar.result == 2: # Attacker
+                        WinnerIcon = Image.open("src/star.png")
+                        imgFinal.paste(WinnerIcon, (x + 290, y + 148), WinnerIcon)
+                    elif playerWar.result == 3: # Defender
+                        WinnerIcon = Image.open("src/star.png")
+                        imgFinal.paste(WinnerIcon, (x + 12 + 585 - 48, y + 148), WinnerIcon)
         #================SINGLEPLAYER================#
         else:
             pass
