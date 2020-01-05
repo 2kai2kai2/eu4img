@@ -477,6 +477,8 @@ class statsChannel(AbstractChannel):
                     elif len(brackets) == 3 and brackets[1] == "\thistory={":
                         if "add_attacker=\"" in line:
                             currentReadWar.attackers.append(line.split("\"")[1])
+                            if currentReadWar.startDate is None:
+                                currentReadWar.startDate = brackets[2].strip("\t={\n ")
                         elif "add_defender=\"" in line:
                             currentReadWar.defenders.append(line.split("\"")[1])
                         elif "rem_attacker=\"" in line or "rem_defender=\"" in line:
@@ -499,8 +501,6 @@ class statsChannel(AbstractChannel):
                             currentReadWar.endDate = currentWarLastLeave
                             self.game.playerWars.append(currentReadWar)
                             currentReadWar = None
-                    elif len(brackets) == 1 and "\taction=" in line:
-                        currentReadWar.startDate = line.strip("\taction=\n ")
         # Finalize data
         for x in self.game.countries: #Remove dead countries from players list
             if x is None or x.development == 0:
@@ -604,35 +604,40 @@ class statsChannel(AbstractChannel):
                     for nat in playerWar.playerAttackers(self.game.playertags):
                         natnum = playerWar.playerAttackers(self.game.playertags).index(nat)
                         if natnum < 8:
-                            imgFinal.paste(EU4Lib.flag(nat).resize((64, 64)), (round(x + (natnum % 4) * (64 + 12)), round(y + round(natnum / 4) * 64 + round(natnum / 4 + 1) * 12)))
+                            imgFinal.paste(EU4Lib.flag(nat).resize((64, 64)), (round(x + 3 * (12 + 64) - (natnum % 4) * (64 + 12)), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
+                    # Draw Attacker Casualties
                     attackerIcon = Image.open("src/bodycount_attacker_button.png")
-                    imgFinal.paste(attackerIcon, (x + 12, y + 184), attackerIcon)
-                    imgDraw.text((x + 12 + 32, y + 180), "Losses: " + str(armyDisplay(playerWar.attackerLosses)), (255, 255, 255), fontmini)
+                    imgFinal.paste(attackerIcon, (x + 290 - 12 - 32, y + 156), attackerIcon)
+                    imgDraw.text((x + 290 - 12 - 32 - imgDraw.textsize("Losses: " + str(armyDisplay(playerWar.attackerLosses)), fontmini)[0], y + 152), "Losses: " + str(armyDisplay(playerWar.attackerLosses)), (255, 255, 255), fontmini)
                     # Draw Defender Flags
                     for nat in playerWar.playerDefenders(self.game.playertags):
                         natnum = playerWar.playerDefenders(self.game.playertags).index(nat)
                         if natnum < 8:
-                            imgFinal.paste(EU4Lib.flag(nat).resize((64, 64)), (round(x + (natnum % 4) * (64 + 12) + 585), round(y + round(natnum / 4) * 64 + round(natnum / 4 + 1) * 12)))
+                            imgFinal.paste(EU4Lib.flag(nat).resize((64, 64)), (round(x + (natnum % 4) * (64 + 12) + 585), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
+                    # Draw Defender Casualties
                     defenderIcon = Image.open("src/bodycount_defender_button.png")
-                    imgFinal.paste(defenderIcon, (x + 12 + 585, y + 184), defenderIcon)
-                    imgDraw.text((x + 12 + 32 + 585, y + 180), "Losses: " + str(armyDisplay(playerWar.defenderLosses)), (255, 255, 255), fontmini)
+                    imgFinal.paste(defenderIcon, (x + 12 + 585, y + 156), defenderIcon)
+                    imgDraw.text((x + 12 + 32 + 585, y + 152), "Losses: " + str(armyDisplay(playerWar.defenderLosses)), (255, 255, 255), fontmini)
                     # Draw war details
-                    nameSplit = playerWar.name.split()
-                    lineLimit = 17 # 20 char/ln
+                    remainingWords = playerWar.name.split()
+                    lineLimit = 290 # pix/ln
                     nameStr = ""
-                    linelen = 0
-                    for word in nameSplit:
-                        if linelen + len(word) > lineLimit:
-                            linelen = 0
-                            nameStr += "\n" + word
-                        else:
-                            linelen += len(word) + 1
-                            if linelen == 0:
+                    for word in remainingWords:
+                        if nameStr == "" or nameStr.endswith("\n"):
+                            if imgDraw.textsize(word, fontmini)[0] >= lineLimit:
+                                nameStr += word + "\n"
+                            else:
                                 nameStr += word
+                        else:
+                            if imgDraw.textsize(word, fontmini)[0] >= lineLimit:
+                                nameStr += "\n" + word + "\n"
+                            elif imgDraw.textsize(nameStr.split("\n")[-1] + " " + word, fontmini)[0] >= lineLimit:
+                                nameStr += "\n" + word
                             else:
                                 nameStr += " " + word
-                    imgDraw.text((x + 300, y + 12), nameStr, (255, 255, 255), fontmini)
-                    imgDraw.text((x + 385, y + 115), playerWar.startDate.split(".")[0] + "-" + playerWar.endDate.split(".")[0], (255, 255, 255), fontmini)
+                    imgDraw.text((round(x + 437.5 - imgDraw.textsize(nameStr, fontmini)[0]/2), y + 12), nameStr, (255, 255, 255), fontmini, align = "center")
+                    dateStr = playerWar.startDate.split(".")[0] + "-" + playerWar.endDate.split(".")[0]
+                    imgDraw.text((round(x + 437.5 - imgDraw.textsize(dateStr, fontmini)[0]/2), y + 115), dateStr, (255, 255, 255), fontmini, align = "center")
         #================SINGLEPLAYER================#
         else:
             pass
@@ -641,30 +646,32 @@ class statsChannel(AbstractChannel):
         year = self.game.date.partition(".")[0].strip("\t \n")
         month = self.game.date.partition(".")[2].partition(".")[0].strip("\t \n")
         day = self.game.date.partition(".")[2].partition(".")[2].strip("\t \n")
+        gameDateStr = None
         if month == "1":
-            imgDraw.text((4880,60), day + " January " + year, (255, 255, 255), font) #Good
+            gameDateStr = day + " January " + year
         elif month == "2":
-            imgDraw.text((4880-40,60), day + " Feburary " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " Feburary " + year
         elif month == "3":
-            imgDraw.text((4880-20,60), day + " March " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " March " + year
         elif month == "4":
-            imgDraw.text((4880-20,60), day + " April " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " April " + year
         elif month == "5":
-            imgDraw.text((4880+50,60), day + " May " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " May " + year
         elif month == "6":
-            imgDraw.text((4880+50,60), day + " June " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " June " + year
         elif month == "7":
-            imgDraw.text((4880+50,60), day + " July " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " July " + year
         elif month == "8":
-            imgDraw.text((4880,60), day + " August " + year, (255, 255, 255), font) # Good
+            gameDateStr = day + " August " + year
         elif month == "9":
-            imgDraw.text((4880-45,60), day + " September " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " September " + year
         elif month == "10":
-            imgDraw.text((4880-25,60), day + " October " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " October " + year
         elif month == "11":
-            imgDraw.text((4880-60,60), day + " November " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " November " + year
         elif month == "12":
-            imgDraw.text((4880-60,60), day + " December " + year, (255, 255, 255), font) # Shift changed; need testing
+            gameDateStr = day + " December " + year
+        imgDraw.text((round(5177 - imgDraw.textsize(gameDateStr, font)[0] / 2) ,60), gameDateStr, (255, 255, 255), font)
         return imgFinal
     
     async def responsive(self, message: discord.Message) -> bool:
@@ -728,7 +735,7 @@ class statsChannel(AbstractChannel):
                 try:
                     await self.interactChannel.send("**Generating Image...**")
                     img = imageToFile(await self.generateImage())
-                except discord.Forbidden:
+                except:
                     await self.interactChannel.send("**Image generation failed!**\nPerhaps something was wrong with one of the files?\n**Try " + prefix + "stats again after checking that the files are valid and unchanged from their creation.**")
                 else: # That was successful, now post!
                     try:
