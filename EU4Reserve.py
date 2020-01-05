@@ -65,6 +65,9 @@ Reserves
 | name | kind | ban   | specdata |
 | str  | str  | str[] | str[]    |
 +------+------+-------+----------+
+kind:
+    Reserve - 'reserve'
+    ASIReserve - 'asi'
 specdata:
     Reserve - [<textmsgID>, <imgmsgID>]
     ASIReserve - [<textmsgID>]
@@ -175,9 +178,7 @@ class Reserve(AbstractReserve):
     def delete(self):
         pass
     def toDict(self) -> dict:
-        pickDictList = []
-        for pick in self.players:
-            pickDictList.append(pick.toDict())
+        pickDictList = [pick.toDict() for pick in self.players]
         return {"kind": "reserve", "textmsg": self.textmsg, "imgmsg": self.imgmsg, "reserves": pickDictList}
 
 class ASIReserve(AbstractReserve):
@@ -212,9 +213,7 @@ class ASIReserve(AbstractReserve):
     def delete(self):
         pass
     def toDict(self) -> dict:
-        pickDictList = []
-        for pick in self.players:
-            pickDictList.append(pick.toDict())
+        pickDictList = [pick.toDict() for pick in self.players]
         return {"kind": "asi", "textmsg": self.textmsg, "reserves": pickDictList}
 
 def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[AbstractReserve]:

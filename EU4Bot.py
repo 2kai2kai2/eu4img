@@ -261,6 +261,41 @@ class Nation:
         self.scorePlace = None
         self.capitalID: int = 0
 
+class war():
+    def __init__(self, name: str):
+        self.name = name
+        self.attackers: List[str] = []
+        self.defenders: List[str] = []
+        self.attackerLosses: int = 0
+        self.defenderLosses: int = 0
+        self.startDate: str = None
+        self.endDate: str = None
+        self.result: int = 0 # 1 = WP; 2 = Attacker wins; 3 = Defender wins
+    def isPlayerWar(self, playertags: List[str]):
+        attacker = False
+        defender = False
+        for tag in self.attackers:
+            if tag in playertags:
+                attacker = True
+                break
+        for tag in self.defenders:
+            if tag in playertags:
+                defender = True
+                break
+        return attacker and defender
+    def playerAttackers(self, playertags: List[str]):
+        return list(filter(lambda x: x in self.attackers, playertags))
+    def playerDefenders(self, playertags: List[str]):
+        return list(filter(lambda x: x in self.defenders, playertags))
+    def warScale(self, playertags: List[str] = []):
+        """Calculates a score for how important the war is for deciding which to display. May be somewhat arbitrary or subjective."""
+        if playertags is None or playertags == []: # Ignore player involvement
+            # Scale by number of players
+            return (self.attackerLosses + self.defenderLosses) * max(min(len(self.playerAttackers(playertags)) * 0.7, len(self.playerDefenders(playertags)) * 0.7), 1)
+        else: # Include player involvement
+            # Base off casualties
+            return self.attackerLosses + self.defenderLosses
+
 class saveGame():
     def __init__(self):
         self.countries: List[Nation] = []
@@ -273,6 +308,7 @@ class saveGame():
         self.HRE: str = None
         self.china: str = None
         self.crusade: str = None
+        self.playerWars: List[war] = []
 
 class statsChannel(AbstractChannel):
     def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
@@ -308,6 +344,9 @@ class statsChannel(AbstractChannel):
         """Gets all data from file and saves it to the self.game"""
         lines: List[str] = file.readlines()
         brackets: List[str] = []
+        currentReadWar: war = None
+        currentReadWarParticTag: str = None
+        currentWarLastLeave: str = None
         
         #Reading save file...
         linenum = 0
@@ -429,6 +468,39 @@ class statsChannel(AbstractChannel):
                                 #Add 1 for each ship
                                 elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
                                     x.navy += 1
+                elif len(brackets) > 0 and brackets[0] == "previous_war={":
+                    if len(brackets) == 1 and "\tname=\"" in line:
+                        if currentReadWar is not None and currentReadWar.isPlayerWar(self.game.playertags):
+                            currentReadWar.endDate = currentWarLastLeave
+                            self.game.playerWars.append(currentReadWar)
+                        currentReadWar = war(line.split("=")[1].strip("\n\t \""))
+                    elif len(brackets) == 3 and brackets[1] == "\thistory={":
+                        if "add_attacker=\"" in line:
+                            currentReadWar.attackers.append(line.split("\"")[1])
+                        elif "add_defender=\"" in line:
+                            currentReadWar.defenders.append(line.split("\"")[1])
+                        elif "rem_attacker=\"" in line or "rem_defender=\"" in line:
+                            currentWarLastLeave = brackets[2].strip("\t={\n ")
+                    elif len(brackets) >= 2 and brackets[1] == "\tparticipants={":
+                        if len(brackets) == 2 and "\t\ttag=\"" in line:
+                            currentReadWarParticTag = line.split("\"")[1]
+                        elif len(brackets) == 4 and brackets[2] == "\t\tlosses={" and brackets[3] == "\t\t\tmembers={":
+                            if currentReadWarParticTag in currentReadWar.attackers:
+                                for x in line.strip("\n\t ").split():
+                                    currentReadWar.attackerLosses += int(x)
+                            elif currentReadWarParticTag in currentReadWar.defenders:
+                                for x in line.strip("\n\t ").split():
+                                    currentReadWar.defenderLosses += int(x)
+                            else:
+                                print("Something went wrong with the attacker/defender list.")
+                    elif len(brackets) == 1 and "\toutcome=" in line:
+                        currentReadWar.result = int(line.strip("\toutcme=\n "))
+                        if currentReadWar.isPlayerWar(self.game.playertags):
+                            currentReadWar.endDate = currentWarLastLeave
+                            self.game.playerWars.append(currentReadWar)
+                            currentReadWar = None
+                    elif len(brackets) == 1 and "\taction=" in line:
+                        currentReadWar.startDate = line.strip("\taction=\n ")
         # Finalize data
         for x in self.game.countries: #Remove dead countries from players list
             if x is None or x.development == 0:
@@ -438,11 +510,18 @@ class statsChannel(AbstractChannel):
             raise Exception("This probably isn't a valid .eu4 uncompressed save file from " + self.user.mention)
         #Sort Data:
         self.game.countries.sort(key = lambda x: x.development, reverse = True)
+        self.game.playerWars.sort(key = lambda x: x.warScale(self.game.playertags), reverse = True)
 
     async def generateImage(self) -> Image:
         """Returns a stats Image based off the self.game data."""
         imgFinal: Image = Image.open("src/finalTemplate.png")
         mapFinal: Image = self.politicalImage.copy()
+        # Make the army display text
+        def armyDisplay(army: int):
+            armydisplay = str(round(army/1000, 1))
+            if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
+                armydisplay = armydisplay.partition(".")[0]
+            return armydisplay + "k"
         # Modify the image
         mapDraw = ImageDraw.Draw(mapFinal)
         if self.playersImage is not None: # If there's a player image - current eu4 update the screenshot is broken
@@ -469,6 +548,7 @@ class statsChannel(AbstractChannel):
         del(mapFinal)
         #The top has 5632x1119
         # Getting fonts
+        fontmini = ImageFont.truetype("src/GARA.TTF", 36)
         fontsmall = ImageFont.truetype("src/GARA.TTF", 50)
         font = ImageFont.truetype("src/GARA.TTF", 100)
         #fontbig = ImageFont.truetype("src/GARA.TTF", 180)
@@ -488,11 +568,7 @@ class statsChannel(AbstractChannel):
                     imgDraw.text((x+128, y), nat.player, (255, 255, 255), font)
                     #x+760: Army size
                     imgFinal.paste(Image.open("src/army.png"), (x+760, y))
-                    armydisplay = str(round(nat.army/1000, 1))
-                    if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
-                        armydisplay = armydisplay.partition(".")[0]
-                    armydisplay = armydisplay + "k"
-                    imgDraw.text((x+760+128, y), armydisplay, (255, 255, 255), font)
+                    imgDraw.text((x+760+128, y), armyDisplay(nat.army), (255, 255, 255), font)
                     #x+1100: Navy size
                     imgFinal.paste(Image.open("src/navy.png"), (x+1100, y))
                     imgDraw.text((x+1100+128, y), str(nat.navy), (255, 255, 255), font)
@@ -519,6 +595,44 @@ class statsChannel(AbstractChannel):
                     #max_sailors
                 else:
                     pass
+            for playerWar in self.game.playerWars:
+                warnum = self.game.playerWars.index(playerWar)
+                if warnum < 4:
+                    x = 4742
+                    y = 230 + 218 * warnum
+                    # Draw Attacker Flags
+                    for nat in playerWar.playerAttackers(self.game.playertags):
+                        natnum = playerWar.playerAttackers(self.game.playertags).index(nat)
+                        if natnum < 8:
+                            imgFinal.paste(EU4Lib.flag(nat).resize((64, 64)), (round(x + (natnum % 4) * (64 + 12)), round(y + round(natnum / 4) * 64 + round(natnum / 4 + 1) * 12)))
+                    attackerIcon = Image.open("src/bodycount_attacker_button.png")
+                    imgFinal.paste(attackerIcon, (x + 12, y + 184), attackerIcon)
+                    imgDraw.text((x + 12 + 32, y + 180), "Losses: " + str(armyDisplay(playerWar.attackerLosses)), (255, 255, 255), fontmini)
+                    # Draw Defender Flags
+                    for nat in playerWar.playerDefenders(self.game.playertags):
+                        natnum = playerWar.playerDefenders(self.game.playertags).index(nat)
+                        if natnum < 8:
+                            imgFinal.paste(EU4Lib.flag(nat).resize((64, 64)), (round(x + (natnum % 4) * (64 + 12) + 585), round(y + round(natnum / 4) * 64 + round(natnum / 4 + 1) * 12)))
+                    defenderIcon = Image.open("src/bodycount_defender_button.png")
+                    imgFinal.paste(defenderIcon, (x + 12 + 585, y + 184), defenderIcon)
+                    imgDraw.text((x + 12 + 32 + 585, y + 180), "Losses: " + str(armyDisplay(playerWar.defenderLosses)), (255, 255, 255), fontmini)
+                    # Draw war details
+                    nameSplit = playerWar.name.split()
+                    lineLimit = 17 # 20 char/ln
+                    nameStr = ""
+                    linelen = 0
+                    for word in nameSplit:
+                        if linelen + len(word) > lineLimit:
+                            linelen = 0
+                            nameStr += "\n" + word
+                        else:
+                            linelen += len(word) + 1
+                            if linelen == 0:
+                                nameStr += word
+                            else:
+                                nameStr += " " + word
+                    imgDraw.text((x + 300, y + 12), nameStr, (255, 255, 255), fontmini)
+                    imgDraw.text((x + 385, y + 115), playerWar.startDate.split(".")[0] + "-" + playerWar.endDate.split(".")[0], (255, 255, 255), fontmini)
         #================SINGLEPLAYER================#
         else:
             pass
@@ -614,7 +728,7 @@ class statsChannel(AbstractChannel):
                 try:
                     await self.interactChannel.send("**Generating Image...**")
                     img = imageToFile(await self.generateImage())
-                except:
+                except discord.Forbidden:
                     await self.interactChannel.send("**Image generation failed!**\nPerhaps something was wrong with one of the files?\n**Try " + prefix + "stats again after checking that the files are valid and unchanged from their creation.**")
                 else: # That was successful, now post!
                     try:
