@@ -1118,6 +1118,8 @@ async def on_message(message: discord.Message):
                     stringHelp += "\n**" + prefix + "NEW**\nTurns the text channel into a reservation channel\n(more commands within that; use this command in it for info)"
                     stringHelp += "\n**" + prefix + "STATS**\nCreates a eu4 stats image in the channel.\nUses DMs to gather the necessary files for creation."
                     stringHelp += "\n**" + prefix + "NEWASI**\nTurns the text channel into a ASI reservation channel\nThis is specific to my discord."
+                    stringHelp += "\n**" + prefix + "PREFIX [prefix]**\nChanges the bot prefix on this server."
+                    stringHelp += "\n**" + prefix + "ADMINRANK [@rank]**\nChanges the minimum rank necessary for admin control of the bot.\nPlease be sure before changing this. The highest rank can always control the bot.\nThe @ is optional in specifying the rank."
                 await message.delete()
                 await sendUserMessage(message.author, stringHelp)
             elif (text.upper() == prefix + "NEW") and checkResAdmin(message.guild, message.author):
@@ -1158,6 +1160,7 @@ async def on_message(message: discord.Message):
                 else:
                     GuildManager.setPrefix(message.guild, newPrefix, conn = conn)
                     await sendUserMessage(message.author, "Prefix on " + message.guild.name + " set to " + newPrefix)
+                await message.delete()
             elif text.upper().startswith(prefix + "ADMINRANK") and checkResAdmin(message.guild, message.author):
                 if len(message.role_mentions) > 0:
                     newRank = message.role_mentions[0]
@@ -1168,6 +1171,7 @@ async def on_message(message: discord.Message):
                 else:
                     GuildManager.setAdmin(message.guild, newRank.name, conn = conn)
                     await sendUserMessage(message.author, "Admin rank set to " + newRank.name + " on " + message.guild.name)
+                await message.delete()
 
 @client.event
 async def on_guild_channel_delete(channel: DiscTextChannels):
