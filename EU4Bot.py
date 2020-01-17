@@ -55,6 +55,8 @@ def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Opt
     """Converts a string into the role on a specified discord server.
     Use an '@role' string as the roleName argument. (@ is optional)
     Returns None if the role cannot be found."""
+    if roleName is None:
+        return None
     # Get server object
     s = None
     if isinstance(server, str) or isinstance(server, int):
