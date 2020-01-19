@@ -32,6 +32,11 @@ In Python, this becomes a dict.
             "tag": "<TAG>"
         },
         {...}
+        ],
+        "bans": [
+            "<TAG>",
+            "<TAG>",
+            "<TAG>"
         ]
     },
     "<ChannelID>": {
@@ -143,6 +148,7 @@ class Reserve(AbstractReserve):
     def __init__(self, name: str):
         self.players: List[reservePick] = [] # list of reservePick objects
         self.name = name
+        self.bans: List[str] = []
         self.textmsg: Optional[int] = None
         self.imgmsg: Optional[int] = None
     def add(self, nation: reservePick) -> int:
@@ -161,6 +167,7 @@ class Reserve(AbstractReserve):
                     return 3
             elif pick.player == nation.player:
                 addInt = 2
+                self.players.remove(pick)
         self.players.append(nation)
         return addInt
     def remove(self, tag: str) -> bool:
@@ -179,7 +186,7 @@ class Reserve(AbstractReserve):
         pass
     def toDict(self) -> dict:
         pickDictList = [pick.toDict() for pick in self.players]
-        return {"kind": "reserve", "textmsg": self.textmsg, "imgmsg": self.imgmsg, "reserves": pickDictList}
+        return {"kind": "reserve", "textmsg": self.textmsg, "imgmsg": self.imgmsg, "reserves": pickDictList, "bans": self.bans}
 
 class ASIReserve(AbstractReserve):
     def __init__(self, name: str):
@@ -202,6 +209,7 @@ class ASIReserve(AbstractReserve):
                     return 3
             elif pick.player == player.player:
                 addInt = 2
+                self.players.remove(pick)
         self.players.append(pick)
         return addInt
     def removePlayer(self, name: str) -> bool:
@@ -240,6 +248,10 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
         for res in jsonLoad:
             if jsonLoad[res]["kind"] == "reserve":
                 r = Reserve(res)
+                try:
+                    r.bans = jsonLoad[res]["bans"]
+                except:
+                    r.bans = []
                 r.textmsg = jsonLoad[res]["textmsg"]
                 r.imgmsg = jsonLoad[res]["imgmsg"]
                 for pick in jsonLoad[res]["reserves"]:
@@ -310,7 +322,9 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                         res.imgmsg = int(resTup[3][1])
                     except: # Probably means the imgmsg is not yet set
                         res.imgmsg = None
-                    # TODO: Put other data stuff here for ban.
+                    # Get banned nations
+                    res.bans = resTup[2]
+                    # Get picks
                     try:
                         cur.execute("SELECT * FROM ReservePicks WHERE reserve=%s", [name])
                     except psycopg2.Error:
@@ -327,7 +341,6 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                         res.textmsg = int(resTup[3][0])
                     except: # Probably means the textmsg is not yet set
                         res.textmsg = None
-                    # TODO: Put other data stuff here for ban.
                     try:
                         cur.execute("SELECT * FROM ASIPicks WHERE reserve=%s", [name])
                     except psycopg2.Error:
@@ -496,7 +509,7 @@ def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.conn
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
-            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [reserve.name, kind, [], specData])
+            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [reserve.name, kind, reserve.bans, specData])
         except psycopg2.Error:
             cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
         cur.close()
@@ -584,6 +597,70 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                     except psycopg2.Error:
                         cur.execute("CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
     return addInt
+
+def addBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional[psycopg2.extensions.connection] = None):
+    name = ""
+    if isinstance(reserve, str):
+        name = reserve
+    elif isinstance(reserve, AbstractReserve):
+        name = reserve.name
+    # File
+    if conn is None:
+        resList = load()
+        for x in resList:
+            if x.name == name:
+                for tag in bans:
+                    if hasattr(x, "bans") and tag not in x.bans:
+                        x.bans.append(tag)
+                break
+        save(resList)
+    # SQL
+    else:
+        cur: psycopg2.extensions.cursor = conn.cursor()
+        try:
+            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
+        except psycopg2.Error:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        else:
+            res = cur.fetchone()
+            banlist = res[2]
+            for tag in bans:
+                if tag not in banlist:
+                    banlist.append(tag)
+            cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
+            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], banlist, res[3]])
+
+def deleteBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional[psycopg2.extensions.connection] = None):
+    name = ""
+    if isinstance(reserve, str):
+        name = reserve
+    elif isinstance(reserve, AbstractReserve):
+        name = reserve.name
+    # File
+    if conn is None:
+        resList = load()
+        for x in resList:
+            if x.name == name:
+                for tag in bans:
+                    if hasattr(x, "bans") and tag in x.bans:
+                        x.bans.remove(tag)
+                break
+        save(resList)
+    # SQL
+    else:
+        cur: psycopg2.extensions.cursor = conn.cursor()
+        try:
+            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
+        except psycopg2.Error:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        else:
+            res = cur.fetchone()
+            banlist = res[2]
+            for tag in bans:
+                if tag in banlist:
+                    banlist.remove(tag)
+            cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
+            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], banlist, res[3]])
 
 def createMap(reserve: Reserve) -> Image:
     """Creates a map based on a Reserve object with x's on all the capitals of reserved reservePicks.

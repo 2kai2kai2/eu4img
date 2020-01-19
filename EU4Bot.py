@@ -138,9 +138,11 @@ class ReserveChannel(AbstractChannel):
             stringHelp += "\n**" + self.prefix() + "DELRESERVE**\nCancels your reservation."
             if checkResAdmin(message.guild, message.author): # Here we send info about commands only for admins
                 stringHelp += "\n**" + self.prefix() + "END**\nStops allowing reservations and stops the bot's channel management.\nThis should be done by the time the game starts."
-                stringHelp += "\n**" + self.prefix() + "ADMRES [nation] [@user]**\nReserves a nation on behalf of a player on the server.\nMake sure to actually @ the player."
+                stringHelp += "\n**" + self.prefix() + "ADMRES [nation] [@user]**\nReserves a nation on behalf of a player on the server.\nMake sure to actually @ the player. This ignores the ban list."
                 stringHelp += "\n**" + self.prefix() + "ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
                 stringHelp += "\n**" + self.prefix() + "UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
+                stringHelp += "\n**" + self.prefix() + "ADDBAN [nation], [nation], ... **\nAdds countries to the ban list. Add commas between each entry if there are more than one."
+                stringHelp += "\n**" + self.prefix() + "DELBAN [nation], [nation], ... **\nRemoves countries from the ban list. Add commas between each entry if there are more than one."
             await message.delete()
             await sendUserMessage(message.author, stringHelp)
         elif text.upper() == self.prefix() + "UPDATE" and checkResAdmin(message.guild, message.author): # UPDATE
@@ -157,7 +159,10 @@ class ReserveChannel(AbstractChannel):
             res = text.split(" ", 1)[1].strip("\n\t ")
             tag = EU4Lib.country(res)
             if tag is not None:
-                await self.add(EU4Reserve.reservePick(message.author.mention, tag.upper()))
+                if tag in EU4Reserve.getReserve(str(self.displayChannel.id)).bans:
+                    await sendUserMessage(message.author, "You may not reserve " + EU4Lib.tagToName(tag) + " in " + self.displayChannel.mention + " because it is banned. If you still want to play it, please have an admin override.")
+                else:
+                    await self.add(EU4Reserve.reservePick(message.author.mention, tag.upper()))
             else:
                 await sendUserMessage(message.author, "Your country reservation in " + self.displayChannel.mention + " was not recorded, as \"" + res + "\" was not recognized.")
             await message.delete()
@@ -181,6 +186,62 @@ class ReserveChannel(AbstractChannel):
             else:
                 await sendUserMessage(message.author, "Your deletion of a reservation in " + self.displayChannel.mention + " needs to @ a player.")
             await message.delete()
+        elif text.upper().startswith(self.prefix() + "ADDBAN") and checkResAdmin(message.guild, message.author): # ADDBAN [nation], [nation], ...
+            bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
+            bantags = []
+            fails = []
+            for bannat in bannations:
+                tag = EU4Lib.country(bannat.strip("\n\t ,"))
+                if tag is not None:
+                    bantags.append(tag)
+                else:
+                    fails.append(bannat)
+            string = ""
+            if len(bantags) > 0:
+                EU4Reserve.addBan(str(self.displayChannel.id), bantags, conn = conn)
+                string += "Added "
+                for tag in bantags:
+                    string += EU4Lib.tagToName(tag)
+                    if tag is not bantags[-1]:
+                        string += ", "
+                string += " to the ban list in " + self.displayChannel.mention + ".\n"
+            if len(fails) > 0:
+                string += "Did not recognize the following nations: "
+                for tag in bantags:
+                    string += EU4Lib.tagToName(tag)
+                    if tag is not bantags[-1]:
+                        string += ", "
+                string += "\n The unrecognized nations were not added to the ban list."
+            if string != "":
+                await sendUserMessage(message.author, string)
+        elif text.upper().startswith(self.prefix() + "DELBAN") and checkResAdmin(message.guild, message.author): # DELBAN [nation], [nation], ...
+            bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
+            bantags = []
+            fails = []
+            for bannat in bannations:
+                tag = EU4Lib.country(bannat.strip("\n\t ,"))
+                if tag is not None:
+                    bantags.append(tag)
+                else:
+                    fails.append(bannat)
+            string = ""
+            if len(bantags) > 0:
+                EU4Reserve.deleteBan(str(self.displayChannel.id), bantags, conn = conn)
+                string += "Removed "
+                for tag in bantags:
+                    string += EU4Lib.tagToName(tag)
+                    if tag is not bantags[-1]:
+                        string += ", "
+                string += " from the ban list in " + self.displayChannel.mention + ".\n"
+            if len(fails) > 0:
+                string += "Did not recognize the following nations: "
+                for tag in bantags:
+                    string += EU4Lib.tagToName(tag)
+                    if tag is not bantags[-1]:
+                        string += ", "
+                string += "\n The unrecognized nations were not removed from the ban list."
+            if string != "":
+                await sendUserMessage(message.author, string)
         else:
             await message.delete()
     def setTextID(self, textID: int):
@@ -193,7 +254,19 @@ class ReserveChannel(AbstractChannel):
         return self.imgID
     async def updateText(self):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
-        string = "How to reserve: " + self.prefix() + "reserve [nation]\nTo unreserve: " + self.prefix() + "delreserve\n**Current players list:**"
+        string = "How to reserve: " + self.prefix() + "reserve [nation]\nTo unreserve: " + self.prefix() + "delreserve\n"
+        string += "Banned nations: "
+        if len(reserve.bans) == 0:
+            string += "*none or unspecified*"
+        for tag in reserve.bans:
+            name = EU4Lib.tagToName(tag)
+            if name is None:
+                string += tag
+            else:
+                string += name
+            if tag is not reserve.bans[-1]:
+                string += ", "
+        string += "\n**Current players list:**"
         if reserve is None or len(reserve.players) == 0:
             string = string + "\n*It's so empty here...*"
         else:
