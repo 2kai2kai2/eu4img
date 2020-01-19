@@ -215,6 +215,7 @@ class ReserveChannel(AbstractChannel):
             if string != "":
                 await sendUserMessage(message.author, string)
             await message.delete()
+            await self.updateText()
         elif text.upper().startswith(self.prefix() + "DELBAN") and checkResAdmin(message.guild, message.author): # DELBAN [nation], [nation], ...
             bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
             bantags = []
@@ -244,6 +245,7 @@ class ReserveChannel(AbstractChannel):
             if string != "":
                 await sendUserMessage(message.author, string)
             await message.delete()
+            await self.updateText()
         else:
             await message.delete()
     def setTextID(self, textID: int):
