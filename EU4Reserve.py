@@ -627,7 +627,7 @@ def addBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional
             for tag in bans:
                 if tag not in banlist:
                     banlist.append(tag)
-            cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
+            cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
             cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], banlist, res[3]])
         cur.close()
 
@@ -660,7 +660,7 @@ def deleteBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optio
             for tag in bans:
                 if tag in banlist:
                     banlist.remove(tag)
-            cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
+            cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
             cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], banlist, res[3]])
         cur.close()
 
