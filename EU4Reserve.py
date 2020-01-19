@@ -629,6 +629,7 @@ def addBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional
                     banlist.append(tag)
             cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
             cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], banlist, res[3]])
+        cur.close()
 
 def deleteBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional[psycopg2.extensions.connection] = None):
     name = ""
@@ -661,6 +662,32 @@ def deleteBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optio
                     banlist.remove(tag)
             cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
             cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [res[0], res[1], banlist, res[3]])
+        cur.close()
+
+def isBanned(reserve: Union[str, AbstractReserve], tag: str, conn: Optional[psycopg2.extensions.connection] = None) -> bool:
+    name = ""
+    if isinstance(reserve, str):
+        name = reserve
+    elif isinstance(reserve, AbstractReserve):
+        name = reserve.name
+    # File
+    if conn is None:
+        resList = load()
+        for x in resList:
+            if x.name == name:
+                return hasattr(x, "bans") and tag in x.bans
+    # SQL
+    else:
+        cur: psycopg2.extensions.cursor = conn.cursor()
+        try:
+            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
+        except psycopg2.Error:
+            cur.execute("CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
+        else:
+            res = cur.fetchone()
+            cur.close()
+            banlist = res[2]
+            return tag in banlist
 
 def createMap(reserve: Reserve) -> Image:
     """Creates a map based on a Reserve object with x's on all the capitals of reserved reservePicks.

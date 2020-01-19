@@ -159,7 +159,7 @@ class ReserveChannel(AbstractChannel):
             res = text.split(" ", 1)[1].strip("\n\t ")
             tag = EU4Lib.country(res)
             if tag is not None:
-                if tag in EU4Reserve.getReserve(str(self.displayChannel.id)).bans:
+                if EU4Reserve.isBanned(str(self.displayChannel.id), tag, conn = conn):
                     await sendUserMessage(message.author, "You may not reserve " + EU4Lib.tagToName(tag) + " in " + self.displayChannel.mention + " because it is banned. If you still want to play it, please have an admin override.")
                 else:
                     await self.add(EU4Reserve.reservePick(message.author.mention, tag.upper()))
@@ -214,6 +214,7 @@ class ReserveChannel(AbstractChannel):
                 string += "\n The unrecognized nations were not added to the ban list."
             if string != "":
                 await sendUserMessage(message.author, string)
+            await message.delete()
         elif text.upper().startswith(self.prefix() + "DELBAN") and checkResAdmin(message.guild, message.author): # DELBAN [nation], [nation], ...
             bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
             bantags = []
@@ -242,6 +243,7 @@ class ReserveChannel(AbstractChannel):
                 string += "\n The unrecognized nations were not removed from the ban list."
             if string != "":
                 await sendUserMessage(message.author, string)
+            await message.delete()
         else:
             await message.delete()
     def setTextID(self, textID: int):
