@@ -124,7 +124,9 @@ class ReserveChannel(AbstractChannel):
         self.textID: Optional[int] = textID
         self.imgID: Optional[int] = imgID
         if not Load: # If this is new, then make a new Reserve.
-            EU4Reserve.addReserve(EU4Reserve.Reserve(str(self.interactChannel.id)), conn = conn)
+            res = EU4Reserve.Reserve(str(self.interactChannel.id))
+            res.bans = GuildManager.getGuildSave(self.interactChannel.guild, conn = conn).defaultBan # Set the ban list to the server default
+            EU4Reserve.addReserve(res, conn = conn)
     def prefix(self) -> str:
         return GuildManager.getGuildSave(self.interactChannel.guild, conn = conn).prefix
     async def responsive(self, message: discord.Message) -> bool:
@@ -199,17 +201,16 @@ class ReserveChannel(AbstractChannel):
             string = ""
             if len(bantags) > 0:
                 EU4Reserve.addBan(str(self.displayChannel.id), bantags, conn = conn)
-                string += "Added "
+                string += "Added the following nations to the ban list in " + self.displayChannel.mention + ": "
                 for tag in bantags:
                     string += EU4Lib.tagToName(tag)
                     if tag is not bantags[-1]:
                         string += ", "
-                string += " to the ban list in " + self.displayChannel.mention + ".\n"
             if len(fails) > 0:
-                string += "Did not recognize the following nations: "
-                for tag in bantags:
+                string += "\nDid not recognize the following nations: "
+                for tag in fails:
                     string += EU4Lib.tagToName(tag)
-                    if tag is not bantags[-1]:
+                    if tag is not fails[-1]:
                         string += ", "
                 string += "\n The unrecognized nations were not added to the ban list."
             if string != "":
@@ -229,17 +230,16 @@ class ReserveChannel(AbstractChannel):
             string = ""
             if len(bantags) > 0:
                 EU4Reserve.deleteBan(str(self.displayChannel.id), bantags, conn = conn)
-                string += "Removed "
+                string += "Removed the following nations from the ban list in " + self.displayChannel.mention + ": "
                 for tag in bantags:
                     string += EU4Lib.tagToName(tag)
                     if tag is not bantags[-1]:
                         string += ", "
-                string += " from the ban list in " + self.displayChannel.mention + ".\n"
             if len(fails) > 0:
-                string += "Did not recognize the following nations: "
-                for tag in bantags:
+                string += "\nDid not recognize the following nations: "
+                for tag in fails:
                     string += EU4Lib.tagToName(tag)
-                    if tag is not bantags[-1]:
+                    if tag is not fails[-1]:
                         string += ", "
                 string += "\n The unrecognized nations were not removed from the ban list."
             if string != "":
@@ -1197,6 +1197,8 @@ async def on_message(message: discord.Message):
                     stringHelp += "\n**" + prefix + "NEWASI**\nTurns the text channel into a ASI reservation channel\nThis is specific to my discord."
                     stringHelp += "\n**" + prefix + "PREFIX [prefix]**\nChanges the bot prefix on this server."
                     stringHelp += "\n**" + prefix + "ADMINRANK [@rank]**\nChanges the minimum rank necessary for admin control of the bot.\nPlease be sure before changing this. The highest rank can always control the bot.\nThe @ is optional in specifying the rank."
+                    stringHelp += "\n**" + prefix + "ADDDEFAULTBAN [nation], [nation], ...**\nAdds nations to the default ban list for the server. When a new reserve channel is created, this list will be copied into that channel's ban list. The channel ban list may be changed separately thereafter."
+                    stringHelp += "\n**" + prefix + "DELDEFAULTBAN [nation], [nation], ...**\nRemoves nations from the default ban list for the server. As many nations as needed may be changed in one command, with commas between them."
                 await message.delete()
                 await sendUserMessage(message.author, stringHelp)
             elif (text.upper() == prefix + "NEW") and checkResAdmin(message.guild, message.author):
@@ -1248,6 +1250,74 @@ async def on_message(message: discord.Message):
                 else:
                     GuildManager.setAdmin(message.guild, newRank.name, conn = conn)
                     await sendUserMessage(message.author, "Admin rank set to " + newRank.name + " on " + message.guild.name)
+                await message.delete()
+            elif text.upper().startswith(prefix + "ADDDEFAULTBAN") and checkResAdmin(message.guild, message.author): # ADDDEFAULTBAN [nation], [nation], ...
+                bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
+                bantags = []
+                fails = []
+                for bannat in bannations:
+                    tag = EU4Lib.country(bannat.strip("\n\t ,"))
+                    if tag is not None:
+                        bantags.append(tag)
+                    else:
+                        fails.append(bannat)
+                string = ""
+                if len(bantags) > 0:
+                    string += "Added the following nations to the default ban list in " + message.guild.name + ": "
+                    for tag in bantags:
+                        GuildManager.addBan(message.guild, tag, conn = conn)
+                        string += EU4Lib.tagToName(tag)
+                        if tag is not bantags[-1]:
+                            string += ", "
+                if len(fails) > 0:
+                    string += "\nDid not recognize the following nations: "
+                    for tag in fails:
+                        string += tag
+                        if tag is not fails[-1]:
+                            string += ", "
+                    string += "\nThe unrecognized nations were not added to the default ban list."
+                if string != "":
+                    string += "\nThe new default ban list: "
+                    newbanlist = GuildManager.getGuildSave(message.guild, conn = conn).defaultBan
+                    for tag in newbanlist:
+                        string += EU4Lib.tagToName(tag)
+                        if tag is not newbanlist[-1]:
+                            string += ", "
+                    await sendUserMessage(message.author, string)
+                await message.delete()
+            elif text.upper().startswith(prefix + "DELDEFAULTBAN") and checkResAdmin(message.guild, message.author): # DELDEFAULTBAN [nation], [nation], ...
+                bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
+                bantags = []
+                fails = []
+                for bannat in bannations:
+                    tag = EU4Lib.country(bannat.strip("\n\t ,"))
+                    if tag is not None:
+                        bantags.append(tag)
+                    else:
+                        fails.append(bannat)
+                string = ""
+                if len(bantags) > 0:
+                    string += "Removed the following nations from the default ban list in " + message.guild.name + ": "
+                    for tag in bantags:
+                        GuildManager.removeBan(message.guild, tag, conn = conn)
+                        string += EU4Lib.tagToName(tag)
+                        if tag is not bantags[-1]:
+                            string += ", "
+                if len(fails) > 0:
+                    string += "\nDid not recognize the following nations: "
+                    for tag in fails:
+                        string += tag
+                        if tag is not fails[-1]:
+                            string += ", "
+                    string += "\nThe unrecognized nations were not removed from the default ban list."
+                if string != "":
+                    string += "\nThe new default ban list: "
+                    newbanlist = GuildManager.getGuildSave(message.guild, conn = conn).defaultBan
+                    for tag in newbanlist:
+                        string += EU4Lib.tagToName(tag)
+                        if tag is not newbanlist[-1]:
+                            string += ", "
+                    await sendUserMessage(message.author, string)
                 await message.delete()
 
 @client.event
