@@ -237,6 +237,7 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
         try:
             with open("ressave.json", "r") as x:
                 jsonLoad: dict = json.load(x)
+                x.close()
             if len(jsonLoad) == 0:
                 return []
         except FileNotFoundError: # There are no reserves.
@@ -286,6 +287,7 @@ def save(reserves: List[AbstractReserve]):
         jsonSave[res.name] = res.toDict()
     with open("ressave.json", "w") as x:
         json.dump(jsonSave, x)
+        x.close()
 
 def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None) -> AbstractReserve:
     """Gets an AbstractReserve saved based on the name given.

@@ -43,6 +43,7 @@ def fileLoadGuilds() -> List[GuildSave]:
 	try:
 		with open("guildsave.json", "r") as x:
 			jsonLoad: dict = json.load(x)
+			x.close()
 	except FileNotFoundError: # There are no reserves.
 		return []
 	except json.decoder.JSONDecodeError:
@@ -61,6 +62,7 @@ def fileSaveGuilds(guilds: List[GuildSave]):
 		jsonSave[gld.name] = gld.toDict()
 	with open("guildsave.json", "w") as x:
 		json.dump(jsonSave, x)
+		x.close()
 
 def addGuild(guild: Union[discord.Guild, int], prefix: Optional[str] = "$", admin: Optional[str] = None, conn: Optional[psycopg2.extensions.connection] = None):
 	if isinstance(guild, discord.Guild):

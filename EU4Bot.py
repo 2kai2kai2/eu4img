@@ -133,7 +133,7 @@ class ReserveChannel(AbstractChannel):
         return message.channel == self.interactChannel
     async def process(self, message: discord.Message):
         text: str = message.content.strip("\n\t ")
-        if text.upper() == self.prefix() + "HELP":
+        if text.upper() == self.prefix() + "HELP": # HELP
             stringHelp = "__**Command help for " + message.channel.mention + ":**__"
             stringHelp += "\n**" + self.prefix() + "HELP**\nGets you this information!"
             stringHelp += "\n**" + self.prefix() + "RESERVE [nation]**\nReserves a nation or overwrites your previous reservation. Don't include the brackets."
@@ -248,14 +248,6 @@ class ReserveChannel(AbstractChannel):
             await self.updateText()
         else:
             await message.delete()
-    def setTextID(self, textID: int):
-        self.textID = int(textID)
-    def getTextID(self) -> int:
-        return self.textID
-    def setImgID(self, imgID: int):
-        self.imgID = int(imgID)
-    def getImgID(self) -> int:
-        return self.imgID
     async def updateText(self):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
         string = "How to reserve: " + self.prefix() + "reserve [nation]\nTo unreserve: " + self.prefix() + "delreserve\n"
@@ -277,19 +269,19 @@ class ReserveChannel(AbstractChannel):
             for x in reserve.players:
                 string = string + "\n" + x.player + ": " + EU4Lib.tagToName(x.tag)
         if self.textID is None:
-            self.setTextID((await self.displayChannel.send(content=string)).id)
-            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), textmsg=self.getTextID(), conn=conn)
+            self.textID = (await self.displayChannel.send(content=string)).id
+            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), textmsg=self.textID, conn=conn)
         else:
-            await (await (self.displayChannel).fetch_message(self.getTextID())).edit(content=string)
+            await (await (self.displayChannel).fetch_message(self.textID)).edit(content=string)
     async def updateImg(self):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
         if reserve is None:
             reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
         if self.imgID is None:
-            self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
-            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=self.getImgID(), conn=conn)
+            self.imgID = (await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id
+            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=self.imgID, conn=conn)
         else:
-            await (await self.interactChannel.fetch_message(self.getImgID())).delete()
+            await (await self.interactChannel.fetch_message(self.imgID)).delete()
     async def add(self, nation: EU4Reserve.reservePick) -> int:
         addInt = EU4Reserve.addPick(str(self.interactChannel.id), nation, conn = conn)
         if addInt == 1 or addInt == 2: # Success!
@@ -310,14 +302,14 @@ class ReserveChannel(AbstractChannel):
         if msgID == self.textID:
             self.textID = None
             await self.updateText()
-            await (await self.interactChannel.fetch_message(self.getImgID())).delete() # This will call msgdel again for the img
+            await (await self.interactChannel.fetch_message(self.imgID).delete() # This will call msgdel again to update the image
         if msgID == self.imgID:
             self.imgID = None
             reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
             if reserve is None:
                 reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
-            self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
-            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=self.getImgID(), conn=conn)
+            self.imgID = (await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id
+            EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=self.imgID, conn=conn)
     async def userdel(self, user: DiscUser):
         if (hasattr(self.displayChannel, 'guild') and self.displayChannel.guild == user.guild) or (hasattr(self.interactChannel, 'guild') and self.interactChannel.guild == user.guild):
             await self.removePlayer(user)
@@ -369,11 +361,11 @@ class war():
     def warScale(self, playertags: List[str] = []):
         """Calculates a score for how important the war is for deciding which to display. May be somewhat arbitrary or subjective."""
         if playertags is None or playertags == []: # Ignore player involvement
-            # Scale by number of players
-            return (self.attackerLosses + self.defenderLosses) * max(min(len(self.playerAttackers(playertags)) * 0.7, len(self.playerDefenders(playertags)) * 0.7), 1)
-        else: # Include player involvement
             # Base off casualties
             return self.attackerLosses + self.defenderLosses
+        else: # Include player involvement
+            # Scale by number of players
+            return (self.attackerLosses + self.defenderLosses) * max(min(len(self.playerAttackers(playertags)) * 0.7, len(self.playerDefenders(playertags)) * 0.7), 1)
 
 class saveGame():
     def __init__(self):
@@ -1349,7 +1341,6 @@ async def on_member_remove(member: DiscUser):
 @client.event
 async def on_guild_join(guild: discord.Guild):
     GuildManager.addGuild(guild, conn = conn)
-
 
 @client.event
 async def on_guild_remove(guild: discord.Guild):
