@@ -302,8 +302,8 @@ class ReserveChannel(AbstractChannel):
         if msgID == self.textID:
             self.textID = None
             await self.updateText()
-            await (await self.interactChannel.fetch_message(self.imgID).delete() # This will call msgdel again to update the image
-        if msgID == self.imgID:
+            await (await self.interactChannel.fetch_message(self.imgID)).delete() # This will call msgdel again to update the image
+        elif msgID == self.imgID:
             self.imgID = None
             reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn = conn)
             if reserve is None:
