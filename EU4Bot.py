@@ -332,6 +332,31 @@ class Nation:
         self.scorePlace = None
         self.capitalID: int = 0
 
+class xNation:
+    def __init__(self, tag: str):
+        self.tag: str = tag.upper()
+        self.development: int = 0
+        self.prestige: int = None
+        self.stability: int = None
+        #self.manpower = None
+        #self.maxManpower = None
+        self.army: float = 0.0
+        self.navy: int = 0
+        self.debt: int = 0
+        self.treasury: float = 0.0
+        self.totalIncome: float = 0.0
+        self.totalExpense: float = 0.0
+        self.scorePlace = None
+        self.capitalID: int = 0
+    def fullDataStr(self) -> str:
+        string = "Tag: " + self.tag + "\n"
+        string += "Dev: " + str(self.development) + " Prestige: " + str(self.prestige) + " Stability: " + str(self.stability) + "\n"
+        string += "Army: " + str(self.army) + " Navy: " + str(self.navy) + "\n"
+        string += "Treasury: " + str(self.treasury) + " Debt: " + str(self.debt) + "\n"
+        string += "Income: " + str(self.totalIncome) + " Expenses: " + str(self.totalExpense) + "\n"
+        string += "Capital: " + str(self.capitalID)
+        return string
+
 class war():
     def __init__(self, name: str):
         self.name = name
@@ -370,6 +395,7 @@ class war():
 class saveGame():
     def __init__(self):
         self.countries: List[Nation] = []
+        self.allNations: dict = {}
         self.playertags: List[str] = []
         self.dlc: List[str] = []
         self.GP: List[str] = []
@@ -493,52 +519,99 @@ class statsChannel(AbstractChannel):
                 elif "previous_controller=" in line and brackets == ["religion_instance_data={", "\tcatholic={", "\t\tpapacy={"]:
                     continue
                 #Country-specific data (for players)
-                elif len(brackets) > 1 and brackets[0] == "countries={" and brackets[1].strip("\t={\n") in self.game.playertags:
-                    for x in self.game.countries:
-                        if x.tag in brackets[1]:
-                            #Here we have all the stats for country x on the players list
-                            if len(brackets) == 2:
-                                if "raw_development=" in line:
-                                    x.development = round(float(line.strip("\traw_devlopmnt=\n")))
-                                elif "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
-                                    x.capitalID = int(line.strip("\tcapitl=\n"))
-                                elif "score_place=" in line:
-                                    x.scorePlace = round(float(line.strip("\tscore_place=\n")))
-                                elif "prestige=" in line:
-                                    x.prestige = round(float(line.strip("\tprestige=\n")))
-                                elif "stability=" in line:
-                                    x.stability = round(float(line.strip("\tstability=\n")))
-                                elif "treasury=" in line:
-                                    x.treasury = round(float(line.strip("\ttreasury=\n")))
-                                #elif "\tmanpower=" in line:
-                                    #x.manpower = round(float(line.strip("\tmanpower=\n")))
-                                #elif "max_manpower=" in line:
-                                    #x.maxManpower = round(float(line.strip("\tmax_manpower=\n")))
-                                else: continue
-                            elif len(brackets) == 3:
-                                #Get each loan and add its amount to debt
-                                if brackets[2] == "\t\tloan={" and "amount=" in line:
-                                    x.debt += round(float(line.strip("\tamount=\n")))
-                                #Get Income from the previous month
-                                elif brackets[2] == "\t\tledger={" and "\tlastmonthincome=" in line:
-                                    x.totalIncome = round(float(line.strip("\tlastmonthincome=\n")), 2)
-                                #Get Expense from the previous month
-                                elif brackets[2] == "\t\tledger={" and "\tlastmonthexpense=" in line:
-                                    x.totalExpense = round(float(line.strip("\tlastmonthexpense=\n")), 2)
-                            elif len(brackets) == 4:
-                                #Add 1 to army size for each regiment
-                                if brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "morale=" in line:
-                                    x.army = x.army + 1000
-                                #Subtract damage done to units from army size
-                                #This needs to be separate from ^ because for full regiments there is no "strength=" tag
-                                elif brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "strength=" in line:
-                                    try:
-                                        x.army = round(x.army - 1000 + 1000*float(line.strip("\tstrength=\n")))
-                                    except ValueError:
-                                        continue
-                                #Add 1 for each ship
-                                elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
-                                    x.navy += 1
+                elif len(brackets) > 1 and brackets[0] == "countries={":
+                    if brackets[1].strip("\t={\n") in self.game.playertags:
+                        for x in self.game.countries:
+                            if x.tag in brackets[1]:
+                                #Here we have all the stats for country x on the players list
+                                if len(brackets) == 2:
+                                    if "raw_development=" in line:
+                                        x.development = round(float(line.strip("\traw_devlopmnt=\n")))
+                                    elif "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
+                                        x.capitalID = int(line.strip("\tcapitl=\n"))
+                                    elif "score_place=" in line:
+                                        x.scorePlace = round(float(line.strip("\tscore_place=\n")))
+                                    elif "prestige=" in line:
+                                        x.prestige = round(float(line.strip("\tprestige=\n")))
+                                    elif "stability=" in line:
+                                        x.stability = round(float(line.strip("\tstability=\n")))
+                                    elif "treasury=" in line:
+                                        x.treasury = round(float(line.strip("\ttreasury=\n")))
+                                    #elif "\tmanpower=" in line:
+                                        #x.manpower = round(float(line.strip("\tmanpower=\n")))
+                                    #elif "max_manpower=" in line:
+                                        #x.maxManpower = round(float(line.strip("\tmax_manpower=\n")))
+                                    else: continue
+                                elif len(brackets) == 3:
+                                    #Get each loan and add its amount to debt
+                                    if brackets[2] == "\t\tloan={" and "amount=" in line:
+                                        x.debt += round(float(line.strip("\tamount=\n")))
+                                    #Get Income from the previous month
+                                    elif brackets[2] == "\t\tledger={" and "\tlastmonthincome=" in line:
+                                        x.totalIncome = round(float(line.strip("\tlastmonthincome=\n")), 2)
+                                    #Get Expense from the previous month
+                                    elif brackets[2] == "\t\tledger={" and "\tlastmonthexpense=" in line:
+                                        x.totalExpense = round(float(line.strip("\tlastmonthexpense=\n")), 2)
+                                elif len(brackets) == 4:
+                                    #Add 1 to army size for each regiment
+                                    if brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "morale=" in line:
+                                        x.army = x.army + 1000
+                                    #Subtract damage done to units from army size
+                                    #This needs to be separate from ^ because for full regiments there is no "strength=" tag
+                                    elif brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "strength=" in line:
+                                        try:
+                                            x.army = round(x.army - 1000 + 1000*float(line.strip("\tstrength=\n")))
+                                        except ValueError:
+                                            continue
+                                    #Add 1 for each ship
+                                    elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
+                                        x.navy += 1
+                    # This is where the general save stuff is.
+                    if len(brackets) == 2:
+                        if "government_rank=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")] = xNation(brackets[1].strip("\n\t ={"))
+                        elif "raw_development=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].development = round(float(line.strip("\traw_devlopmnt=\n")))
+                        elif "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].capitalID = int(line.strip("\tcapitl=\n"))
+                        elif "score_place=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].scorePlace = round(float(line.strip("\tscore_place=\n")))
+                        elif "prestige=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].prestige = round(float(line.strip("\tprestige=\n")))
+                        elif "stability=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].stability = round(float(line.strip("\tstability=\n")))
+                        elif "treasury=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].treasury = round(float(line.strip("\ttreasury=\n")))
+                        #elif "\tmanpower=" in line:
+                            #x.manpower = round(float(line.strip("\tmanpower=\n")))
+                        #elif "max_manpower=" in line:
+                            #x.maxManpower = round(float(line.strip("\tmax_manpower=\n")))
+                        else: continue
+                    elif len(brackets) == 3:
+                        #Get each loan and add its amount to debt
+                        if brackets[2] == "\t\tloan={" and "amount=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].debt += round(float(line.strip("\tamount=\n")))
+                        #Get Income from the previous month
+                        elif brackets[2] == "\t\tledger={" and "\tlastmonthincome=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].totalIncome = round(float(line.strip("\tlastmonthincome=\n")), 2)
+                        #Get Expense from the previous month
+                        elif brackets[2] == "\t\tledger={" and "\tlastmonthexpense=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].totalExpense = round(float(line.strip("\tlastmonthexpense=\n")), 2)
+                    elif len(brackets) == 4:
+                        #Add 1 to army size for each regiment
+                        if brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "morale=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].army += 1000
+                        #Subtract damage done to units from army size
+                        #This needs to be separate from ^ because for full regiments there is no "strength=" tag
+                        elif brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "strength=" in line:
+                            try:
+                                self.game.allNations[brackets[1].strip("\n\t ={")].army = round(self.game.allNations[brackets[1].strip("\n\t ={")].army - 1000 + 1000 * float(line.strip("\tstrength=\n")))
+                            except ValueError:
+                                continue
+                        #Add 1 for each ship
+                        elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
+                            self.game.allNations[brackets[1].strip("\n\t ={")].navy += 1
+                    # End new save stuff
                 elif len(brackets) > 0 and brackets[0] == "previous_war={":
                     if len(brackets) == 1 and "\tname=\"" in line:
                         if currentReadWar is not None and currentReadWar.isPlayerWar(self.game.playertags):
@@ -582,6 +655,11 @@ class statsChannel(AbstractChannel):
         #Sort Data:
         self.game.countries.sort(key = lambda x: x.development, reverse = True)
         self.game.playerWars.sort(key = lambda x: x.warScale(self.game.playertags), reverse = True)
+        for x in self.game.allNations.copy().keys():
+            if self.game.allNations[x].development == 0:
+                del(self.game.allNations[x])
+            #else:
+                #print(self.game.allNations[x].fullDataStr())
 
     async def generateImage(self) -> Image:
         """Returns a stats Image based off the self.game data."""
