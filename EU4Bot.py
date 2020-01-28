@@ -385,7 +385,7 @@ class war():
         return list(filter(lambda x: x in self.defenders, playertags))
     def warScale(self, playertags: List[str] = []):
         """Calculates a score for how important the war is for deciding which to display. May be somewhat arbitrary or subjective."""
-        if playertags is None or playertags == []: # Ignore player involvement
+        if playertags is None or playertags == {}: # Ignore player involvement
             # Base off casualties
             return self.attackerLosses + self.defenderLosses
         else: # Include player involvement
@@ -394,9 +394,8 @@ class war():
 
 class saveGame():
     def __init__(self):
-        self.countries: List[Nation] = []
         self.allNations: dict = {}
-        self.playertags: List[str] = []
+        self.playertags: dict = {}
         self.dlc: List[str] = []
         self.GP: List[str] = []
         self.date: Optional[str] = None
@@ -429,11 +428,11 @@ class statsChannel(AbstractChannel):
     def modPromptStr(self) -> str:
         """Makes and returns a string giving information for player list modification."""
         prompt = "**Current players list:**```"
-        for x in self.game.countries:
-            if EU4Lib.tagToName(x.tag) is None:
-                prompt += "\n" + x.tag + ": " + x.player
+        for x in self.game.playertags:
+            if EU4Lib.tagToName(x) is None:
+                prompt += "\n" + x + ": " + self.game.playertags[x]
             else:
-                prompt += "\n" + EU4Lib.tagToName(x.tag)+ ": " + x.player
+                prompt += "\n" + EU4Lib.tagToName(x)+ ": " + self.game.playertags[x]
         #prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nadd TAG playername\nremove TAG**\n"
         prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\nremove [nation]**\n"
         return prompt
@@ -444,6 +443,7 @@ class statsChannel(AbstractChannel):
         currentReadWar: war = None
         currentReadWarParticTag: str = None
         currentWarLastLeave: str = None
+        lastPlayerInList: str = None
         
         #Reading save file...
         linenum = 0
@@ -490,15 +490,12 @@ class statsChannel(AbstractChannel):
                     #
                     #Where "   " is a tab \t
                     #This v adds a new Nation object and player name if there is none open.
-                    if len(self.game.countries) == 0 or self.game.countries[len(self.game.countries)-1].tag is not None:
-                        self.game.countries.append(Nation(line.strip('\t"\n')))
+                    if lastPlayerInList is None:
+                        lastPlayerInList = line.strip('\t"\n')
                     #Add country code to most recent country (which, because of ^ will not have a tag)
                     else:
-                        for x in self.game.countries:
-                            if x.tag == line.strip('\t"\n'): #Players are added later to the list as they join, so we remove all previous players
-                                self.game.countries.remove(x)
-                        self.game.countries[len(self.game.countries)-1].tag = line.strip('\t"\n')
-                        self.game.playertags.append(line.strip('\t"\n'))
+                        self.game.playertags[line.strip('\t"\n ')] = lastPlayerInList
+                        lastPlayerInList = None
                 #Get current age
                 elif "current_age=" in line and brackets == []:
                     self.game.age = line[12:].strip('"\n')
@@ -520,53 +517,6 @@ class statsChannel(AbstractChannel):
                     continue
                 #Country-specific data (for players)
                 elif len(brackets) > 1 and brackets[0] == "countries={":
-                    if brackets[1].strip("\t={\n") in self.game.playertags:
-                        for x in self.game.countries:
-                            if x.tag in brackets[1]:
-                                #Here we have all the stats for country x on the players list
-                                if len(brackets) == 2:
-                                    if "raw_development=" in line:
-                                        x.development = round(float(line.strip("\traw_devlopmnt=\n")))
-                                    elif "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
-                                        x.capitalID = int(line.strip("\tcapitl=\n"))
-                                    elif "score_place=" in line:
-                                        x.scorePlace = round(float(line.strip("\tscore_place=\n")))
-                                    elif "prestige=" in line:
-                                        x.prestige = round(float(line.strip("\tprestige=\n")))
-                                    elif "stability=" in line:
-                                        x.stability = round(float(line.strip("\tstability=\n")))
-                                    elif "treasury=" in line:
-                                        x.treasury = round(float(line.strip("\ttreasury=\n")))
-                                    #elif "\tmanpower=" in line:
-                                        #x.manpower = round(float(line.strip("\tmanpower=\n")))
-                                    #elif "max_manpower=" in line:
-                                        #x.maxManpower = round(float(line.strip("\tmax_manpower=\n")))
-                                    else: continue
-                                elif len(brackets) == 3:
-                                    #Get each loan and add its amount to debt
-                                    if brackets[2] == "\t\tloan={" and "amount=" in line:
-                                        x.debt += round(float(line.strip("\tamount=\n")))
-                                    #Get Income from the previous month
-                                    elif brackets[2] == "\t\tledger={" and "\tlastmonthincome=" in line:
-                                        x.totalIncome = round(float(line.strip("\tlastmonthincome=\n")), 2)
-                                    #Get Expense from the previous month
-                                    elif brackets[2] == "\t\tledger={" and "\tlastmonthexpense=" in line:
-                                        x.totalExpense = round(float(line.strip("\tlastmonthexpense=\n")), 2)
-                                elif len(brackets) == 4:
-                                    #Add 1 to army size for each regiment
-                                    if brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "morale=" in line:
-                                        x.army = x.army + 1000
-                                    #Subtract damage done to units from army size
-                                    #This needs to be separate from ^ because for full regiments there is no "strength=" tag
-                                    elif brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "strength=" in line:
-                                        try:
-                                            x.army = round(x.army - 1000 + 1000*float(line.strip("\tstrength=\n")))
-                                        except ValueError:
-                                            continue
-                                    #Add 1 for each ship
-                                    elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
-                                        x.navy += 1
-                    # This is where the general save stuff is.
                     if len(brackets) == 2:
                         if "government_rank=" in line:
                             self.game.allNations[brackets[1].strip("\n\t ={")] = xNation(brackets[1].strip("\n\t ={"))
@@ -646,18 +596,20 @@ class statsChannel(AbstractChannel):
                             self.game.playerWars.append(currentReadWar)
                             currentReadWar = None
         # Finalize data
-        for x in self.game.countries: #Remove dead countries from players list
-            if x is None or x.development == 0:
-                self.game.playertags.remove(x.tag)
-                self.game.countries.remove(x)
         if self.game.GP == [] or self.game.date == None or self.game.age == None: # These signify that it's probably not a valid save file.
             raise Exception("This probably isn't a valid .eu4 uncompressed save file from " + self.user.mention)
         #Sort Data:
-        self.game.countries.sort(key = lambda x: x.development, reverse = True)
         self.game.playerWars.sort(key = lambda x: x.warScale(self.game.playertags), reverse = True)
         for x in self.game.allNations.copy().keys():
             if self.game.allNations[x].development == 0:
-                del(self.game.allNations[x])
+                try:
+                    del(self.game.allNations[x])
+                except:
+                    pass
+                try:
+                    del(self.game.playertags[x])
+                except:
+                    pass
             #else:
                 #print(self.game.allNations[x].fullDataStr())
 
@@ -706,15 +658,19 @@ class statsChannel(AbstractChannel):
         if True:#mp == True:
             #Players section from (20,30) to (4710, 1100) half way is x=2345
             #So start with yborder = 38, yheight = 128 for each player row. x just make it half or maybe thirds depending on how it goes
-            for nat in self.game.countries:
-                natnum = self.game.countries.index(nat)
+            playerNationList: List[xNation] = []
+            for x in self.game.playertags:
+                playerNationList.append(self.game.allNations[x])
+            playerNationList.sort(key = lambda x: x.development, reverse = True)
+            for nat in playerNationList:
+                natnum = playerNationList.index(nat)
                 x = 38 + 2335*int(natnum/8) #We have 2335 pixels to work with maximum for each player column
                 y = 38 + 128*(natnum%8)
                 if (natnum < 16):
                     #x: Country flag
                     imgFinal.paste(EU4Lib.flag(nat.tag), (x, y))
                     #x+128: Player
-                    imgDraw.text((x+128, y), nat.player, (255, 255, 255), font)
+                    imgDraw.text((x+128, y), self.game.playertags[nat.tag], (255, 255, 255), font)
                     #x+760: Army size
                     imgFinal.paste(Image.open("src/army.png"), (x+760, y))
                     imgDraw.text((x+760+128, y), armyDisplay(nat.army), (255, 255, 255), font)
@@ -891,19 +847,19 @@ class statsChannel(AbstractChannel):
                 self.doneMod == True
                 img = None
                 # Create the Image and convert to discord.File
+                #try:
+                await self.interactChannel.send("**Generating Image...**")
+                img = imageToFile(await self.generateImage())
+                #except:
+                #    await self.interactChannel.send("**Image generation failed!**\nPerhaps something was wrong with one of the files?\n**Try " + GuildManager.getGuildSave(self.displayChannel.guild, conn = conn).prefix + "stats again after checking that the files are valid and unchanged from their creation.**")
+                #else: # That was successful, now post!
                 try:
-                    await self.interactChannel.send("**Generating Image...**")
-                    img = imageToFile(await self.generateImage())
-                except:
-                    await self.interactChannel.send("**Image generation failed!**\nPerhaps something was wrong with one of the files?\n**Try " + GuildManager.getGuildSave(self.displayChannel.guild, conn = conn).prefix + "stats again after checking that the files are valid and unchanged from their creation.**")
-                else: # That was successful, now post!
-                    try:
-                        await self.interactChannel.send("**Image generation complete...**")
-                        await self.displayChannel.send(file = img)
-                    except discord.Forbidden: # If we're not allowed to send on the server, just give it in dms. They can post it themselves; this will reduce the server load
-                        await self.interactChannel.send("**Unable to send the image to " + self.displayChannel.mention + " due to lack of permissions. Posting image here:**\nYou can right-click and copy link then post that.", file = imageToFile(img))
-                    else:
-                        await self.interactChannel.send("**Image posted to " + self.displayChannel.mention + "**")
+                    await self.interactChannel.send("**Image generation complete...**")
+                    await self.displayChannel.send(file = img)
+                except discord.Forbidden: # If we're not allowed to send on the server, just give it in dms. They can post it themselves; this will reduce the server load
+                    await self.interactChannel.send("**Unable to send the image to " + self.displayChannel.mention + " due to lack of permissions. Posting image here:**\nYou can right-click and copy link then post that.", file = imageToFile(img))
+                else:
+                    await self.interactChannel.send("**Image posted to " + self.displayChannel.mention + "**")
                 interactions.remove(self)
                 del(self)
             #elif message.content.strip("\n\t ").startswith("add "):
@@ -923,15 +879,10 @@ class statsChannel(AbstractChannel):
                 tag = EU4Lib.country(name)
                 if tag is None:
                     await self.interactChannel.send("Did not recognize \"" + name + "\" as a valid nation.")
-                    return
-                for nat in self.game.countries:
-                    if nat.tag.upper().strip("\t \n") == tag.upper().strip("\t \n"):
-                        self.game.countries.remove(nat)
-                        self.game.playertags.remove(nat.tag)
-                        await self.modMsg.edit(content = self.modPromptStr())
-                        break
-                    elif self.game.countries[len(self.game.countries)-1] == nat: #This means we are on the last one and elif so it's still not on the list.
-                        await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
+                elif tag in self.game.playertags:
+                    del(self.game.playertags[tag])
+                else:
+                    await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
     async def msgdel(self, msgID: Union[str, int]):
         pass
     async def userdel(self, user: DiscUser):
