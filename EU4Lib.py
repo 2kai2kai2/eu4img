@@ -1,4 +1,4 @@
-#This will need to be updated. Currently for 1.28
+# This will need to be updated. Currently for 1.28
 from typing import List, Optional, Tuple, Union
 
 from PIL import Image, ImageDraw
@@ -21,10 +21,11 @@ def country(text: str) -> Optional[str]:
                 return text
     # text is not a recognized tag, search names
     for line in lines:
-       if ('"' + text.lower() + '"') in line.lower():
-           return line[1:4]
+        if ('"' + text.lower() + '"') in line.lower():
+            return line[1:4]
     # text is unknown
     return None
+
 
 def tagToName(tag: str) -> Optional[str]:
     """Returns the name of a nation based on its tag.
@@ -44,13 +45,14 @@ def tagToName(tag: str) -> Optional[str]:
     # Tag was not found or is not valid 3-character str
     return None
 
+
 def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     """Gets the location of a province on a screenshot map.
 
     Returns a tuple of floats, (x, y).
     """
     # Read file
-    srcFile = open("src/positions.txt", "r", encoding = "cp1252")
+    srcFile = open("src/positions.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     """Format of the file:
@@ -70,13 +72,15 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     """
     beyond = 0
     for line in lines:
-        if beyond == 2: # Two after the province, this is the line with the position.
+        if beyond == 2:  # Two after the province, this is the line with the position.
             vals = line.strip("\t\n ").split(" ")
-            return (float(vals[0]), 2048-float(vals[1])) # need to subtract the y value because the position starts from the bottom rather than the top like images
-        if beyond == 1: # One after the province, wait one more line for the position
+            # need to subtract the y value because the position starts from the bottom rather than the top like images
+            return (float(vals[0]), 2048-float(vals[1]))
+        if beyond == 1:  # One after the province, wait one more line for the position
             beyond = 2
             continue
-        if line.strip("\n ") == (str(id)+"={"): # So we have the province... Wait two lines for the position
+        # So we have the province... Wait two lines for the position
+        if line.strip("\n ") == (str(id)+"={"):
             beyond = 1
             continue
 
@@ -91,17 +95,18 @@ def flag(tag: str) -> Image:
     line = srcFile.read()
     srcFile.close()
     # Get the number for the order of the flag; starts at 0
-    a = line.partition(tag) #Separate into a 3-tuple around tag
-    flagnum = a[0].count(".tga") #Get image number starting at 0
+    a = line.partition(tag)  # Separate into a 3-tuple around tag
+    flagnum = a[0].count(".tga")  # Get image number starting at 0
     # Get the file based on 256 flags per
     flagfile = Image.open("src/flagfiles_" + str(int(flagnum/256)) + ".tga")
     # Get the location of the flag within the file
-    x = 128*((flagnum%256)%16)
-    y = 128*int((flagnum%256)/16)
+    x = 128*((flagnum % 256) % 16)
+    y = 128*int((flagnum % 256)/16)
     # Get the actual flag image and return it
     flagimg = flagfile.crop((x, y, x+127, y+127))
     flagimg.load()
     return flagimg
+
 
 def provinceArea(provinceID: Union[str, int]) -> str:
     """Returns the area (state) name of a specified province's id.
@@ -124,6 +129,7 @@ def provinceArea(provinceID: Union[str, int]) -> str:
                 return currentArea
     # Was not found
     raise ValueError(str(provinceID) + " was not a valid province.")
+
 
 def region(areaName: str) -> str:
     """Returns the region name of a specified area.
@@ -148,6 +154,7 @@ def region(areaName: str) -> str:
     # Was not found
     raise ValueError(str(areaName) + " was not a valid area.")
 
+
 def superregion(regionName: str) -> str:
     """Returns the superregion name of a specified region.
 
@@ -171,6 +178,7 @@ def superregion(regionName: str) -> str:
     # Was not found
     raise ValueError(str(regionName) + " was not a valid region.")
 
+
 def continent(provinceID: Union[str, int]) -> str:
     """Returns the continent name from a specified province's id.
 
@@ -193,6 +201,7 @@ def continent(provinceID: Union[str, int]) -> str:
     # Was not found
     raise ValueError(str(provinceID) + " was not a valid province.")
 
+
 def isIn(provinceID: Union[str, int], group: str) -> bool:
     """Checks if the province is within the given area, region, superregion, or continent."""
     # Because area, region, and superregion has the suffix with _area, etc. each can't be confused with the other.
@@ -210,58 +219,67 @@ def isIn(provinceID: Union[str, int], group: str) -> bool:
         return True
     return False
 
+
 class dataReq:
     DATATYPE_PROVINCEDAT = 0
     REQUEST_PROVINCE_NAME = 0
     REQUEST_PROVINCE_TRADE = 1
     REQUEST_PROVINCE_CULTURE_ORIGINAL = 2
     REQUEST_PROVINCE_RELIGION_ORIGINAL = 3
+
     def __init__(self, datatype: int, key: str, request: int):
         self.datatype = datatype
         self.key = key
         self.request = request
         self.response = None
+
     def respond(self, r):
         if self.datatype == self.DATATYPE_PROVINCEDAT:
             if self.request == self.REQUEST_PROVINCE_NAME:
                 if isinstance(r, str):
                     self.response = r
                 else:
-                    raise ValueError("PROVINCE NAME request for " + self.key + " was the wrong type.")
+                    raise ValueError("PROVINCE NAME request for " +
+                                     self.key + " was the wrong type.")
             elif self.request == self.REQUEST_PROVINCE_TRADE:
                 if isinstance(r, str):
                     self.response = r
                 else:
-                    raise ValueError("PROVINCE TRADE request for " + self.key + " was the wrong type.")
+                    raise ValueError(
+                        "PROVINCE TRADE request for " + self.key + " was the wrong type.")
             elif self.request == self.REQUEST_PROVINCE_CULTURE_ORIGINAL:
                 if isinstance(r, str):
                     self.response = r
                 else:
-                    raise ValueError("PROVINCE CULTURE ORIGINAL request for " + self.key + " was the wrong type.")
+                    raise ValueError(
+                        "PROVINCE CULTURE ORIGINAL request for " + self.key + " was the wrong type.")
             elif self.request == self.REQUEST_PROVINCE_RELIGION_ORIGINAL:
                 if isinstance(r, str):
                     self.response = r
                 else:
-                    raise ValueError("PROVINCE RELIGION ORIGINAL request for " + self.key + " was the wrong type.")
+                    raise ValueError(
+                        "PROVINCE RELIGION ORIGINAL request for " + self.key + " was the wrong type.")
             # More things
         # More datatypes
 
+
 def provinceData(*requests: dataReq) -> List[dataReq]:
     data = requests
-    lines = open("src/save_1444.eu4", encoding = "cp1252").readlines()
+    lines = open("src/save_1444.eu4", encoding="cp1252").readlines()
     brackets: List[str] = []
-    
-    #Reading save file...
+
+    # Reading save file...
     linenum = 0
     for line in lines:
-        linenum+=1
+        linenum += 1
         if "{" in line:
             if line.count("{") == line.count("}"):
                 continue
             elif line.count("}") == 0 and line.count("{") == 1:
                 brackets.append(line.rstrip("\n "))
             elif line.count("}") == 0 and line.count("{") > 1:
-                brackets.append("{" * line.count("{")) #TODO: fix this so it has more stuff
+                # TODO: fix this so it has more stuff
+                brackets.append("{" * line.count("{"))
             else:
                 pass
         elif "}" in line:
@@ -280,7 +298,7 @@ def provinceData(*requests: dataReq) -> List[dataReq]:
                         request.respond(line.split("=", 1)[1].strip("\n\t "))
                     elif request.request == dataReq.REQUEST_PROVINCE_RELIGION_ORIGINAL and line.startswith("\t\toriginal_religion="):
                         request.respond(line.split("=", 1)[1].strip("\n\t "))
-        #elif len(brackets) < 0 and ("trade={" == brackets[1]  or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
+        # elif len(brackets) < 0 and ("trade={" == brackets[1]  or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
         #    continue
         else:
             pass
