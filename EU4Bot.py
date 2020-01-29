@@ -534,9 +534,9 @@ class statsChannel(AbstractChannel):
                     brackets.pop()
                 except IndexError:  # No brackets to close
                     pass
-            """Get rid of long, useless sections
-            elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
-                continue"""
+            #Get rid of long, useless sections
+            #elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
+            #    continue
             # This is where we do stuff
 
             # Get current gamedate
