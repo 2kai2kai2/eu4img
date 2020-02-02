@@ -1405,7 +1405,7 @@ async def on_message(message: discord.Message):
         text = message.content.strip("\n\t ")
         for interaction in interactions:  # Should be only abstractChannel descendants
             if await interaction.responsive(message):
-                asyncio.create_task(interaction.process(message))
+                await interaction.process(message)
                 return
         if (message.guild is not None and text.startswith(GuildManager.getGuildSave(message.guild, conn=conn).prefix)):
             prefix = GuildManager.getGuildSave(message.guild, conn=conn).prefix
@@ -1581,13 +1581,13 @@ async def on_private_channel_delete(channel: DiscTextChannels):
 @client.event
 async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
     for c in interactions:
-        asyncio.create_task(c.msgdel(payload.message_id))
+        await c.msgdel(payload.message_id)
 
 
 @client.event
 async def on_member_remove(member: DiscUser):
     for c in interactions:
-        asyncio.create_task(c.userdel(member))
+        await c.userdel(member)
 
 
 @client.event
