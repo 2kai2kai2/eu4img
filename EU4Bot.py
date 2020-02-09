@@ -504,7 +504,7 @@ class statsChannel(AbstractChannel):
             else:
                 prompt += "\n" + \
                     EU4Lib.tagToName(x) + ": " + self.game.playertags[x]
-        prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\n`remove [nation]`\n`add [player], [nation]**"
+        prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\n`remove [nation]`\n`add [player], [nation]`**"
         return prompt
 
     async def readFile(self, file):
@@ -637,9 +637,9 @@ class statsChannel(AbstractChannel):
                             self.game.allNations[brackets[1].strip(
                                 "\n\t ={")].subjects.append(subject)
                     elif brackets[2] == "\t\tallies={":
-                        for actually in line.strip().split():
+                        for ally in line.strip().split():
                             self.game.allNations[brackets[1].strip(
-                                "\n\t ={")].allies.append(subject)
+                                "\n\t ={")].allies.append(ally)
                 elif len(brackets) == 4:
                     # Add 1 to army size for each regiment
                     if brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "morale=" in line:
@@ -953,8 +953,8 @@ class statsChannel(AbstractChannel):
             await self.interactChannel.send("**Recieved save file. Processing...**")
             try:
                 await self.readFile(saveFile)
-            except:
-                await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**")
+            except Exception as e:
+                await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```" + repr(e) + "```")
                 return
             else:
                 await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
