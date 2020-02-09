@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
 from typing import List, Optional, Union
-import asyncio
 
 import discord
 import psycopg2
@@ -535,28 +534,24 @@ class statsChannel(AbstractChannel):
                     brackets.pop()
                 except IndexError:  # No brackets to close
                     pass
-            # Get rid of long, useless sections
-            # elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
+            #Get rid of long, useless sections
+            #elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
             #    continue
-            # Get player names and country tags
-
             # This is where we do stuff
-            elif len(brackets) == 0:
-                # Get current gamedate
-                if line.startswith("date="):
-                    self.game.date = line.strip('date=\n')
-                # Get save DLC (not sure if we use this...)
-                elif brackets == ["dlc_enabled={"]:
-                    self.game.dlc.append(line.strip('\t"\n'))
-                # Check if game is mp
-                elif "multi_player=" in line:
-                    if "yes" in line:
-                        self.game.mp = True
-                    else:
-                        self.game.mp = False
-                # Get current age
-                elif "current_age=" in line and brackets == []:
-                    self.game.age = line[12:].strip('"\n')
+
+            # Get current gamedate
+            elif line.startswith("date=") and brackets == []:
+                self.game.date = line.strip('date=\n')
+            # Get save DLC (not sure if we use this...)
+            elif brackets == ["dlc_enabled={"]:
+                self.game.dlc.append(line.strip('\t"\n'))
+            # Check if game is mp
+            elif "multi_player=" in line and brackets == []:
+                if "yes" in line:
+                    self.game.mp = True
+                else:
+                    self.game.mp = False
+            # Get player names and country tags
             elif brackets == ["players_countries={"]:
                 # In the file, the format is like this:
                 # players_countries={
@@ -572,6 +567,9 @@ class statsChannel(AbstractChannel):
                     self.game.playertags[line.strip(
                         '\t"\n ')] = lastPlayerInList
                     lastPlayerInList = None
+            # Get current age
+            elif "current_age=" in line and brackets == []:
+                self.game.age = line[12:].strip('"\n')
             # Get top 8
             elif "country=" in line and brackets == ["great_powers={", "\toriginal={"]:
                 if len(self.game.GP) < 8:  # Make sure to not include leaving GPs
@@ -944,8 +942,8 @@ class statsChannel(AbstractChannel):
                 if response.status_code == 200:  # 200 == requests.codes.ok
                     try:
                         saveFile = StringIO(response.content.decode("cp1252"))
-                    except Exception as e:
-                        await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**\n```"+repr(e)+"```")
+                    except:
+                        await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**")
                         return
                 else:
                     await self.interactChannel.send("Something went wrong. Please try a different link.")
@@ -1156,6 +1154,9 @@ class asiresChannel(AbstractChannel):
                     except IndexError:  # This shouldn't happen.
                         print("No brackets to delete.")
                         print("Line", linenum, ":", line)
+                # Get rid of long, useless sections
+                elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
+                    continue
                 elif len(brackets) > 1 and brackets[0] == "countries={":
                     for x in tagCapitals:
                         if x in brackets[1]:
