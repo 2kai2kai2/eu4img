@@ -754,13 +754,16 @@ class statsChannel(AbstractChannel):
                 pass
         # Modify the image
         mapDraw = ImageDraw.Draw(mapFinal)
-        for x in range(mapFinal.size[0]):
-            for y in range(mapFinal.size[1]):
-                color = self.politicalImage.getpixel((x, y))
+        pixels: List[Tuple[int, int, int]] = list(mapFinal.getdata())
+        width: int = mapFinal.size[0]
+        height: int = mapFinal.size[1]
+        for x in range(width):
+            for y in range(height):
+                color = pixels[x + y * width]
                 if color in playerColors:
                     for neighbor in ((x - 1, y - 1), (x, y - 1), (x + 1, y - 1), (x - 1, y), (x + 1, y), (x - 1, y + 1), (x, y + 1), (x + 1, y + 1)):
                         try:
-                            neighborColor = self.politicalImage.getpixel(neighbor)
+                            neighborColor = pixels[neighbor[0] + neighbor[1] * width]
                         except:
                             # This means that we're out of bounds. That's okay. We're on the edge of the map so draw a border here.
                             mapDraw.point((x, y), playerColors[color])
