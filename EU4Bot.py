@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 import asyncio
 
 import discord
@@ -405,6 +405,9 @@ class xNation:
         self.overlord: Optional[str] = None
         self.allies: List[str] = []
         self.subjects: List[str] = []
+        #self.revColors: color = None
+        self.mapColor: Tuple[int, int, int] = None
+        self.natColor: Tuple[int, int, int] = None
 
     def fullDataStr(self) -> str:
         string = "Tag: " + self.tag + "\n"
@@ -657,6 +660,10 @@ class statsChannel(AbstractChannel):
                     elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
                         self.game.allNations[brackets[1].strip(
                             "\n\t ={")].navy += 1
+                    elif brackets[2] == "\t\tcolors={" and brackets[3] == "\t\t\tmap_color={":
+                        self.game.allNations[brackets[1].strip("\n\t ={")].mapColor = tuple(map(lambda x: int(x), line.strip().split()))
+                    elif brackets[2] == "\t\tcolors={" and brackets[3] == "\t\t\tcountry_color={":
+                        self.game.allNations[brackets[1].strip("\n\t ={")].natColor = tuple(map(lambda x: int(x), line.strip().split()))
                 # End new save stuff
             elif len(brackets) > 0 and brackets[0] == "previous_war={":
                 if len(brackets) == 1 and "\tname=\"" in line:
@@ -725,26 +732,43 @@ class statsChannel(AbstractChannel):
             if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
                 armydisplay = armydisplay.partition(".")[0]
             return armydisplay + "k"
+        # Player and player-owned country colors
+        def invertColor(color: Tuple[int, int, int]) -> Tuple[int, int, int]:
+            return (255 - color[0], 255 - color[1], 255 - color[2])
+        playerColors = {} # Formatting: (map color) = (player contrast color)
+        for natTag in self.game.allNations:
+            try:
+                nat: xNation = self.game.allNations[natTag]
+                playerNatTag: str = None # This is what nation actually is said to own the land
+                # Check if this nation is a player
+                if natTag in self.game.playertags:
+                    playerNatTag = natTag
+                # Check if any overlord(s) are players and if so, go with the highest one.
+                while nat.overlord is not None:
+                    if nat.overlord in self.game.playertags:
+                        playerNatTag = nat.overlord
+                    nat = self.game.allNations[nat.overlord]
+                if playerNatTag is not None:
+                    playerColors[self.game.allNations[natTag].mapColor] = invertColor(self.game.allNations[playerNatTag].mapColor)
+            except:
+                pass
         # Modify the image
         mapDraw = ImageDraw.Draw(mapFinal)
-        if self.playersImage is not None:  # If there's a player image - current eu4 update the screenshot is broken
-            for x in range(mapFinal.size[0]):
-                for y in range(mapFinal.size[1]):
-                    # Get color for each pixel
-                    # In EU4 player mapmode screenshots:
-                    #Water: (68, 107, 163)
-                    #AI: (127, 127, 127)
-                    #Wasteland: (94, 94, 94)
-                    color = self.playersImage.getpixel((x, y))
-                    if color == (68, 107, 163) or color == (127, 127, 127) or color == (94, 94, 94):
-                        continue
-                    else:
-                        # All pixels on the edge should be water and wasteland so not get past ^ if, although custom games may break this by not being real pixels
-                        # TODO: Make no borders for wasteland
-                        if color != self.playersImage.getpixel((x - 1, y - 1)) or color != self.playersImage.getpixel((x - 1, y)) or color != self.playersImage.getpixel((x - 1, y + 1)) or color != self.playersImage.getpixel((x, y - 1)) or color != self.playersImage.getpixel((x, y + 1)) or color != self.playersImage.getpixel((x + 1, y - 1)) or color != self.playersImage.getpixel((x + 1, y)) or color != self.playersImage.getpixel((x + 1, y + 1)):
-                            # Contrast color for player borders
-                            mapDraw.point(
-                                (x, y), (255-color[0], 255-color[1], 255-color[2]))
+        for x in range(mapFinal.size[0]):
+            for y in range(mapFinal.size[1]):
+                color = self.politicalImage.getpixel((x, y))
+                if color in playerColors:
+                    for neighbor in ((x - 1, y - 1), (x, y - 1), (x + 1, y - 1), (x - 1, y), (x + 1, y), (x - 1, y + 1), (x, y + 1), (x + 1, y + 1)):
+                        try:
+                            neighborColor = self.politicalImage.getpixel(neighbor)
+                        except:
+                            # This means that we're out of bounds. That's okay. We're on the edge of the map so draw a border here.
+                            mapDraw.point((x, y), playerColors[color])
+                            break
+                        else:
+                            if neighborColor not in playerColors or playerColors[neighborColor] != playerColors[color]:
+                                mapDraw.point((x, y), playerColors[color])
+                                break
         # Start Final Img Creation
         # Copy map into bottom of final image
         imgFinal.paste(mapFinal, (0, imgFinal.size[1]-mapFinal.size[1]))
