@@ -2,6 +2,8 @@ import json
 import os
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union
+import time
+import datetime
 
 import psycopg2
 from dotenv import load_dotenv
@@ -29,7 +31,8 @@ In Python, this becomes a dict.
         "reserves": [
         {
             "player": "<PlayerMention>",
-            "tag": "<TAG>"
+            "tag": "<TAG>",
+            "time": 1234567
         },
         {...}
         ],
@@ -57,7 +60,8 @@ In Python, this becomes a dict.
                 "priority": true,
                 "picks": [
                     "<TAG>"
-                ]
+                ],
+                "time": 1234567
             }
         ]
     }
@@ -78,54 +82,85 @@ specdata:
     ASIReserve - [<textmsgID>]
 
 ReservePicks
-+---------+--------+-----+
-| reserve | player | tag |
-| str     | str    | str |
-+---------+--------+-----+
++---------+--------+-----+--------+
+| reserve | player | tag | time   |
+| str     | str    | str | bigint |
++---------+--------+-----+--------+
 reserve refers to the name of the Reserve in the Reserves table this pick is for.
 
 ASIPicks
-+---------+--------+------+------+------+
-| reserve | player | tag1 | tag2 | tag3 |
-| str     | str    | str  | str  | str  |
-+---------+--------+------+------+------+
++---------+--------+------+------+------+--------+
+| reserve | player | tag1 | tag2 | tag3 | time   |
+| str     | str    | str  | str  | str  | bigint |
++---------+--------+------+------+------+--------+
 reserve refers to the name of the ASIReserve in the Reserves table this pick is for.
 If the pick is priority, tag2 and tag3 are 'NULL' (a str).
 """
 
+class Eastern(datetime.tzinfo):
+    def __init__(self):
+        pass
+    def dst(self, dt: datetime.datetime) -> datetime.timedelta:
+        if dt.month < 3 or 11 < dt.month:
+            return datetime.timedelta(0)
+        elif 3 < dt.month and dt.month < 11:
+            return datetime.timedelta(hours=1)
+        elif dt.month == 3: # DST starts second Sunday of March
+            week2Day = dt.day - 7
+            if week2Day > 0 and (dt.weekday() == 6 or week2Day < dt.weekday() + 1):
+                return datetime.timedelta(0)
+            else:
+                return datetime.timedelta(hours=1)
+        elif dt.month == 11: # DST ends first Sunday of November
+            if dt.weekday() == 6 or dt.day > dt.weekday() + 1:
+                return datetime.timedelta(hours=1)
+            else:
+                return datetime.timedelta(0)
+    def utcoffset(self, dt: datetime.datetime) -> datetime.timedelta:
+        return datetime.timedelta(hours=-5) + self.dst(dt)
+    def tzname(self, dt: datetime.datetime) -> str:
+        if self.dst(dt).total_seconds() == 0:
+            return "EST"
+        else:
+            return "EDT"
 
 class AbstractPick(ABC):
     def __init__(self, player: str):
         self.player = player
+        self.time: int = None
 
     @abstractmethod
     def toDict(self) -> dict:
         pass
 
+    def timeStr(self) -> str:
+        date = datetime.datetime.fromtimestamp(self.time, Eastern())
+        return date.strftime("%m/%d/%y %I:%M:%S %p %Z")
+
 
 class reservePick(AbstractPick):
     """A Nation for the nation reserve channel interaction."""
 
-    def __init__(self, player: str, tag: str):
+    def __init__(self, player: str, tag: str, time: int = None):
         self.player: str = player
         self.tag = tag
         self.capitalID: int = 0
+        self.time: int = time
 
     def toDict(self) -> dict:
-        return {"player": self.player, "tag": self.tag}
-
+        return {"player": self.player, "tag": self.tag, "time": self.time}
 
 class asiPick(AbstractPick):
     """A user's reservation for an ASI game."""
 
-    def __init__(self, player: str, priority: bool = False):
+    def __init__(self, player: str, priority: bool = False, time: int = None):
         self.player: str = player
         self.picks: List[str] = None
         self.priority = priority
+        self.time: int = time
 
     def toDict(self) -> dict:
-        return {"player": self.player, "priority": self.priority, "picks": self.picks}
-
+        return {"player": self.player, "priority": self.priority, "picks": self.picks, "time": self.time}
 
 class AbstractReserve(ABC):
     @abstractmethod
@@ -184,6 +219,8 @@ class Reserve(AbstractReserve):
             elif pick.player == nation.player:
                 addInt = 2
                 self.players.remove(pick)
+        if nation.time is None:
+            nation.time = int(time.time())
         self.players.append(nation)
         return addInt
 
@@ -232,6 +269,8 @@ class ASIReserve(AbstractReserve):
             elif pick.player == player.player:
                 addInt = 2
                 self.players.remove(pick)
+        if pick.time is None:
+            pick.time = int(time.time())
         self.players.append(pick)
         return addInt
 
@@ -283,7 +322,10 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
                 r.textmsg = jsonLoad[res]["textmsg"]
                 r.imgmsg = jsonLoad[res]["imgmsg"]
                 for pick in jsonLoad[res]["reserves"]:
-                    r.add(reservePick(pick["player"], pick["tag"]))
+                    try:
+                        r.add(reservePick(pick["player"], pick["tag"], pick["time"]))
+                    except:
+                        r.add(reservePick(pick["player"], pick["tag"]))
                 resList.append(r)
             elif jsonLoad[res]["kind"] == "asi":
                 r = ASIReserve(res)
@@ -291,6 +333,10 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
                 for pick in jsonLoad[res]["reserves"]:
                     asirespick = asiPick(pick["player"], pick["priority"])
                     asirespick.picks = pick["picks"]
+                    try:
+                        asirespick.time = pick["time"]
+                    except:
+                        pass
                     r.add(asirespick)
                 resList.append(r)
         return resList
@@ -363,10 +409,10 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                             "SELECT * FROM ReservePicks WHERE reserve=%s", [name])
                     except psycopg2.Error:
                         cur.execute(
-                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, bigint time)")
                     else:
                         for pick in cur.fetchall():
-                            res.add(reservePick(pick[1], pick[2]))
+                            res.add(reservePick(pick[1], pick[2], pick[3]))
                         cur.close()
                         return res
                 elif resTup[1] == "asi":
@@ -381,11 +427,11 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                             "SELECT * FROM ASIPicks WHERE reserve=%s", [name])
                     except psycopg2.Error:
                         cur.execute(
-                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
+                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, bigint time)")
                     else:
                         for pick in cur.fetchall():
                             pickObj = asiPick(
-                                pick[1], (pick[3] == "NULL" and pick[4] == "NULL"))
+                                pick[1], (pick[3] == "NULL" and pick[4] == "NULL"), pick[5])
                             if pickObj.priority:
                                 pickObj.picks = [pick[2]]
                             else:
@@ -481,12 +527,12 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.
             cur.execute("DELETE FROM ReservePicks WHERE reserve=%s", [name])
         except psycopg2.Error:
             cur.execute(
-                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, bigint time)")
         try:
             cur.execute("DELETE FROM ASIPicks WHERE reserve=%s", [name])
         except psycopg2.Error:
             cur.execute(
-                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
+                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, bigint time)")
         cur.close()
 
 
@@ -524,7 +570,7 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
                 didStuff = True
         except psycopg2.Error:
             cur.execute(
-                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, bigint time)")
         # Delete from ASIPicks
         try:
             # See if there are any that meet the requirements
@@ -537,7 +583,7 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
                 didStuff = True
         except psycopg2.Error:
             cur.execute(
-                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
+                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, bigint time)")
         cur.close()
     return didStuff
 
@@ -620,15 +666,23 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                             "SELECT * FROM ReservePicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
                         playerres = cur.fetchone()
                         if tagres is None and playerres is None:  # Nobody else has reserved this; player has not reserved
-                            cur.execute("INSERT INTO ReservePicks (reserve, player, tag) VALUES (%s, %s, %s)", [
-                                        res[0], pick.player, pick.tag])
+                            if pick.time is None:
+                                resTime = int(time.time())
+                            else:
+                                resTime = pick.time
+                            cur.execute("INSERT INTO ReservePicks (reserve, player, tag, time) VALUES (%s, %s, %s, %s)", [
+                                        res[0], pick.player, pick.tag, resTime])
                             addInt = 1
                         # Nobody else has reserved this, but player has another reservation
                         elif tagres is None and playerres is not None:
                             cur.execute("DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [
                                         res[0], pick.player])
-                            cur.execute("INSERT INTO ReservePicks (reserve, player, tag) VALUES (%s, %s, %s)", [
-                                        res[0], pick.player, pick.tag])
+                            if pick.time is None:
+                                resTime = int(time.time())
+                            else:
+                                resTime = pick.time
+                            cur.execute("INSERT INTO ReservePicks (reserve, player, tag, time) VALUES (%s, %s, %s, %s)", [
+                                        res[0], pick.player, pick.tag, resTime])
                             addInt = 2
                         elif tagres == playerres:  # This player has already reserved this
                             addInt = 4
@@ -636,7 +690,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                             addInt = 3
                     except psycopg2.Error:
                         cur.execute(
-                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar)")
+                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, bigint time)")
                 elif res[1] == "asi" and isinstance(pick, asiPick):
                     try:
                         cur.execute(
@@ -648,30 +702,38 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                         if tagres == playerres and tagres is not None:  # The player has priority reserved this already
                             addInt = 4
                         elif tagres is None and playerres is None:  # Nobody else has priority reserved this; player has not reserved
-                            if pick.priority:
-                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, 'NULL', 'NULL')", [
-                                            res[0], pick.player, pick.picks[0]])
+                            if pick.time is None:
+                                resTime = int(time.time())
                             else:
-                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, %s, %s)", [
-                                            res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2]])
+                                resTime = pick.time
+                            if pick.priority:
+                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3, time) VALUES (%s, %s, %s, 'NULL', 'NULL', %s)", [
+                                            res[0], pick.player, pick.picks[0], resTime])
+                            else:
+                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3, time) VALUES (%s, %s, %s, %s, %s, %s)", [
+                                            res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2], resTime])
                             addInt = 1
                         # Nobody else has priority reserved this, but player has another reservation
                         elif tagres is None and playerres is not None:
                             cur.execute("DELETE FROM ASIPicks WHERE reserve=%s AND player=%s", [
                                         res[0], pick.player])
-                            if pick.priority:
-                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, 'NULL', 'NULL')", [
-                                            res[0], pick.player, pick.picks[0]])
+                            if pick.time is None:
+                                resTime = int(time.time())
                             else:
-                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3) VALUES (%s, %s, %s, %s, %s)", [
-                                            res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2]])
+                                resTime = pick.time
+                            if pick.priority:
+                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3, time) VALUES (%s, %s, %s, 'NULL', 'NULL', %s)", [
+                                            res[0], pick.player, pick.picks[0], resTime])
+                            else:
+                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3, time) VALUES (%s, %s, %s, %s, %s, %s)", [
+                                            res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2], resTime])
                             addInt = 2
                         # Another player has priority reserved this. (tagres is not None and tagres != playerres)
                         else:
                             addInt = 3
                     except psycopg2.Error:
                         cur.execute(
-                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar)")
+                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, bigint time)")
     return addInt
 
 

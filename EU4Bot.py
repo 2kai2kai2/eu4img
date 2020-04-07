@@ -303,9 +303,10 @@ class ReserveChannel(AbstractChannel):
         if reserve is None or len(reserve.players) == 0:
             string = string + "\n*It's so empty here...*"
         else:
+            reserve.players.sort(key=lambda x: x.time)
             for x in reserve.players:
                 string = string + "\n" + x.player + \
-                    ": " + EU4Lib.tagToName(x.tag)
+                    ": " + EU4Lib.tagToName(x.tag) + " | " + x.timeStr()
         if self.textID is None:
             self.textID = (await self.displayChannel.send(content=string)).id
             EU4Reserve.updateMessageIDs(
@@ -1320,13 +1321,14 @@ class asiresChannel(AbstractChannel):
         if len(picks) == 0:
             string += "\n*It's so empty here...*"
         else:
+            picks.sort(key=lambda x: x.time)
             for x in picks:
                 if x.priority:
                     string += "\n" + x.player + ": **" + \
                         EU4Lib.tagToName(x.picks[0]) + "**"
                 else:
                     string += "\n" + x.player + ": " + EU4Lib.tagToName(
-                        x.picks[0]) + ", " + EU4Lib.tagToName(x.picks[1]) + ", " + EU4Lib.tagToName(x.picks[2])
+                        x.picks[0]) + ", " + EU4Lib.tagToName(x.picks[1]) + ", " + EU4Lib.tagToName(x.picks[2]) + " | " + x.timeStr()
         if self.textID is None:
             self.textID = (await self.displayChannel.send(content=string)).id
             EU4Reserve.updateMessageIDs(
