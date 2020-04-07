@@ -496,7 +496,7 @@ class statsChannel(AbstractChannel):
         if self.user.dm_channel is None:
             await self.user.create_dm()
         self.interactChannel = self.user.dm_channel
-        await self.interactChannel.send("**Send EITHER an uncompressed .eu4 save file\nor a direct link to an uncompressed .eu4 save file:**\nYou can do this by uploading to https://www.filesend.jp/l/en-US/ \n then right clicking on the DOWNLOAD to Copy Link Address.")
+        await self.interactChannel.send("**Send EITHER an uncompressed .eu4 save file\nor a direct link to an uncompressed .eu4 save file:**\nYou can do this by uploading to https://www.file.io/\nthen clicking **Copy Link** and entering it here:")
         return self
 
     def modPromptStr(self) -> str:
@@ -1053,8 +1053,7 @@ class statsChannel(AbstractChannel):
                     await sendUserMessage(self.user, "Added " + EU4Lib.tagToName(tag) + " for " + player + ".")
             # remove [nation]
             elif message.content.strip("\n\t ").startswith("remove "):
-                name = message.content.strip("\n\t ").partition(" ")[
-                    2].strip("\t\n ")
+                name = message.content.strip("\n\t ").partition(" ")[2].strip("\t\n ")
                 tag = EU4Lib.country(name)
                 if tag is None:
                     await self.interactChannel.send("Did not recognize \"" + name + "\" as a valid nation.")

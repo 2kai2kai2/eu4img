@@ -18,7 +18,7 @@ def country(text: str) -> Optional[str]:
     if len(text) == 3:
         for line in lines:
             if line[1:4] == text.upper():
-                return text
+                return text.upper()
     # text is not a recognized tag, search names
     for line in lines:
         if ('"' + text.lower() + '"') in line.lower():
