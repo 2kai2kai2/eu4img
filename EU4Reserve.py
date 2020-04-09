@@ -409,7 +409,7 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                             "SELECT * FROM ReservePicks WHERE reserve=%s", [name])
                     except psycopg2.Error:
                         cur.execute(
-                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, bigint time)")
+                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, time bigint)")
                     else:
                         for pick in cur.fetchall():
                             res.add(reservePick(pick[1], pick[2], pick[3]))
@@ -427,7 +427,7 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
                             "SELECT * FROM ASIPicks WHERE reserve=%s", [name])
                     except psycopg2.Error:
                         cur.execute(
-                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, bigint time)")
+                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, time bigint)")
                     else:
                         for pick in cur.fetchall():
                             pickObj = asiPick(
@@ -527,12 +527,12 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.
             cur.execute("DELETE FROM ReservePicks WHERE reserve=%s", [name])
         except psycopg2.Error:
             cur.execute(
-                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, bigint time)")
+                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, time bigint)")
         try:
             cur.execute("DELETE FROM ASIPicks WHERE reserve=%s", [name])
         except psycopg2.Error:
             cur.execute(
-                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, bigint time)")
+                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, time bigint)")
         cur.close()
 
 
@@ -570,7 +570,7 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
                 didStuff = True
         except psycopg2.Error:
             cur.execute(
-                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, bigint time)")
+                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, time bigint)")
         # Delete from ASIPicks
         try:
             # See if there are any that meet the requirements
@@ -583,7 +583,7 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
                 didStuff = True
         except psycopg2.Error:
             cur.execute(
-                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, bigint time)")
+                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, time bigint)")
         cur.close()
     return didStuff
 
@@ -690,7 +690,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                             addInt = 3
                     except psycopg2.Error:
                         cur.execute(
-                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, bigint time)")
+                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, time bigint)")
                 elif res[1] == "asi" and isinstance(pick, asiPick):
                     try:
                         cur.execute(
@@ -733,7 +733,7 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
                             addInt = 3
                     except psycopg2.Error:
                         cur.execute(
-                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, bigint time)")
+                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, time bigint)")
     return addInt
 
 
