@@ -333,9 +333,9 @@ class ReserveChannel(AbstractChannel):
             await self.updateText()
             await self.updateImg()
         elif addInt == 0:  # This is not a reserve channel. How did this happen?
-            await sendUserMessage(client.get_user(int(nation.player.strip("\n\t <@>"))), "You can't reserve nations in " + self.displayChannel.mention + ".")
+            await sendUserMessage(client.get_user(int(nation.player.strip("\n\t <!@>"))), "You can't reserve nations in " + self.displayChannel.mention + ".")
         elif addInt == 3:  # This nation is already taken
-            await sendUserMessage(client.get_user(int(nation.player.strip("\n\t <@>"))), "The nation " + EU4Lib.tagToName(nation.tag) + " is already reserved in " + self.displayChannel.mention + ".")
+            await sendUserMessage(client.get_user(int(nation.player.strip("\n\t <!@>"))), "The nation " + EU4Lib.tagToName(nation.tag) + " is already reserved in " + self.displayChannel.mention + ".")
         return addInt
 
     async def remove(self, tag: str):
