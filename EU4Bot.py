@@ -133,8 +133,8 @@ class ReserveChannel(AbstractChannel):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
-        self.textID: Optional[int] = textID
-        self.imgID: Optional[int] = imgID
+        self.setTextID(textID)
+        self.setImgID(imgID)
         if not Load:  # If this is new, then make a new Reserve.
             res = EU4Reserve.Reserve(str(self.interactChannel.id))
             # Set the ban list to the server default
@@ -147,6 +147,26 @@ class ReserveChannel(AbstractChannel):
 
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
+
+    def getTextID(self) -> Optional[int]:
+        res = EU4Reserve.getReserve(str(self.displayChannel.id), conn=conn)
+        if res != None:
+            return res.textmsg
+        else:
+            return None
+
+    def getImgID(self) -> Optional[int]:
+        res = EU4Reserve.getReserve(str(self.displayChannel.id), conn=conn)
+        if res != None:
+            return res.imgmsg
+        else:
+            return None
+
+    def setTextID(self, id: int):
+        EU4Reserve.updateMessageIDs(str(self.displayChannel.id), textmsg=id, conn=conn)
+
+    def setImgID(self, id: int):
+        EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=id, conn=conn)
 
     async def process(self, message: discord.Message):
         text: str = message.content.strip("\n\t ")
@@ -206,7 +226,8 @@ class ReserveChannel(AbstractChannel):
             else:
                 await sendUserMessage(message.author, "Your reservation in " + self.displayChannel.mention + " needs to @ a player.")
             await message.delete()
-        elif text.upper() == self.prefix() + "DELRESERVE" or text.upper() == self.prefix() + "DELETERESERVE":  # DELRESERVE
+        # DELRESERVE
+        elif text.upper() == self.prefix() + "DELRESERVE" or text.upper() == self.prefix() + "DELETERESERVE":
             await self.removePlayer(message.author.mention)
             await message.delete()
         # ADMDELRES @[player]
@@ -307,24 +328,21 @@ class ReserveChannel(AbstractChannel):
             for x in reserve.players:
                 string = string + "\n" + x.player + \
                     ": " + EU4Lib.tagToName(x.tag) + " | " + x.timeStr()
-        if self.textID is None:
-            self.textID = (await self.displayChannel.send(content=string)).id
-            EU4Reserve.updateMessageIDs(
-                str(self.displayChannel.id), textmsg=self.textID, conn=conn)
-        else:
-            await (await (self.displayChannel).fetch_message(self.textID)).edit(content=string)
+        try:
+            await (await (self.displayChannel).fetch_message(self.getTextID())).edit(content=string)
+        except discord.NotFound or discord.HTTPException:
+            self.setTextID((await self.displayChannel.send(content=string)).id)
 
     async def updateImg(self):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(
             str(self.interactChannel.id), conn=conn)
         if reserve is None:
             reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
-        if self.imgID is None:
-            self.imgID = (await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id
-            EU4Reserve.updateMessageIDs(
-                str(self.displayChannel.id), imgmsg=self.imgID, conn=conn)
-        else:
-            await (await self.interactChannel.fetch_message(self.imgID)).delete()
+        try:
+            await (await self.interactChannel.fetch_message(self.getImgID())).delete()
+        except discord.NotFound or discord.HTTPException:
+            # Normally when deleted it'll create the new one in the delete event, but in case there's an issue this will fix it.
+            self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
 
     async def add(self, nation: EU4Reserve.reservePick) -> int:
         addInt = EU4Reserve.addPick(
@@ -348,20 +366,18 @@ class ReserveChannel(AbstractChannel):
             await self.updateImg()
 
     async def msgdel(self, msgID: Union[str, int]):
-        if msgID == self.textID:
-            self.textID = None
+        if msgID == self.getTextID():
+            self.setTextID(None)
             await self.updateText()
             # This will call msgdel again to update the image
-            await (await self.interactChannel.fetch_message(self.imgID)).delete()
-        elif msgID == self.imgID:
-            self.imgID = None
+            await (await self.interactChannel.fetch_message(self.getImgID())).delete()
+        elif msgID == self.getImgID():
+            self.setImgID(None)
             reserve = EU4Reserve.getReserve(
                 str(self.interactChannel.id), conn=conn)
             if reserve is None:
                 reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
-            self.imgID = (await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id
-            EU4Reserve.updateMessageIDs(
-                str(self.displayChannel.id), imgmsg=self.imgID, conn=conn)
+            self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
 
     async def userdel(self, user: DiscUser):
         if (hasattr(self.displayChannel, 'guild') and self.displayChannel.guild == user.guild) or (hasattr(self.interactChannel, 'guild') and self.interactChannel.guild == user.guild):
