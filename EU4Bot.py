@@ -330,7 +330,7 @@ class ReserveChannel(AbstractChannel):
                     ": " + EU4Lib.tagToName(x.tag) + " | " + x.timeStr()
         try:
             await (await (self.displayChannel).fetch_message(self.getTextID())).edit(content=string)
-        except discord.NotFound or discord.HTTPException:
+        except (discord.NotFound, discord.HTTPException):
             self.setTextID((await self.displayChannel.send(content=string)).id)
 
     async def updateImg(self):
@@ -340,7 +340,7 @@ class ReserveChannel(AbstractChannel):
             reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
         try:
             await (await self.interactChannel.fetch_message(self.getImgID())).delete()
-        except discord.NotFound or discord.HTTPException:
+        except (discord.NotFound, discord.HTTPException):
             # Normally when deleted it'll create the new one in the delete event, but in case there's an issue this will fix it.
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
 
