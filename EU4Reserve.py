@@ -251,6 +251,7 @@ class ASIReserve(AbstractReserve):
         self.players: List[asiPick] = []
         self.name = name  # Should be channelID
         self.textmsg: Optional[int] = None
+        self.bans = []
 
     def add(self, pick: asiPick) -> int:
         """Codes:
