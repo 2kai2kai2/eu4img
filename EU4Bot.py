@@ -1122,10 +1122,10 @@ class asiresChannel(AbstractChannel):
                                                  "russia_region", "ruthenia_region", "carpathia_region", "venetia_area", "lombardy_area", "emilia_romagna_area", "apulia_area", "central_italy_area"]))
         self.factions.append(asiFaction("Mid", [
                              "balkan_region", "near_east_superregion", "persia_superregion", "egypt_region", "maghreb_region"]))
-        self.factions.append(asiFaction(
-            "India", ["india_superregion", "burma_region"]))
+        #self.factions.append(asiFaction(
+        #    "India", ["india_superregion", "burma_region"]))
         self.factions.append(asiFaction("Asia", ["china_superregion", "tartary_superregion", "far_east_superregion",
-                                                 "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion"], 3))
+                                                 "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion", "india_superregion", "burma_region"], 4))
         if not Load:
             EU4Reserve.addReserve(EU4Reserve.ASIReserve(
                 str(self.displayChannel.id)), conn=conn)
