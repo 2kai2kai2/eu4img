@@ -21,7 +21,7 @@ client = discord.Client()
 # Get database if it exists; if not None and methods will open a json file.
 try:
     DATABASEURL = os.environ['DATABASE_URL']
-    conn = psycopg2.connect(DATABASEURL, sslmode='require')
+    conn: psycopg2.extensions.connection = psycopg2.connect(DATABASEURL, sslmode='require')
     conn.autocommit = True
 except:
     conn = None
@@ -29,6 +29,13 @@ except:
 DiscUser = Union[discord.User, discord.Member]
 DiscTextChannels = Union[discord.TextChannel,
                          discord.DMChannel, discord.GroupChannel]
+
+
+def checkConn() -> psycopg2.extensions.connection:
+    if conn is not None and conn.closed:
+        conn: psycopg2.extensions.connection = psycopg2.connect(DATABASEURL, sslmode='require')
+        conn.autocommit = True
+    return conn
 
 
 def imageToFile(img: Image) -> discord.File:
@@ -100,7 +107,7 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscU
         print(user)
         return False  # pass uh something went wrong.. false i guess?
     # OK now check
-    role = getRoleFromStr(s, GuildManager.getGuildSave(s, conn=conn).admin)
+    role = getRoleFromStr(s, GuildManager.getGuildSave(s, conn=checkConn()).admin)
     return (role is not None and role <= u.top_role) or u.top_role.id == s.roles[-1].id or u._user.id == 249680375280959489
 
 
@@ -139,34 +146,34 @@ class ReserveChannel(AbstractChannel):
             res = EU4Reserve.Reserve(str(self.interactChannel.id))
             # Set the ban list to the server default
             res.bans = GuildManager.getGuildSave(
-                self.interactChannel.guild, conn=conn).defaultBan
-            EU4Reserve.addReserve(res, conn=conn)
+                self.interactChannel.guild, conn=checkConn()).defaultBan
+            EU4Reserve.addReserve(res, conn=checkConn())
 
     def prefix(self) -> str:
-        return GuildManager.getGuildSave(self.interactChannel.guild, conn=conn).prefix
+        return GuildManager.getGuildSave(self.interactChannel.guild, conn=checkConn()).prefix
 
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
 
     def getTextID(self) -> Optional[int]:
-        res = EU4Reserve.getReserve(str(self.displayChannel.id), conn=conn)
+        res = EU4Reserve.getReserve(str(self.displayChannel.id), conn=checkConn())
         if res != None:
             return res.textmsg
         else:
             return None
 
     def getImgID(self) -> Optional[int]:
-        res = EU4Reserve.getReserve(str(self.displayChannel.id), conn=conn)
+        res = EU4Reserve.getReserve(str(self.displayChannel.id), conn=checkConn())
         if res != None:
             return res.imgmsg
         else:
             return None
 
     def setTextID(self, id: int):
-        EU4Reserve.updateMessageIDs(str(self.displayChannel.id), textmsg=id, conn=conn)
+        EU4Reserve.updateMessageIDs(str(self.displayChannel.id), textmsg=id, conn=checkConn())
 
     def setImgID(self, id: int):
-        EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=id, conn=conn)
+        EU4Reserve.updateMessageIDs(str(self.displayChannel.id), imgmsg=id, conn=checkConn())
 
     async def process(self, message: discord.Message):
         text: str = message.content.strip("\n\t ")
@@ -199,7 +206,7 @@ class ReserveChannel(AbstractChannel):
         elif text.upper() == self.prefix() + "END" and checkResAdmin(message.guild, message.author):  # END
             await message.delete()
             await self.displayChannel.send("*Reservations are now ended. Good Luck.*")
-            EU4Reserve.deleteReserve(str(self.displayChannel.id), conn=conn)
+            EU4Reserve.deleteReserve(str(self.displayChannel.id), conn=checkConn())
             interactions.remove(self)
             del(self)
         # RESERVE [nation]
@@ -207,7 +214,7 @@ class ReserveChannel(AbstractChannel):
             res = text.split(" ", 1)[1].strip("\n\t ")
             tag = EU4Lib.country(res)
             if tag is not None:
-                if EU4Reserve.isBanned(str(self.displayChannel.id), tag, conn=conn):
+                if EU4Reserve.isBanned(str(self.displayChannel.id), tag, conn=checkConn()):
                     await sendUserMessage(message.author, "You may not reserve " + EU4Lib.tagToName(tag) + " in " + self.displayChannel.mention + " because it is banned. If you still want to play it, please have an admin override.")
                 else:
                     await self.add(EU4Reserve.reservePick(message.author.mention, tag.upper()))
@@ -251,7 +258,7 @@ class ReserveChannel(AbstractChannel):
             string = ""
             if len(bantags) > 0:
                 EU4Reserve.addBan(str(self.displayChannel.id),
-                                  bantags, conn=conn)
+                                  bantags, conn=checkConn())
                 string += "Added the following nations to the ban list in " + \
                     self.displayChannel.mention + ": "
                 for tag in bantags:
@@ -283,7 +290,7 @@ class ReserveChannel(AbstractChannel):
             string = ""
             if len(bantags) > 0:
                 EU4Reserve.deleteBan(
-                    str(self.displayChannel.id), bantags, conn=conn)
+                    str(self.displayChannel.id), bantags, conn=checkConn())
                 string += "Removed the following nations from the ban list in " + \
                     self.displayChannel.mention + ": "
                 for tag in bantags:
@@ -306,7 +313,7 @@ class ReserveChannel(AbstractChannel):
 
     async def updateText(self):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(
-            str(self.interactChannel.id), conn=conn)
+            str(self.interactChannel.id), conn=checkConn())
         string = "How to reserve: " + self.prefix() + \
             "reserve [nation]\nTo unreserve: " + self.prefix() + "delreserve\n"
         string += "Banned nations: "
@@ -335,7 +342,7 @@ class ReserveChannel(AbstractChannel):
 
     async def updateImg(self):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(
-            str(self.interactChannel.id), conn=conn)
+            str(self.interactChannel.id), conn=checkConn())
         if reserve is None:
             reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
         try:
@@ -346,7 +353,7 @@ class ReserveChannel(AbstractChannel):
 
     async def add(self, nation: EU4Reserve.reservePick) -> int:
         addInt = EU4Reserve.addPick(
-            str(self.interactChannel.id), nation, conn=conn)
+            str(self.interactChannel.id), nation, conn=checkConn())
         if addInt == 1 or addInt == 2:  # Success!
             await self.updateText()
             await self.updateImg()
@@ -361,7 +368,7 @@ class ReserveChannel(AbstractChannel):
 
     async def removePlayer(self, name: str):
         # If it did anything
-        if EU4Reserve.deletePick(str(self.interactChannel.id), name, conn=conn):
+        if EU4Reserve.deletePick(str(self.interactChannel.id), name, conn=checkConn()):
             await self.updateText()
             await self.updateImg()
 
@@ -374,7 +381,7 @@ class ReserveChannel(AbstractChannel):
         elif msgID == self.getImgID():
             self.setImgID(None)
             reserve = EU4Reserve.getReserve(
-                str(self.interactChannel.id), conn=conn)
+                str(self.interactChannel.id), conn=checkConn())
             if reserve is None:
                 reserve = EU4Reserve.Reserve(str(self.interactChannel.id))
             self.setImgID((await self.displayChannel.send(file=imageToFile(EU4Reserve.createMap(reserve)))).id)
@@ -978,7 +985,7 @@ class statsChannel(AbstractChannel):
         return message.channel == self.interactChannel and not message.author.bot
 
     async def process(self, message: discord.Message):
-        if message.content.upper() == GuildManager.getGuildSave(self.displayChannel.guild, conn=conn).prefix + "CANCEL":
+        if message.content.upper() == GuildManager.getGuildSave(self.displayChannel.guild, conn=checkConn()).prefix + "CANCEL":
             await self.interactChannel.send("**Cancelling the stats operation.**")
             interactions.remove(self)
             del(self)
@@ -1128,10 +1135,10 @@ class asiresChannel(AbstractChannel):
                                                  "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion", "india_superregion", "burma_region"], 4))
         if not Load:
             EU4Reserve.addReserve(EU4Reserve.ASIReserve(
-                str(self.displayChannel.id)), conn=conn)
+                str(self.displayChannel.id)), conn=checkConn())
 
     def prefix(self) -> str:
-        return GuildManager.getGuildSave(self.interactChannel.guild, conn=conn).prefix
+        return GuildManager.getGuildSave(self.interactChannel.guild, conn=checkConn()).prefix
 
     def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
         """Returns the faction that owns a given province.
@@ -1173,7 +1180,7 @@ class asiresChannel(AbstractChannel):
         elif text.upper() == self.prefix() + "END" and checkResAdmin(message.guild, message.author):  # END
             await message.delete()
             reserves = EU4Reserve.getReserve(
-                str(self.displayChannel.id), conn=conn).players
+                str(self.displayChannel.id), conn=checkConn()).players
             finalReserves: List[EU4Reserve.reservePick] = []
             # This stores the capitals of all possible tags, so that their factions can be determined.
             tagCapitals = dict()
@@ -1260,7 +1267,7 @@ class asiresChannel(AbstractChannel):
                 count += 1
             await self.displayChannel.send(string)
             # aaand we're done!
-            EU4Reserve.deleteReserve(str(self.displayChannel.id), conn=conn)
+            EU4Reserve.deleteReserve(str(self.displayChannel.id), conn=checkConn())
             interactions.remove(self)
             del(self)
         elif text.upper().startswith(self.prefix() + "RESERVE "):
@@ -1307,7 +1314,7 @@ class asiresChannel(AbstractChannel):
             reserve.picks = [pick]
             await self.remove(user)
             addInt = EU4Reserve.addPick(
-                str(self.displayChannel.id), reserve, conn=conn)
+                str(self.displayChannel.id), reserve, conn=checkConn())
             if addInt == 3:
                 await sendUserMessage(message.author, EU4Lib.tagToName(pick) + " is already executive-reserved in " + message.channel.mention)
             elif addInt == 1 or addInt == 2:
@@ -1332,7 +1339,7 @@ class asiresChannel(AbstractChannel):
             "reserve [nation1], [nation2], [nation3]\nTo unreserve: " + \
             self.prefix() + "delreserve\n**Current players list:**"
         picks = EU4Reserve.getReserve(
-            str(self.displayChannel.id), conn=conn).players
+            str(self.displayChannel.id), conn=checkConn()).players
         if len(picks) == 0:
             string += "\n*It's so empty here...*"
         else:
@@ -1347,13 +1354,13 @@ class asiresChannel(AbstractChannel):
         if self.textID is None:
             self.textID = (await self.displayChannel.send(content=string)).id
             EU4Reserve.updateMessageIDs(
-                str(self.displayChannel.id), textmsg=self.textID, conn=conn)
+                str(self.displayChannel.id), textmsg=self.textID, conn=checkConn())
         else:
             await (await (self.displayChannel).fetch_message(self.textID)).edit(content=string)
 
     async def remove(self, user: DiscUser):
         EU4Reserve.deletePick(str(self.displayChannel.id),
-                              user.mention, conn=conn)
+                              user.mention, conn=checkConn())
 
     async def add(self, user: DiscUser, text: str):
         picks = text.split(",")
@@ -1371,7 +1378,7 @@ class asiresChannel(AbstractChannel):
         res = EU4Reserve.asiPick(user.mention)
         res.picks = tags
         await self.remove(user)
-        EU4Reserve.addPick(str(self.displayChannel.id), res, conn=conn)
+        EU4Reserve.addPick(str(self.displayChannel.id), res, conn=checkConn())
 
     async def msgdel(self, msgID: Union[str, int]):
         if msgID == self.textID:
@@ -1393,18 +1400,18 @@ async def on_ready():
     print("Registering connected Guilds not yet registered...")
     newGuildCount = 0
     async for guild in client.fetch_guilds():
-        if GuildManager.getGuildSave(guild, conn=conn) is None:
-            GuildManager.addGuild(guild, conn=conn)
+        if GuildManager.getGuildSave(guild, conn=checkConn()) is None:
+            GuildManager.addGuild(guild, conn=checkConn())
             newGuildCount += 1
     print("Registered " + str(newGuildCount) + " new Guilds.")
     print("Loading previous Reserves...")
-    reserves = EU4Reserve.load(conn=conn)
+    reserves = EU4Reserve.load(conn=checkConn())
     rescount = 0
     closedcount = 0
     for res in reserves:
         reschannel: DiscTextChannels = client.get_channel(int(res.name))
         if reschannel is None:
-            EU4Reserve.deleteReserve(res, conn=conn)
+            EU4Reserve.deleteReserve(res, conn=checkConn())
             closedcount += 1
         else:
             if isinstance(res, EU4Reserve.Reserve):
@@ -1459,8 +1466,8 @@ async def on_message(message: discord.Message):
             if await interaction.responsive(message):
                 await interaction.process(message)
                 return
-        if (message.guild is not None and text.startswith(GuildManager.getGuildSave(message.guild, conn=conn).prefix)):
-            prefix = GuildManager.getGuildSave(message.guild, conn=conn).prefix
+        if (message.guild is not None and text.startswith(GuildManager.getGuildSave(message.guild, conn=checkConn()).prefix)):
+            prefix = GuildManager.getGuildSave(message.guild, conn=checkConn()).prefix
             if text.upper() == prefix + "HELP":
                 stringHelp = "__**Command help:**__"
                 stringHelp += "\n**" + prefix + "HELP**\nGets you this information!"
@@ -1497,7 +1504,7 @@ async def on_message(message: discord.Message):
                 await c.updateText()
                 interactions.append(c)
             elif text.upper() == prefix + "LOAD" and checkResAdmin(message.guild, message.author):
-                res = EU4Reserve.getReserve(str(message.channel.id), conn=conn)
+                res = EU4Reserve.getReserve(str(message.channel.id), conn=checkConn())
                 if res is None:
                     await sendUserMessage(message.author, "You tried to load a save in " + message.channel.mention + " but no save was found. Please try " + prefix + "NEW to create new reserves.")
                 elif isinstance(res, EU4Reserve.Reserve):
@@ -1520,7 +1527,7 @@ async def on_message(message: discord.Message):
                 elif any(char.isalpha() for char in newPrefix):
                     await sendUserMessage(message.author, "The prefix cannot contain letters.")
                 else:
-                    GuildManager.setPrefix(message.guild, newPrefix, conn=conn)
+                    GuildManager.setPrefix(message.guild, newPrefix, conn=checkConn())
                     await sendUserMessage(message.author, "Prefix on " + message.guild.name + " set to " + newPrefix)
                 await message.delete()
             elif text.upper().startswith(prefix + "ADMINRANK") and checkResAdmin(message.guild, message.author):
@@ -1533,7 +1540,7 @@ async def on_message(message: discord.Message):
                     await sendUserMessage(message.author, "The rank " + text.partition(" ")[2].strip("\n\t ") + " is not a valid rank on " + message.guild.name)
                 else:
                     GuildManager.setAdmin(
-                        message.guild, newRank.name, conn=conn)
+                        message.guild, newRank.name, conn=checkConn())
                     await sendUserMessage(message.author, "Admin rank set to " + newRank.name + " on " + message.guild.name)
                 await message.delete()
             # ADDDEFAULTBAN [nation], [nation], ...
@@ -1552,7 +1559,7 @@ async def on_message(message: discord.Message):
                     string += "Added the following nations to the default ban list in " + \
                         message.guild.name + ": "
                     for tag in bantags:
-                        GuildManager.addBan(message.guild, tag, conn=conn)
+                        GuildManager.addBan(message.guild, tag, conn=checkConn())
                         string += EU4Lib.tagToName(tag)
                         if tag is not bantags[-1]:
                             string += ", "
@@ -1566,7 +1573,7 @@ async def on_message(message: discord.Message):
                 if string != "":
                     string += "\nThe new default ban list: "
                     newbanlist = GuildManager.getGuildSave(
-                        message.guild, conn=conn).defaultBan
+                        message.guild, conn=checkConn()).defaultBan
                     for tag in newbanlist:
                         string += EU4Lib.tagToName(tag)
                         if tag is not newbanlist[-1]:
@@ -1589,7 +1596,7 @@ async def on_message(message: discord.Message):
                     string += "Removed the following nations from the default ban list in " + \
                         message.guild.name + ": "
                     for tag in bantags:
-                        GuildManager.removeBan(message.guild, tag, conn=conn)
+                        GuildManager.removeBan(message.guild, tag, conn=checkConn())
                         string += EU4Lib.tagToName(tag)
                         if tag is not bantags[-1]:
                             string += ", "
@@ -1603,7 +1610,7 @@ async def on_message(message: discord.Message):
                 if string != "":
                     string += "\nThe new default ban list: "
                     newbanlist = GuildManager.getGuildSave(
-                        message.guild, conn=conn).defaultBan
+                        message.guild, conn=checkConn()).defaultBan
                     for tag in newbanlist:
                         string += EU4Lib.tagToName(tag)
                         if tag is not newbanlist[-1]:
@@ -1617,7 +1624,7 @@ async def on_guild_channel_delete(channel: DiscTextChannels):
     for c in interactions:
         if c.displayChannel == channel or c.interactChannel == channel:
             if isinstance(c, ReserveChannel) or isinstance(c, asiresChannel):
-                EU4Reserve.deleteReserve(str(c.displayChannel.id), conn=conn)
+                EU4Reserve.deleteReserve(str(c.displayChannel.id), conn=checkConn())
             interactions.remove(c)
             del(c)
 
@@ -1644,16 +1651,16 @@ async def on_member_remove(member: DiscUser):
 
 @client.event
 async def on_guild_join(guild: discord.Guild):
-    GuildManager.addGuild(guild, conn=conn)
+    GuildManager.addGuild(guild, conn=checkConn())
 
 
 @client.event
 async def on_guild_remove(guild: discord.Guild):
-    GuildManager.removeGuild(guild, conn=conn)
+    GuildManager.removeGuild(guild, conn=checkConn())
     for c in interactions:
         if (hasattr(c.displayChannel, 'guild') and c.displayChannel.guild == guild) or (hasattr(c.interactChannel, 'guild') and c.interactChannel.guild == guild):
             if isinstance(c, ReserveChannel) or isinstance(c, asiresChannel):
-                EU4Reserve.deleteReserve(str(c.displayChannel.id), conn=conn)
+                EU4Reserve.deleteReserve(str(c.displayChannel.id), conn=checkConn())
             interactions.remove(c)
             del(c)
 
