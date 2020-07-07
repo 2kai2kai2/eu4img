@@ -32,8 +32,9 @@ DiscTextChannels = Union[discord.TextChannel,
 
 
 def checkConn() -> psycopg2.extensions.connection:
+    global conn
     if conn is not None and conn.closed:
-        conn: psycopg2.extensions.connection = psycopg2.connect(DATABASEURL, sslmode='require')
+        conn = psycopg2.connect(DATABASEURL, sslmode='require')
         conn.autocommit = True
     return conn
 
