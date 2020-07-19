@@ -30,7 +30,7 @@ for f in specFiles:
 	del(fileObj)
 
 # Find only the ones that are nation tags
-tagLines: List[str] = [line.strip() for line in allLines if len(line) > 5 and line[0] == " " and line[4] == ":" and line[:5] == line[:5].upper()]
+tagLines: List[str] = [line for line in allLines if len(line) > 5 and line[0] == " " and line[4] == ":" and line[:5] == line[:5].upper()]
 tagLines.sort()
 
 def deaccent(string: str) -> str:
