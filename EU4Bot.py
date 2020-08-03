@@ -848,11 +848,7 @@ class statsChannel(AbstractChannel):
                     flag: Image.Image = None
                     if (nat.tag.startswith("C") and nat.tag[1:].upper() == nat.tag[1:].lower() and nat.overlord is not None):
                         # This is a colonial nation, so make that flag instead.
-                        try:
-                            flag = EU4Lib.colonialFlag(nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
-                        except:
-                            print("Something went wrong in creating a colonial flag. Details:")
-                            print(nat.fullDataStr())
+                        flag = EU4Lib.colonialFlag(nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
                     else:
                         flag = EU4Lib.flag(nat.tag)
                     imgFinal.paste(flag, (x, y))
@@ -918,7 +914,7 @@ class statsChannel(AbstractChannel):
                                     print("Something went wrong in creating a colonial flag. Details:")
                                     print(nat.fullDataStr())
                             else:
-                                flag = EU4Lib.flag(nat.tag)
+                                flag = EU4Lib.flag(nat)
                             imgFinal.paste(flag.resize((64, 64)), (round(x + 3 * (12 + 64) - (
                                 natnum % 4) * (64 + 12)), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
                     # Draw Attacker Casualties
@@ -942,7 +938,7 @@ class statsChannel(AbstractChannel):
                                     print("Something went wrong in creating a colonial flag. Details:")
                                     print(nat.fullDataStr())
                             else:
-                                flag = EU4Lib.flag(nat.tag)
+                                flag = EU4Lib.flag(nat)
                             imgFinal.paste(flag.resize((64, 64)), (round(
                                 x + (natnum % 4) * (64 + 12) + 585), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
                     # Draw Defender Casualties
