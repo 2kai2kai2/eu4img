@@ -422,25 +422,6 @@ class ReserveChannel(AbstractChannel):
 
 
 class Nation:
-    def __init__(self, player: str):
-        self.player = player
-        self.tag: Optional[str] = None
-        self.development: int = 0
-        self.prestige: int = None
-        self.stability: int = None
-        #self.manpower = None
-        #self.maxManpower = None
-        self.army: float = 0.0
-        self.navy: int = 0
-        self.debt: int = 0
-        self.treasury: float = 0.0
-        self.totalIncome: float = 0.0
-        self.totalExpense: float = 0.0
-        self.scorePlace = None
-        self.capitalID: int = 0
-
-
-class xNation:
     def __init__(self, tag: str):
         self.tag: str = tag.upper()
         self.development: int = 0
@@ -649,7 +630,7 @@ class statsChannel(AbstractChannel):
             elif len(brackets) > 1 and brackets[0] == "countries={":
                 if len(brackets) == 2:
                     if "government_rank=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")] = xNation(
+                        self.game.allNations[brackets[1].strip("\n\t ={")] = Nation(
                             brackets[1].strip("\n\t ={"))
                     elif "raw_development=" in line:
                         self.game.allNations[brackets[1].strip("\n\t ={")].development = round(
@@ -792,7 +773,7 @@ class statsChannel(AbstractChannel):
         playerColors = {} # Formatting: (map color) = (player contrast color)
         for natTag in self.game.allNations:
             try:
-                nat: xNation = self.game.allNations[natTag]
+                nat: Nation = self.game.allNations[natTag]
                 playerNatTag: str = None # This is what nation actually is said to own the land
                 # Check if this nation is a player
                 if natTag in self.game.playertags:
@@ -851,7 +832,7 @@ class statsChannel(AbstractChannel):
 
             # Get the list of player Nations
             # TODO: make this more integrated with the new savefile data system rather than doing this conversion
-            playerNationList: List[xNation] = []
+            playerNationList: List[Nation] = []
             for x in self.game.playertags:
                 playerNationList.append(self.game.allNations[x])
             playerNationList.sort(key=lambda x: x.development, reverse=True)

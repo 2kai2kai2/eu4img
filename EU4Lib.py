@@ -1,4 +1,4 @@
-# This will need to be updated. Currently for 1.28
+# This will need to be updated. Currently for 1.30.2
 from typing import List, Optional, Tuple, Union
 
 from PIL import Image, ImageDraw
@@ -85,7 +85,7 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
             continue
 
 
-def flag(tag: str) -> Image:
+def flag(tag: str) -> Image.Image:
     """Gets an Image of the flag of the specified nation.
 
     Returns Image of size (128, 128).
@@ -219,6 +219,62 @@ def isIn(provinceID: Union[str, int], group: str) -> bool:
         return True
     return False
 
+
+def colonialRegion(provinceID: Union[str, int]) -> str:
+    """Returns the colonial region from a specified province's id.
+
+    Raises an error if the province is not found in a colonial region.
+    """
+    # Read file
+    srcFile = open("src/00_colonial_regions.txt", "r")
+    lines = srcFile.readlines()
+    srcFile.close()
+    # Search file
+    currentColReg: Optional[str] = None
+    provsOpen = False
+    for line in lines:
+        # First get the colonial region. No indent.
+        if not line.startswith("\t") and " = {" in line:
+            currentColReg = line.strip("= {\n\t")
+        elif currentColReg is not None and "\tprovinces = {" in line:
+            provsOpen = True
+        elif provsOpen is True:
+            if "}" in line:
+                provsOpen = False
+            elif str(provinceID) in line.split():
+                return currentColReg
+    # Was not found
+    raise ValueError(str(provinceID) + " was not a valid province in a colonial region.")
+
+
+def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
+    """Generates a colonial nation flag for the given motherland and colonial region."""
+    # First find the correct colonial region color
+    color: Tuple[int, int, int] = None
+    # Read file
+    srcFile = open("src/00_colonial_regions.txt", "r")
+    lines = srcFile.readlines()
+    srcFile.close()
+    # Search file
+    currentColReg: Optional[str] = None
+    for line in lines:
+        # First get the colonial region. No indent.
+        if not line.startswith("\t") and " = {" in line:
+            currentColReg = line.strip("= {\n\t")
+        elif currentColReg == colReg and "\tcolor = {" in line:
+            colorR, colorG, colorB = line.strip("\tcolor ={}\n").split()
+            color = (int(colorR), int(colorG), int(colorB))
+    # Raise error if the colonial region or color was invalid
+    if currentColReg is None:
+        raise ValueError("Colonial Region \"" + colReg + "\" was not found.")
+    elif colorR is None or colorG is None or colorB is None:
+        raise ValueError("Something went very wrong. No color was found in the source file for the Colonial Region \"" + colReg + "\".")
+    # Image editing
+    flagimg: Image.Image = flag(overlordTag)
+    flagDraw = ImageDraw.Draw(flagimg)
+    flagDraw.rectangle([64, 0, 127, 127], color)
+    flagimg.show()
+    return flagimg
 
 class dataReq:
     DATATYPE_PROVINCEDAT = 0
