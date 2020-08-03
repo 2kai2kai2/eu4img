@@ -910,10 +910,10 @@ class statsChannel(AbstractChannel):
                             self.game.playertags).index(nat)
                         if natnum < 8:
                             flag: Image.Image = None
-                            if (nat.tag.startswith("C") and nat.tag[1:].upper() == nat.tag[1:].lower() and nat.overlord is not None):
+                            if (nat.startswith("C") and nat[1:].upper() == nat[1:].lower() and self.game.allNations[nat].overlord is not None):
                                 # This is a colonial nation, so make that flag instead.
                                 try:
-                                    flag = EU4Lib.colonialFlag(nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
+                                    flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(self.game.allNations[nat].capitalID))
                                 except:
                                     print("Something went wrong in creating a colonial flag. Details:")
                                     print(nat.fullDataStr())
@@ -934,10 +934,10 @@ class statsChannel(AbstractChannel):
                             self.game.playertags).index(nat)
                         if natnum < 8:
                             flag: Image.Image = None
-                            if (nat.tag.startswith("C") and nat.tag[1:].upper() == nat.tag[1:].lower() and nat.overlord is not None):
+                            if (nat.startswith("C") and nat[1:].upper() == nat[1:].lower() and self.game.allNations[nat].overlord is not None):
                                 # This is a colonial nation, so make that flag instead.
                                 try:
-                                    flag = EU4Lib.colonialFlag(nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
+                                    flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(self.game.allNations[nat].capitalID))
                                 except:
                                     print("Something went wrong in creating a colonial flag. Details:")
                                     print(nat.fullDataStr())
