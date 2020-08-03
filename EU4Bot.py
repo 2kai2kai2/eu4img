@@ -845,7 +845,17 @@ class statsChannel(AbstractChannel):
                 y = 38 + 128*(natnum % 8)
                 if (natnum < 16):
                     # x: Country flag
-                    imgFinal.paste(EU4Lib.flag(nat.tag), (x, y))
+                    flag: Image.Image = None
+                    if (nat.tag.startswith("C") and nat.tag[1:].upper() == nat.tag[1:].lower() and nat.overlord is not None):
+                        # This is a colonial nation, so make that flag instead.
+                        try:
+                            flag = EU4Lib.colonialFlag(nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
+                        except:
+                            print("Something went wrong in creating a colonial flag. Details:")
+                            print(nat.fullDataStr())
+                    else:
+                        flag = EU4Lib.flag(nat.tag)
+                    imgFinal.paste(flag, (x, y))
                     # x+128: Player
                     playerName = self.game.playertags[nat.tag]
                     while (imgDraw.textsize(playerName, font)[0] > 760 - 128):
@@ -899,7 +909,17 @@ class statsChannel(AbstractChannel):
                         natnum = playerWar.playerAttackers(
                             self.game.playertags).index(nat)
                         if natnum < 8:
-                            imgFinal.paste(EU4Lib.flag(nat).resize((64, 64)), (round(x + 3 * (12 + 64) - (
+                            flag: Image.Image = None
+                            if (nat.tag.startswith("C") and nat.tag[1:].upper() == nat.tag[1:].lower() and nat.overlord is not None):
+                                # This is a colonial nation, so make that flag instead.
+                                try:
+                                    flag = EU4Lib.colonialFlag(nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
+                                except:
+                                    print("Something went wrong in creating a colonial flag. Details:")
+                                    print(nat.fullDataStr())
+                            else:
+                                flag = EU4Lib.flag(nat.tag)
+                            imgFinal.paste(flag.resize((64, 64)), (round(x + 3 * (12 + 64) - (
                                 natnum % 4) * (64 + 12)), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
                     # Draw Attacker Casualties
                     attackerIcon = Image.open(
@@ -913,7 +933,17 @@ class statsChannel(AbstractChannel):
                         natnum = playerWar.playerDefenders(
                             self.game.playertags).index(nat)
                         if natnum < 8:
-                            imgFinal.paste(EU4Lib.flag(nat).resize((64, 64)), (round(
+                            flag: Image.Image = None
+                            if (nat.tag.startswith("C") and nat.tag[1:].upper() == nat.tag[1:].lower() and nat.overlord is not None):
+                                # This is a colonial nation, so make that flag instead.
+                                try:
+                                    flag = EU4Lib.colonialFlag(nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
+                                except:
+                                    print("Something went wrong in creating a colonial flag. Details:")
+                                    print(nat.fullDataStr())
+                            else:
+                                flag = EU4Lib.flag(nat.tag)
+                            imgFinal.paste(flag.resize((64, 64)), (round(
                                 x + (natnum % 4) * (64 + 12) + 585), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
                     # Draw Defender Casualties
                     defenderIcon = Image.open(
