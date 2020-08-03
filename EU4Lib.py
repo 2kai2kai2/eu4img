@@ -226,7 +226,7 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
     Raises an error if the province is not found in a colonial region.
     """
     # Read file
-    srcFile = open("src/00_colonial_regions.txt", "r")
+    srcFile = open("src/00_colonial_regions.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     # Search file
@@ -252,7 +252,7 @@ def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
     # First find the correct colonial region color
     color: Tuple[int, int, int] = None
     # Read file
-    srcFile = open("src/00_colonial_regions.txt", "r")
+    srcFile = open("src/00_colonial_regions.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     # Search file
