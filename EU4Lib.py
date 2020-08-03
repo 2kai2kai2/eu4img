@@ -273,7 +273,6 @@ def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
     flagimg: Image.Image = flag(overlordTag)
     flagDraw = ImageDraw.Draw(flagimg)
     flagDraw.rectangle([64, 0, 127, 127], color)
-    flagimg.show()
     return flagimg
 
 class dataReq:
