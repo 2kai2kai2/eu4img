@@ -522,7 +522,7 @@ class statsChannel(AbstractChannel):
         #self.playersImage: Image = Image.open("src/BlankPlayerMap.png")
         self.playersImage = None
         self.game = saveGame()
-        self.modMsg = None
+        self.modMsg: discord.Message = None
         self.doneMod = False
 
     async def asyncInit(self):
@@ -542,7 +542,7 @@ class statsChannel(AbstractChannel):
             else:
                 prompt += "\n" + \
                     EU4Lib.tagToName(x) + ": " + self.game.playertags[x]
-        prompt += "```\n**Do you want to make any changes?\nType `'done'` to finish. Commands:\n`remove [nation]`\n`add [player], [nation]`**"
+        prompt += "```\n**Do you want to make any changes?\nType `done` to finish. Commands:\n`remove [nation]`\n`add [player], [nation]`**"
         return prompt
 
     async def readFile(self, file):
@@ -1076,7 +1076,8 @@ class statsChannel(AbstractChannel):
 
         # Third step - player list modification
         elif self.hasReadFile and (self.politicalImage is not None) and (not self.doneMod):
-            if message.content.strip("\n\t ") == "done":
+            # done
+            if message.content.strip("\n\t ").lower() == "done":
                 self.doneMod == True
                 img = None
                 # Create the Image and convert to discord.File
@@ -1096,32 +1097,35 @@ class statsChannel(AbstractChannel):
                 interactions.remove(self)
                 del(self)
             # add [player], [nation]
-            elif message.content.strip("\n\t ").startswith("add "):
+            elif message.content.strip("\n\t ").lower().startswith("add "):
                 player = message.content.strip("\n\t ").partition(
                     " ")[2].partition(",")[0].strip("\t\n ")
                 natName = message.content.strip("\n\t ").partition(",")[
                     2].strip("\t\n ")
                 tag = EU4Lib.country(natName)
                 if tag is None:
-                    await sendUserMessage(self.user, "Nation " + natName + " not recognized.")
+                    await message.add_reaction("\u2754")
                 elif tag in self.game.playertags:
                     await sendUserMessage(self.user, EU4Lib.tagToName(tag) + " is already played. If you wish to replace the player, please remove it first.")
                 elif not tag in self.game.allNations:
                     await sendUserMessage(self.user, EU4Lib.tagToName(tag) + " does not exist in this game.")
                 else:
                     self.game.playertags[tag] = player
-                    await sendUserMessage(self.user, "Added " + EU4Lib.tagToName(tag) + " for " + player + ".")
+                    await self.modMsg.edit(content=self.modPromptStr())
+                    await message.add_reaction("\u2705")
             # remove [nation]
-            elif message.content.strip("\n\t ").startswith("remove "):
+            elif message.content.strip("\n\t ").lower().startswith("remove "):
                 name = message.content.strip("\n\t ").partition(" ")[2].strip("\t\n ")
                 tag = EU4Lib.country(name)
                 if tag is None:
-                    await self.interactChannel.send("Did not recognize \"" + name + "\" as a valid nation.")
+                    await message.add_reaction("\u2754")
                 elif tag in self.game.playertags:
                     del(self.game.playertags[tag])
-                    await sendUserMessage(self.user, "Removed " + EU4Lib.tagToName(tag) + ".")
+                    await self.modMsg.edit(content=self.modPromptStr())
+                    await message.add_reaction("\u2705")
                 else:
-                    await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
+                    pass
+                    # await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
 
     async def msgdel(self, msgID: Union[str, int]):
         pass
