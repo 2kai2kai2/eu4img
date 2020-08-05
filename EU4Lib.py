@@ -244,7 +244,8 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
             elif str(provinceID) in line.split():
                 return currentColReg
     # Was not found
-    raise ValueError(str(provinceID) + " was not a valid province in a colonial region.")
+    raise ValueError(str(provinceID) +
+                     " was not a valid province in a colonial region.")
 
 
 def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
@@ -268,12 +269,14 @@ def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
     if currentColReg is None:
         raise ValueError("Colonial Region \"" + colReg + "\" was not found.")
     elif colorR is None or colorG is None or colorB is None:
-        raise ValueError("Something went very wrong. No color was found in the source file for the Colonial Region \"" + colReg + "\".")
+        raise ValueError(
+            "Something went very wrong. No color was found in the source file for the Colonial Region \"" + colReg + "\".")
     # Image editing
     flagimg: Image.Image = flag(overlordTag)
     flagDraw = ImageDraw.Draw(flagimg)
     flagDraw.rectangle([64, 0, 127, 127], color)
     return flagimg
+
 
 class dataReq:
     DATATYPE_PROVINCEDAT = 0

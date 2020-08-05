@@ -97,32 +97,37 @@ reserve refers to the name of the ASIReserve in the Reserves table this pick is 
 If the pick is priority, tag2 and tag3 are 'NULL' (a str).
 """
 
+
 class Eastern(datetime.tzinfo):
     def __init__(self):
         pass
+
     def dst(self, dt: datetime.datetime) -> datetime.timedelta:
         if dt.month < 3 or 11 < dt.month:
             return datetime.timedelta(0)
         elif 3 < dt.month and dt.month < 11:
             return datetime.timedelta(hours=1)
-        elif dt.month == 3: # DST starts second Sunday of March
+        elif dt.month == 3:  # DST starts second Sunday of March
             week2Day = dt.day - 7
             if week2Day > 0 and (dt.weekday() == 6 or week2Day < dt.weekday() + 1):
                 return datetime.timedelta(0)
             else:
                 return datetime.timedelta(hours=1)
-        elif dt.month == 11: # DST ends first Sunday of November
+        elif dt.month == 11:  # DST ends first Sunday of November
             if dt.weekday() == 6 or dt.day > dt.weekday() + 1:
                 return datetime.timedelta(hours=1)
             else:
                 return datetime.timedelta(0)
+
     def utcoffset(self, dt: datetime.datetime) -> datetime.timedelta:
         return datetime.timedelta(hours=-5) + self.dst(dt)
+
     def tzname(self, dt: datetime.datetime) -> str:
         if self.dst(dt).total_seconds() == 0:
             return "EST"
         else:
             return "EDT"
+
 
 class AbstractPick(ABC):
     def __init__(self, player: str):
@@ -150,6 +155,7 @@ class reservePick(AbstractPick):
     def toDict(self) -> dict:
         return {"player": self.player, "tag": self.tag, "time": self.time}
 
+
 class asiPick(AbstractPick):
     """A user's reservation for an ASI game."""
 
@@ -161,6 +167,7 @@ class asiPick(AbstractPick):
 
     def toDict(self) -> dict:
         return {"player": self.player, "priority": self.priority, "picks": self.picks, "time": self.time}
+
 
 class AbstractReserve(ABC):
     @abstractmethod
@@ -324,7 +331,8 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
                 r.imgmsg = jsonLoad[res]["imgmsg"]
                 for pick in jsonLoad[res]["reserves"]:
                     try:
-                        r.add(reservePick(pick["player"], pick["tag"], pick["time"]))
+                        r.add(reservePick(pick["player"],
+                                          pick["tag"], pick["time"]))
                     except:
                         r.add(reservePick(pick["player"], pick["tag"]))
                 resList.append(r)
