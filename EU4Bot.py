@@ -839,29 +839,24 @@ class statsChannel(AbstractChannel):
         # Modify the image
         mapDraw = ImageDraw.Draw(mapFinal)
         drawColors = {}  # Formatting: (draw color) = [(x, y), (x, y), ...]
-        for x in range(mapFinal.size[0]):
-            for y in range(mapFinal.size[1]):
-                color = self.politicalImage.getpixel((x, y))
+        width = self.politicalImage.width
+        pixlist: List[Tuple[int, int, int]] = list(
+            self.politicalImage.getdata())
+        for x in range(width):
+            for y in range(self.politicalImage.height):
+                index = x + y * width
+                color = pixlist[index]
                 if color in playerColors:
-                    for neighbor in ((x - 1, y - 1), (x, y - 1), (x + 1, y - 1), (x - 1, y), (x + 1, y), (x - 1, y + 1), (x, y + 1), (x + 1, y + 1)):
-                        try:
-                            neighborColor = self.politicalImage.getpixel(
-                                neighbor)
-                        except:
-                            # This means that we're out of bounds. That's okay. We're on the edge of the map so draw a border here.
-                            if playerColors[color] in drawColors:
-                                drawColors[playerColors[color]].append((x, y))
-                            else:
-                                drawColors[playerColors[color]] = [(x, y)]
+                    # This is the inverse color of the player or player overlord
+                    playerColor = playerColors[color]
+                    for neighbor in (index - 1 - width, index - width, index + 1 - width, index - 1, index + 1, index - 1 + width, index + width, index + 1 + width):
+                        neighborColor = pixlist[neighbor]
+                        if neighborColor not in playerColors or playerColors[neighborColor] != playerColor:
+                            try:
+                                drawColors[playerColor].append((x, y))
+                            except KeyError:
+                                drawColors[playerColor] = [(x, y)]
                             break
-                        else:
-                            if neighborColor not in playerColors or playerColors[neighborColor] != playerColors[color]:
-                                if playerColors[color] in drawColors:
-                                    drawColors[playerColors[color]].append(
-                                        (x, y))
-                                else:
-                                    drawColors[playerColors[color]] = [(x, y)]
-                                break
         for drawColor in drawColors:
             mapDraw.point(drawColors[drawColor], drawColor)
         del(drawColors)
@@ -1122,7 +1117,7 @@ class statsChannel(AbstractChannel):
             else:  # This means that all the checks succeeded
                 politicalFile = BytesIO()
                 await message.attachments[0].save(politicalFile)
-                self.politicalImage = Image.open(politicalFile)
+                self.politicalImage: Image.Image = Image.open(politicalFile)
                 del(politicalFile)
                 if self.politicalImage.size != (5632, 2048):
                     await self.interactChannel.send("**Your image was not the right size.** (5632, 2048)\nDid you submit a Political Mapmode screenshot? (f10)\n**Please try another image.**")
