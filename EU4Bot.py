@@ -614,7 +614,6 @@ class statsChannel(AbstractChannel):
         self.displayChannel = initChannel
         self.hasReadFile = False
         self.politicalImage: Image.Image = None
-        self.playersImage = None
         self.game = saveGame()
         self.modMsg: discord.Message = None
         self.doneMod = False
@@ -648,6 +647,7 @@ class statsChannel(AbstractChannel):
         Gets all data from file and saves it to the self.game.
         """
         lines: List[str] = file.readlines()
+        del(file)
         brackets: List[str] = []
         currentReadWar: war = None
         currentReadWarParticTag: str = None
@@ -873,8 +873,6 @@ class statsChannel(AbstractChannel):
             if progressMessage is not None:
                 newstr = "**Generating Image...**\n" + text + " (" + str(num) + "/" + str(maxnum) + ")"
                 await progressMessage.edit(content=newstr)
-        
-        mapFinal: Image.Image = self.politicalImage.copy()
 
         def armyDisplay(army: int) -> str:
             """
@@ -914,13 +912,13 @@ class statsChannel(AbstractChannel):
                 pass
         # Modify the image
         await updateProgress("Calculating player borders...", 2, 8)
-        mapDraw = ImageDraw.Draw(mapFinal)
         drawColors = {}  # Formatting: (draw color) = [(x, y), (x, y), ...]
         width = self.politicalImage.width
+        height = self.politicalImage.height
         pixlist: List[Tuple[int, int, int]] = list(
             self.politicalImage.getdata())
         for x in range(width):
-            for y in range(self.politicalImage.height):
+            for y in range(height):
                 index = x + y * width
                 color = pixlist[index]
                 if color in playerColors:
@@ -936,6 +934,7 @@ class statsChannel(AbstractChannel):
                             finally:
                                 break
         del(pixlist)
+        mapDraw = ImageDraw.Draw(self.politicalImage)
         await updateProgress("Drawing player borders...", 3, 8)
         for drawColor in drawColors:
             mapDraw.point(drawColors[drawColor], drawColor)
@@ -945,8 +944,8 @@ class statsChannel(AbstractChannel):
         # Copy map into bottom of final image
         await updateProgress("Finalizing map section...", 4, 8)
         imgFinal: Image.Image = Image.open("src/finalTemplate.png")
-        imgFinal.paste(mapFinal, (0, imgFinal.size[1]-mapFinal.size[1]))
-        del(mapFinal)
+        imgFinal.paste(self.politicalImage, (0, imgFinal.size[1]-self.politicalImage.size[1]))
+        del(self.politicalImage)
         # The top has 5632x1119
         # Getting fonts
         fontmini = ImageFont.truetype("src/GARA.TTF", 36)
