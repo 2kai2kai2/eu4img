@@ -44,7 +44,7 @@ def checkConn() -> psycopg2.extensions.connection:
     return conn
 
 
-def imageToFile(img: Image) -> discord.File:
+def imageToFile(img: Image.Image) -> discord.File:
     """
     Comverts PIL Images into discord File objects.
     """
@@ -124,6 +124,53 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscU
     role = getRoleFromStr(
         s, GuildManager.getGuildSave(s, conn=checkConn()).admin)
     return (role is not None and role <= u.top_role) or u.top_role.id == s.roles[-1].id or u._user.id == 249680375280959489
+
+
+class eu4Date:
+    def __init__(self, datestr: str):
+        yearstr, monthstr, daystr = datestr.strip().split(".")
+        self.year = int(yearstr)
+        self.month = int(monthstr)
+        self.day = int(daystr)
+
+    @property
+    def fancyStr(self):
+        monthnames = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+                      7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
+        return str(self.day) + " " + monthnames[self.month] + " " + str(self.year)
+
+    def __str__(self):
+        return str(self.year) + "." + str(self.month) + "." + str(self.day)
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, eu4Date):
+            return False
+        return self.year == other.year and self.month == other.month and self.day == other.day
+
+    def __ne__(self, other) -> bool:
+        if not isinstance(other, eu4Date):
+            return True
+        return self.year != other.year or self.month != other.month or self.day != other.day
+
+    def __lt__(self, other) -> bool:
+        if not isinstance(other, eu4Date):
+            raise TypeError("eu4Date can only be compared with eu4Date.")
+        return self.year < other.year or (self.year == other.year and (self.month < other.month or (self.month == other.month and self.day < other.day)))
+
+    def __le__(self, other) -> bool:
+        if not isinstance(other, eu4Date):
+            raise TypeError("eu4Date can only be compared with eu4Date.")
+        return self == other or self < other
+
+    def __gt__(self, other) -> bool:
+        if not isinstance(other, eu4Date):
+            raise TypeError("eu4Date can only be compared with eu4Date.")
+        return self.year > other.year or (self.year == other.year and (self.month > other.month or (self.month == other.month and self.day > other.day)))
+
+    def __ge__(self, other) -> bool:
+        if not isinstance(other, eu4Date):
+            raise TypeError("eu4Date can only be compared with eu4Date.")
+        return self == other or self > other
 
 
 class AbstractChannel(ABC):
@@ -398,6 +445,13 @@ class ReserveChannel(AbstractChannel):
     async def add(self, nation: EU4Reserve.reservePick) -> int:
         """
         Adds a reservation for a player.
+
+        Codes:
+        0 = Failed; Reserve not found
+        1 = Success; New Reservation
+        2 = Success; Replaced old reservation
+        3 = Failed; Nation taken by other
+        4 = Nothing happens; Nation taken by self
         """
         addInt = EU4Reserve.addPick(
             str(self.interactChannel.id), nation, conn=checkConn())
@@ -472,6 +526,9 @@ class Nation:
         self.natColor: Tuple[int, int, int] = None
 
     def fullDataStr(self) -> str:
+        """
+        Returns a brief multi-line human-readable text representation of the data contained in this Nation object.
+        """
         string = "Tag: " + self.tag + "\n"
         string += "Dev: " + str(self.development) + " Prestige: " + \
             str(self.prestige) + " Stability: " + str(self.stability) + "\n"
@@ -491,8 +548,8 @@ class war():
         self.defenders: List[str] = []
         self.attackerLosses: int = 0
         self.defenderLosses: int = 0
-        self.startDate: str = None
-        self.endDate: str = None
+        self.startDate: eu4Date = None
+        self.endDate: eu4Date = None
         self.result: int = 0  # 1 = WP; 2 = Attacker wins; 3 = Defender wins
 
     def isPlayerWar(self, playertags: List[str]):
@@ -541,7 +598,7 @@ class saveGame():
         self.playertags: dict = {}
         self.dlc: List[str] = []
         self.GP: List[str] = []
-        self.date: Optional[str] = None
+        self.date: Optional[eu4Date] = None
         self.mp: bool = True
         self.age: Optional[str] = None
         self.HRE: str = None
@@ -556,7 +613,7 @@ class statsChannel(AbstractChannel):
         self.interactChannel = None
         self.displayChannel = initChannel
         self.hasReadFile = False
-        self.politicalImage: Image = None
+        self.politicalImage: Image.Image = None
         self.playersImage = None
         self.game = saveGame()
         self.modMsg: discord.Message = None
@@ -574,7 +631,7 @@ class statsChannel(AbstractChannel):
 
     def modPromptStr(self) -> str:
         """
-        Makes and returns a string giving information for player list modification.
+        Makes and returns a string giving information and instructions for player list modification.
         """
         prompt = "**Current players list:**```"
         for x in self.game.playertags:
@@ -594,7 +651,7 @@ class statsChannel(AbstractChannel):
         brackets: List[str] = []
         currentReadWar: war = None
         currentReadWarParticTag: str = None
-        currentWarLastLeave: str = None
+        currentWarLastLeave: eu4Date = None
         lastPlayerInList: str = None
 
         # Reading save file...
@@ -625,7 +682,7 @@ class statsChannel(AbstractChannel):
             elif len(brackets) == 0:
                 # Get current gamedate
                 if line.startswith("date="):
-                    self.game.date = line.strip('date=\n')
+                    self.game.date = eu4Date(line.strip('date=\n '))
                 # Get save DLC (not sure if we use this...)
                 elif brackets == ["dlc_enabled={"]:
                     self.game.dlc.append(line.strip('\t"\n'))
@@ -755,12 +812,13 @@ class statsChannel(AbstractChannel):
                     if "add_attacker=\"" in line:
                         currentReadWar.attackers.append(line.split("\"")[1])
                         if currentReadWar.startDate is None:
-                            currentReadWar.startDate = brackets[2].strip(
-                                "\t={\n ")
+                            currentReadWar.startDate = eu4Date(
+                                brackets[2].strip("\t={\n "))
                     elif "add_defender=\"" in line:
                         currentReadWar.defenders.append(line.split("\"")[1])
                     elif "rem_attacker=\"" in line or "rem_defender=\"" in line:
-                        currentWarLastLeave = brackets[2].strip("\t={\n ")
+                        currentWarLastLeave = eu4Date(
+                            brackets[2].strip("\t={\n "))
                 elif len(brackets) >= 2 and brackets[1] == "\tparticipants={":
                     if len(brackets) == 2 and "\t\ttag=\"" in line:
                         currentReadWarParticTag = line.split("\"")[1]
@@ -782,7 +840,7 @@ class statsChannel(AbstractChannel):
                         currentReadWar = None
         # Finalize data
         # These signify that it's probably not a valid save file.
-        if self.game.GP == [] or self.game.date == None or self.game.age == None:
+        if self.game.GP == [] or self.game.date is None or self.game.age is None:
             raise Exception(
                 "This probably isn't a valid .eu4 uncompressed save file from " + self.user.mention)
         for x in self.game.allNations.copy().keys():
@@ -801,23 +859,29 @@ class statsChannel(AbstractChannel):
         self.game.playerWars.sort(key=lambda x: x.warScale(
             self.game.playertags), reverse=True)
 
-    async def generateImage(self) -> Image:
+    async def generateImage(self) -> Image.Image:
         """
         Returns a stats Image based off the self.game data.
         """
-        mapFinal: Image = self.politicalImage.copy()
-        # Make the army display text
+        mapFinal: Image.Image = self.politicalImage.copy()
 
-        def armyDisplay(army: int):
+        def armyDisplay(army: int) -> str:
+            """
+            Makes the army display text
+
+            The format is 12.3k when under 100k or 123k when equal to or above.
+            """
             armydisplay = str(round(army/1000, 1))
             if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
                 armydisplay = armydisplay.partition(".")[0]
             return armydisplay + "k"
-        # Player and player-owned country colors
 
         def invertColor(color: Tuple[int, int, int]) -> Tuple[int, int, int]:
+            """
+            Inverts a color for the player border.
+            """
             return (255 - color[0], 255 - color[1], 255 - color[2])
-        
+
         playerColors = {}  # Formatting: (map color) = (player contrast color)
         for natTag in self.game.allNations:
             try:
@@ -865,7 +929,7 @@ class statsChannel(AbstractChannel):
         del(playerColors)
         # Start Final Img Creation
         # Copy map into bottom of final image
-        imgFinal: Image = Image.open("src/finalTemplate.png")
+        imgFinal: Image.Image = Image.open("src/finalTemplate.png")
         imgFinal.paste(mapFinal, (0, imgFinal.size[1]-mapFinal.size[1]))
         del(mapFinal)
         # The top has 5632x1119
@@ -1021,8 +1085,8 @@ class statsChannel(AbstractChannel):
                                 nameStr += " " + word
                     imgDraw.text((round(x + 437.5 - imgDraw.textsize(nameStr, fontmini)
                                         [0]/2), y + 12), nameStr, (255, 255, 255), fontmini, align="center")
-                    dateStr = playerWar.startDate.split(
-                        ".")[0] + "-" + playerWar.endDate.split(".")[0]
+                    dateStr = str(playerWar.startDate.year) + \
+                        "-" + str(playerWar.endDate.year)
                     imgDraw.text((round(x + 437.5 - imgDraw.textsize(dateStr, fontmini)
                                         [0]/2), y + 115), dateStr, (255, 255, 255), fontmini, align="center")
                     # Draw result
@@ -1042,34 +1106,8 @@ class statsChannel(AbstractChannel):
             pass
         #================END  SECTION================#
         # Date
-        year, month, day = self.game.date.split(".")
-        gameDateStr = None
-        if month == "1":
-            gameDateStr = day + " January " + year
-        elif month == "2":
-            gameDateStr = day + " Feburary " + year
-        elif month == "3":
-            gameDateStr = day + " March " + year
-        elif month == "4":
-            gameDateStr = day + " April " + year
-        elif month == "5":
-            gameDateStr = day + " May " + year
-        elif month == "6":
-            gameDateStr = day + " June " + year
-        elif month == "7":
-            gameDateStr = day + " July " + year
-        elif month == "8":
-            gameDateStr = day + " August " + year
-        elif month == "9":
-            gameDateStr = day + " September " + year
-        elif month == "10":
-            gameDateStr = day + " October " + year
-        elif month == "11":
-            gameDateStr = day + " November " + year
-        elif month == "12":
-            gameDateStr = day + " December " + year
-        imgDraw.text((round(5177 - imgDraw.textsize(gameDateStr, font)
-                            [0] / 2), 60), gameDateStr, (255, 255, 255), font)
+        imgDraw.text((round(5177 - imgDraw.textsize(self.game.date.fancyStr,
+                                                    font)[0] / 2), 60), self.game.date.fancyStr, (255, 255, 255), font)
         return imgFinal
 
     async def responsive(self, message: discord.Message) -> bool:
@@ -1089,8 +1127,12 @@ class statsChannel(AbstractChannel):
                     await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**")
                     return
             else:  # str
-                saveURL = message.content.strip("\n\t ")
-                response = requests.get(saveURL)
+                saveURL: str = message.content.strip("\n\t ")
+                try:
+                    response = requests.get(saveURL)
+                except:
+                    await self.interactChannel.send("Something went wrong. This may not be a valid link.")
+                    return
                 if response.status_code == 200:  # 200 == requests.codes.ok
                     try:
                         saveFile = StringIO(response.content.decode("cp1252"))
@@ -1127,24 +1169,19 @@ class statsChannel(AbstractChannel):
                     self.politicalImage = None
                 else:
                     self.modMsg = await self.interactChannel.send(self.modPromptStr())
-
         # Third step - player list modification
         elif self.hasReadFile and (self.politicalImage is not None) and (not self.doneMod):
             # done
             if message.content.strip("\n\t ").lower() == "done":
                 self.doneMod == True
-                img = None
                 # Create the Image and convert to discord.File
-                # try:
                 await self.interactChannel.send("**Generating Image...**")
-                img = imageToFile(await self.generateImage())
-                # except:
-                #    await self.interactChannel.send("**Image generation failed!**\nPerhaps something was wrong with one of the files?\n**Try " + GuildManager.getGuildSave(self.displayChannel.guild, conn = conn).prefix + "stats again after checking that the files are valid and unchanged from their creation.**")
-                # else: # That was successful, now post!
+                img: discord.File = imageToFile(await self.generateImage())
                 try:
                     await self.interactChannel.send("**Image generation complete...**")
                     await self.displayChannel.send(file=img)
-                except discord.Forbidden:  # If we're not allowed to send on the server, just give it in dms. They can post it themselves; this will reduce the server load
+                # If we're not allowed to send on the server, just give it in dms. They can post it themselves.
+                except discord.Forbidden:
                     await self.interactChannel.send("**Unable to send the image to " + self.displayChannel.mention + " due to lack of permissions. Posting image here:**\nYou can right-click and copy link then post that.", file=imageToFile(img))
                 else:
                     await self.interactChannel.send("**Image posted to " + self.displayChannel.mention + "**")
@@ -1283,7 +1320,7 @@ class asiresChannel(AbstractChannel):
             await self.updateText()
         elif text.upper() == self.prefix() + "END" and checkResAdmin(message.guild, message.author):  # END
             await message.delete()
-            reserves = EU4Reserve.getReserve(
+            reserves: List[EU4Reserve.asiPick] = EU4Reserve.getReserve(
                 str(self.displayChannel.id), conn=checkConn()).players
             finalReserves: List[EU4Reserve.reservePick] = []
             # This stores the capitals of all possible tags, so that their factions can be determined.
@@ -1296,7 +1333,7 @@ class asiresChannel(AbstractChannel):
             # Get the actual capitals and add to tagCapitals.
             srcFile = open("src/save_1444.eu4", "r", encoding="cp1252")
             lines = srcFile.readlines()
-            brackets = []
+            brackets: List[str] = []
             linenum = 0
             for line in lines:
                 linenum += 1
@@ -1525,6 +1562,7 @@ interactions: List[AbstractChannel] = []
 @client.event
 async def on_ready():
     print("EU4 Reserve Bot!")
+    # Register guilds
     print("Registering connected Guilds not yet registered...")
     newGuildCount = 0
     async for guild in client.fetch_guilds():
@@ -1532,6 +1570,7 @@ async def on_ready():
             GuildManager.addGuild(guild, conn=checkConn())
             newGuildCount += 1
     print("Registered " + str(newGuildCount) + " new Guilds.")
+    # Load reserves
     print("Loading previous Reserves...")
     reserves = EU4Reserve.load(conn=checkConn())
     rescount = 0

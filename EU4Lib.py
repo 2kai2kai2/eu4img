@@ -5,7 +5,8 @@ from PIL import Image, ImageDraw
 
 
 def country(text: str) -> Optional[str]:
-    """Returns the tag of a nation from the name of the nation.
+    """
+    Returns the tag of a nation from the name of the nation.
 
     Some nations may have multiple valid names.
     If the nation is not recognized, returns None.
@@ -28,7 +29,8 @@ def country(text: str) -> Optional[str]:
 
 
 def tagToName(tag: str) -> Optional[str]:
-    """Returns the name of a nation based on its tag.
+    """
+    Returns the name of a nation based on its tag.
 
     If the tag is not recognized, returns None.
     """
@@ -47,7 +49,8 @@ def tagToName(tag: str) -> Optional[str]:
 
 
 def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
-    """Gets the location of a province on a screenshot map.
+    """
+    Gets the location of a province on a screenshot map.
 
     Returns a tuple of floats, (x, y).
     """
@@ -55,7 +58,8 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     srcFile = open("src/positions.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
-    """Format of the file:
+    """
+    Format of the file:
     1={
         position={
             3085.000 1723.000 3086.000 1730.000 3084.500 1729.000 3095.000 1724.500 3082.000 1730.000 3080.000 1736.000 0.000 0.000 
@@ -86,7 +90,8 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
 
 
 def flag(tag: str) -> Image.Image:
-    """Gets an Image of the flag of the specified nation.
+    """
+    Gets an Image of the flag of the specified nation.
 
     Returns Image of size (128, 128).
     """
@@ -109,7 +114,8 @@ def flag(tag: str) -> Image.Image:
 
 
 def provinceArea(provinceID: Union[str, int]) -> str:
-    """Returns the area (state) name of a specified province's id.
+    """
+    Returns the area (state) name of a specified province's id.
 
     Raises an error if the province is not found.
     """
@@ -132,7 +138,8 @@ def provinceArea(provinceID: Union[str, int]) -> str:
 
 
 def region(areaName: str) -> str:
-    """Returns the region name of a specified area.
+    """
+    Returns the region name of a specified area.
 
     The argument may be the string returned by the provinceArea() method.
     Raises an error if the area is not found.
@@ -156,7 +163,8 @@ def region(areaName: str) -> str:
 
 
 def superregion(regionName: str) -> str:
-    """Returns the superregion name of a specified region.
+    """
+    Returns the superregion name of a specified region.
 
     The argument may be the string returned by the region() method.
     Raises an error if the region is not found.
@@ -180,7 +188,8 @@ def superregion(regionName: str) -> str:
 
 
 def continent(provinceID: Union[str, int]) -> str:
-    """Returns the continent name from a specified province's id.
+    """
+    Returns the continent name from a specified province's id.
 
     Raises an error if the province is not found.
     """
@@ -203,7 +212,9 @@ def continent(provinceID: Union[str, int]) -> str:
 
 
 def isIn(provinceID: Union[str, int], group: str) -> bool:
-    """Checks if the province is within the given area, region, superregion, or continent."""
+    """
+    Checks if the province is within the given area, region, superregion, or continent.
+    """
     # Because area, region, and superregion has the suffix with _area, etc. each can't be confused with the other.
     provarea = provinceArea(provinceID)
     if provarea == group:
@@ -221,7 +232,8 @@ def isIn(provinceID: Union[str, int], group: str) -> bool:
 
 
 def colonialRegion(provinceID: Union[str, int]) -> str:
-    """Returns the colonial region from a specified province's id.
+    """
+    Returns the colonial region from a specified province's id.
 
     Raises an error if the province is not found in a colonial region.
     """
@@ -249,7 +261,9 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
 
 
 def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
-    """Generates a colonial nation flag for the given motherland and colonial region."""
+    """
+    Generates a colonial nation flag for the given motherland and colonial region.
+    """
     # First find the correct colonial region color
     color: Tuple[int, int, int] = None
     # Read file

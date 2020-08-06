@@ -12,7 +12,8 @@ from PIL import Image, ImageDraw, ImageFont
 import EU4Lib
 
 
-""" Data Structure - Python side
+"""
+Data Structure - Python side
 AbstractReserve ("Reserve")
     players: List[AbstractPick ("Pick")]
         player: str; user mention
@@ -20,7 +21,8 @@ AbstractReserve ("Reserve")
     textmsg: int; the msg ID in the channel
 """
 
-""" Data Structure - JSON Formatting
+"""
+Data Structure - JSON Formatting
 In Python, this becomes a dict.
 
 {
@@ -68,7 +70,8 @@ In Python, this becomes a dict.
 }
 """
 
-""" Data Structure - SQL Database
+"""
+Data Structure - SQL Database
 Reserves
 +------+------+-------+----------+
 | name | kind | ban   | specdata |
@@ -144,7 +147,9 @@ class AbstractPick(ABC):
 
 
 class reservePick(AbstractPick):
-    """A Nation for the nation reserve channel interaction."""
+    """
+    A Nation for the nation reserve channel interaction.
+    """
 
     def __init__(self, player: str, tag: str, time: int = None):
         self.player: str = player
@@ -157,7 +162,9 @@ class reservePick(AbstractPick):
 
 
 class asiPick(AbstractPick):
-    """A user's reservation for an ASI game."""
+    """
+    A user's reservation for an ASI game.
+    """
 
     def __init__(self, player: str, priority: bool = False, time: int = None):
         self.player: str = player
@@ -178,7 +185,8 @@ class AbstractReserve(ABC):
 
     @abstractmethod
     def add(self, pick: AbstractPick) -> int:
-        """Codes:
+        """
+        Codes:
         1 = Success; New Reservation
         2 = Success; Replaced old reservation
         3 = Failed; Nation taken by other (ONLY for priority)
@@ -200,7 +208,9 @@ class AbstractReserve(ABC):
 
 
 class Reserve(AbstractReserve):
-    """Represents a reservation list for a specific game. The name should be the id of the channel it represents."""
+    """
+    Represents a reservation list for a specific game. The name should be the id of the channel it represents.
+    """
 
     def __init__(self, name: str):
         self.players: List[reservePick] = []  # list of reservePick objects
@@ -210,7 +220,8 @@ class Reserve(AbstractReserve):
         self.imgmsg: Optional[int] = None
 
     def add(self, nation: reservePick) -> int:
-        """Codes:
+        """
+        Codes:
         1 = Success; New Reservation
         2 = Success; Replaced old reservation
         3 = Failed; Nation taken by other
@@ -261,7 +272,8 @@ class ASIReserve(AbstractReserve):
         self.bans = []
 
     def add(self, pick: asiPick) -> int:
-        """Codes:
+        """
+        Codes:
         1 = Success; New Reservation
         2 = Success; Replaced old reservation
         3 = Failed; Nation taken by other (ONLY for priority)
@@ -298,7 +310,8 @@ class ASIReserve(AbstractReserve):
 
 
 def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[AbstractReserve]:
-    """Loads the full list of reserves.
+    """
+    Loads the full list of reserves.
 
     If conn is specified, it uses that database connection. Otherwise, it loads from the json.
 
@@ -365,7 +378,9 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
 
 
 def save(reserves: List[AbstractReserve]):
-    """Overwrites the json save file with the given reserve list."""
+    """
+    Overwrites the json save file with the given reserve list.
+    """
     jsonSave = {}
     for res in reserves:
         jsonSave[res.name] = res.toDict()
@@ -375,7 +390,8 @@ def save(reserves: List[AbstractReserve]):
 
 
 def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None) -> AbstractReserve:
-    """Gets an AbstractReserve saved based on the name given.
+    """
+    Gets an AbstractReserve saved based on the name given.
 
     If conn is given, the psycopg2 connection will be used to access the database. Otherwise, the json file method will be used.
 
@@ -453,11 +469,13 @@ def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None)
 
 
 def updateMessageIDs(reserve: Union[str, AbstractReserve], textmsg: int = None, imgmsg: int = None, conn: Optional[psycopg2.extensions.connection] = None):
-    """Updates the saved message IDs for the given reserve.
+    """
+    Updates the saved message IDs for the given reserve.
 
     For normal Reserve, this is both textmsg and imgmsg. Either or both may be given as optional arguments, and only those given will be changed.
 
-    In ASIReserve, the same applies but ASIReserve does not have imgmsg, so entering this for an ASIReserve will be ignored."""
+    In ASIReserve, the same applies but ASIReserve does not have imgmsg, so entering this for an ASIReserve will be ignored.
+    """
     # If they haven't given either to change, do nothing
     if textmsg is None and imgmsg is None:
         return
@@ -510,7 +528,9 @@ def updateMessageIDs(reserve: Union[str, AbstractReserve], textmsg: int = None, 
 
 
 def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
-    """Deletes a Reserve from on save"""
+    """
+    Deletes a Reserve from on save.
+    """
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -546,9 +566,11 @@ def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.
 
 
 def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional[psycopg2.extensions.connection] = None) -> bool:
-    """Deletes a player's pick from a specified reserve on save.
+    """
+    Deletes a player's pick from a specified reserve on save.
 
-    Returns a bool of whether or not a change occured. (False means that there was no pick to begin with)"""
+    Returns a bool of whether or not a change occured. (False means that there was no pick to begin with)
+    """
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -598,7 +620,9 @@ def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional
 
 
 def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.connection] = None):
-    """Adds a new reserve on save."""
+    """
+    Adds a new reserve on save.
+    """
     # File
     if conn is None:
         resList = load()
@@ -628,7 +652,8 @@ def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.conn
 
 
 def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Optional[psycopg2.extensions.connection] = None) -> int:
-    """Adds a pick to a specified reserve and returns a code based on the result.
+    """
+    Adds a pick to a specified reserve and returns a code based on the result.
 
     Codes:
     0 = Failed; Reserve not found
@@ -747,6 +772,9 @@ def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Opti
 
 
 def addBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional[psycopg2.extensions.connection] = None):
+    """
+    Adds a list of tags to the ban list for a specified reserve channel.
+    """
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -783,6 +811,9 @@ def addBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional
 
 
 def deleteBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional[psycopg2.extensions.connection] = None):
+    """
+    Removes a list of tags from the ban list for a specified reserve channel.
+    """
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -819,6 +850,9 @@ def deleteBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optio
 
 
 def isBanned(reserve: Union[str, AbstractReserve], tag: str, conn: Optional[psycopg2.extensions.connection] = None) -> bool:
+    """
+    Returns whether a tag is banned on a specified reserve channel.
+    """
     name = ""
     if isinstance(reserve, str):
         name = reserve
@@ -845,15 +879,16 @@ def isBanned(reserve: Union[str, AbstractReserve], tag: str, conn: Optional[psyc
             return tag in banlist
 
 
-def createMap(reserve: Reserve) -> Image:
-    """Creates a map based on a Reserve object with x's on all the capitals of reserved reservePicks.
+def createMap(reserve: Reserve) -> Image.Image:
+    """
+    Creates a map based on a Reserve object with x's on all the capitals of reserved reservePicks.
     Returns an Image object.
     """
     countries: List[reservePick] = reserve.players
-    mapFinal = Image.open("src/map_1444.png")
+    mapFinal: Image.Image = Image.open("src/map_1444.png")
     srcFile = open("src/save_1444.eu4", "r", encoding="cp1252")
     lines = srcFile.readlines()
-    brackets = []
+    brackets: List[str] = []
     linenum = 0
     for line in lines:
         linenum += 1
@@ -885,7 +920,7 @@ def createMap(reserve: Reserve) -> Image:
                     if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
                         x.capitalID = int(line.strip("\tcapitl=\n"))
     srcFile.close()
-    imgX = Image.open("src/xIcon.png")
+    imgX: Image.Image = Image.open("src/xIcon.png")
     for x in countries:
         loc = EU4Lib.province(x.capitalID)
         mapFinal.paste(

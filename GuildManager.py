@@ -7,7 +7,8 @@ import psycopg2
 from dotenv import load_dotenv
 
 
-""" Data Structure - Json
+"""
+Data Structure - Json
 {
 	"<GuildID>": {
 		"prefix": "<$>",
@@ -22,7 +23,8 @@ from dotenv import load_dotenv
 }
 """
 
-""" Data Structure - SQL Database
+"""
+Data Structure - SQL Database
 +------+--------+-------+---------------+------------+
 | name | prefix | admin | announcements | defaultBan |
 | str  | str    | str   | str           | str[]      |
@@ -43,6 +45,9 @@ class GuildSave:
 
 
 def fileLoadGuilds() -> List[GuildSave]:
+    """
+    Loads all guild as GuildSave objects from file. Does not work with SQL connection.
+    """
     guilds: List[GuildSave] = []
     try:
         with open("guildsave.json", "r") as x:
@@ -63,6 +68,9 @@ def fileLoadGuilds() -> List[GuildSave]:
 
 
 def fileSaveGuilds(guilds: List[GuildSave]):
+    """
+    Saves full GuildSave list to file. Does not work with SQL connection.
+    """
     jsonSave = {}
     for gld in guilds:
         jsonSave[gld.name] = gld.toDict()
@@ -72,6 +80,9 @@ def fileSaveGuilds(guilds: List[GuildSave]):
 
 
 def addGuild(guild: Union[discord.Guild, int], prefix: Optional[str] = "$", admin: Optional[str] = None, conn: Optional[psycopg2.extensions.connection] = None):
+    """
+    Add a new guild to the list.
+    """
     if isinstance(guild, discord.Guild):
         guildName: str = str(guild.id)
     elif isinstance(guild, int):
@@ -103,6 +114,9 @@ def addGuild(guild: Union[discord.Guild, int], prefix: Optional[str] = "$", admi
 
 
 def setPrefix(guild: Union[discord.Guild, int], prefix: str, conn: Optional[psycopg2.extensions.connection] = None):
+    """
+    Sets the prefix for a specified guild.
+    """
     if isinstance(guild, discord.Guild):
         guildName: str = str(guild.id)
     elif isinstance(guild, int):
@@ -137,6 +151,9 @@ def setPrefix(guild: Union[discord.Guild, int], prefix: str, conn: Optional[psyc
 
 
 def setAdmin(guild: Union[discord.Guild, int], admin: str, conn: Optional[psycopg2.extensions.connection] = None):
+    """
+    Sets the minimum admin role for a specified guild.
+    """
     if isinstance(guild, discord.Guild):
         guildName: str = str(guild.id)
     elif isinstance(guild, int):
@@ -205,6 +222,9 @@ def setAnnouncements(guild: Union[discord.Guild, int], announcements: str, conn:
 
 
 def addBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg2.extensions.connection] = None):
+    """
+    Adds a tag to the default nation ban list for a specified guild.
+    """
     if isinstance(guild, discord.Guild):
         guildName: str = str(guild.id)
     elif isinstance(guild, int):
@@ -241,6 +261,9 @@ def addBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg2.e
 
 
 def removeBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg2.extensions.connection] = None):
+    """
+    Removes a tag from the default ban list for a specified guild.
+    """
     if isinstance(guild, discord.Guild):
         guildName: str = str(guild.id)
     elif isinstance(guild, int):
@@ -280,6 +303,9 @@ def removeBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg
 
 
 def getGuildSave(guild: Union[discord.Guild, int], conn: Optional[psycopg2.extensions.connection] = None) -> GuildSave:
+    """
+    Gets the GuildSave data for a specified guild.
+    """
     if isinstance(guild, discord.Guild):
         guildName: str = str(guild.id)
     elif isinstance(guild, int):
@@ -311,6 +337,9 @@ def getGuildSave(guild: Union[discord.Guild, int], conn: Optional[psycopg2.exten
 
 
 def removeGuild(guild: Union[discord.Guild, int], conn: Optional[psycopg2.extensions.connection] = None) -> bool:
+    """
+    Removes a specified guild from the list and storage data.
+    """
     if isinstance(guild, discord.Guild):
         guildName: str = str(guild.id)
     elif isinstance(guild, int):
