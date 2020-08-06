@@ -805,7 +805,6 @@ class statsChannel(AbstractChannel):
         """
         Returns a stats Image based off the self.game data.
         """
-        imgFinal: Image = Image.open("src/finalTemplate.png")
         mapFinal: Image = self.politicalImage.copy()
         # Make the army display text
 
@@ -818,6 +817,7 @@ class statsChannel(AbstractChannel):
 
         def invertColor(color: Tuple[int, int, int]) -> Tuple[int, int, int]:
             return (255 - color[0], 255 - color[1], 255 - color[2])
+        
         playerColors = {}  # Formatting: (map color) = (player contrast color)
         for natTag in self.game.allNations:
             try:
@@ -856,13 +856,16 @@ class statsChannel(AbstractChannel):
                                 drawColors[playerColor].append((x, y))
                             except KeyError:
                                 drawColors[playerColor] = [(x, y)]
-                            break
+                            finally:
+                                break
+        del(pixlist)
         for drawColor in drawColors:
             mapDraw.point(drawColors[drawColor], drawColor)
         del(drawColors)
         del(playerColors)
         # Start Final Img Creation
         # Copy map into bottom of final image
+        imgFinal: Image = Image.open("src/finalTemplate.png")
         imgFinal.paste(mapFinal, (0, imgFinal.size[1]-mapFinal.size[1]))
         del(mapFinal)
         # The top has 5632x1119
