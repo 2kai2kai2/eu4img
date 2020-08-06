@@ -915,25 +915,40 @@ class statsChannel(AbstractChannel):
         drawColors = {}  # Formatting: (draw color) = [(x, y), (x, y), ...]
         width = self.politicalImage.width
         height = self.politicalImage.height
-        pixlist: List[Tuple[int, int, int]] = list(
-            self.politicalImage.getdata())
-        for x in range(width):
-            for y in range(height):
-                index = x + y * width
-                color = pixlist[index]
-                if color in playerColors:
-                    # This is the inverse color of the player or player overlord
-                    playerColor = playerColors[color]
-                    for neighbor in (index - 1 - width, index - width, index + 1 - width, index - 1, index + 1, index - 1 + width, index + width, index + 1 + width):
-                        neighborColor = pixlist[neighbor]
-                        if neighborColor not in playerColors or playerColors[neighborColor] != playerColor:
+        # So basically, I'm hitting my memory cap of 512MB which means that we can't have the full pixel list at one time.
+        # Instead, I'm going to have it cut up the image into pieces and go through each by itself.
+        pieces = 5
+        sliceheight = int(height / pieces + pieces * 2)
+        for slice in range(pieces):
+            await updateProgress("Calculating player borders [sector " + str(slice) + "/" + str(pieces) + "]...", 2, 8)
+            ystart = int(max(0, height / pieces * slice - pieces))
+            pixlist: List[Tuple[int, int, int]] = list(
+                self.politicalImage.crop([0, ystart, width, min(height, ystart+sliceheight)]).getdata())
+            for x in range(width):
+                for sy in range(int(len(pixlist)/width)):
+                    if sy == 0:
+                        # For some reason it draws borders on the first row of each slice. I think it might be something with the crop method but I have no clue why.
+                        continue
+                    y = ystart + sy
+                    index = x + sy * width
+                    color = pixlist[index]
+                    if color in playerColors:
+                        # This is the inverse color of the player or player overlord
+                        playerColor = playerColors[color]
+                        for neighbor in (index - 1 - width, index - width, index + 1 - width, index - 1, index + 1, index - 1 + width, index + width, index + 1 + width):
                             try:
-                                drawColors[playerColor].append((x, y))
-                            except KeyError:
-                                drawColors[playerColor] = [(x, y)]
-                            finally:
-                                break
-        del(pixlist)
+                                neighborColor = pixlist[neighbor]
+                            except IndexError:
+                                continue
+                            else:
+                                if neighborColor not in playerColors or playerColors[neighborColor] != playerColor:
+                                    try:
+                                        drawColors[playerColor].append((x, y))
+                                    except KeyError:
+                                        drawColors[playerColor] = [(x, y)]
+                                    finally:
+                                        break
+            del(pixlist)
         mapDraw = ImageDraw.Draw(self.politicalImage)
         await updateProgress("Drawing player borders...", 3, 8)
         for drawColor in drawColors:
