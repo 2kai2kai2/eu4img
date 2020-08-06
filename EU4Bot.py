@@ -610,7 +610,7 @@ class saveGame():
 class statsChannel(AbstractChannel):
     def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
         self.user = user
-        self.interactChannel = None
+        self.interactChannel: DiscTextChannels = None
         self.displayChannel = initChannel
         self.hasReadFile = False
         self.politicalImage: Image.Image = None
@@ -859,10 +859,21 @@ class statsChannel(AbstractChannel):
         self.game.playerWars.sort(key=lambda x: x.warScale(
             self.game.playertags), reverse=True)
 
-    async def generateImage(self) -> Image.Image:
+    async def generateImage(self, sendUpdates = True) -> Image.Image:
         """
         Returns a stats Image based off the self.game data.
+
+        If sendUpdates is True, a message will be sent and edited in the interactChannel for this interaction.
         """
+        progressMessage: discord.Message = None
+        if sendUpdates and self.interactChannel is not None:
+            progressMessage = await self.interactChannel.send("**Generating Image...**")
+
+        async def updateProgress(text: str, num: int, maxnum: int):
+            if progressMessage is not None:
+                newstr = "**Generating Image...**\n" + text + " (" + str(num) + "/" + str(maxnum) + ")"
+                await progressMessage.edit(content=newstr)
+        
         mapFinal: Image.Image = self.politicalImage.copy()
 
         def armyDisplay(army: int) -> str:
@@ -882,6 +893,7 @@ class statsChannel(AbstractChannel):
             """
             return (255 - color[0], 255 - color[1], 255 - color[2])
 
+        await updateProgress("Finding players to draw borders...", 1, 8)
         playerColors = {}  # Formatting: (map color) = (player contrast color)
         for natTag in self.game.allNations:
             try:
@@ -901,6 +913,7 @@ class statsChannel(AbstractChannel):
             except:
                 pass
         # Modify the image
+        await updateProgress("Calculating player borders...", 2, 8)
         mapDraw = ImageDraw.Draw(mapFinal)
         drawColors = {}  # Formatting: (draw color) = [(x, y), (x, y), ...]
         width = self.politicalImage.width
@@ -923,12 +936,14 @@ class statsChannel(AbstractChannel):
                             finally:
                                 break
         del(pixlist)
+        await updateProgress("Drawing player borders...", 3, 8)
         for drawColor in drawColors:
             mapDraw.point(drawColors[drawColor], drawColor)
         del(drawColors)
         del(playerColors)
         # Start Final Img Creation
         # Copy map into bottom of final image
+        await updateProgress("Finalizing map section...", 4, 8)
         imgFinal: Image.Image = Image.open("src/finalTemplate.png")
         imgFinal.paste(mapFinal, (0, imgFinal.size[1]-mapFinal.size[1]))
         del(mapFinal)
@@ -945,6 +960,7 @@ class statsChannel(AbstractChannel):
 
             # Get the list of player Nations
             # TODO: make this more integrated with the new savefile data system rather than doing this conversion
+            await updateProgress("Drawing player list...", 5, 8)
             playerNationList: List[Nation] = []
             for x in self.game.playertags:
                 playerNationList.append(self.game.allNations[x])
@@ -1009,6 +1025,7 @@ class statsChannel(AbstractChannel):
                     # max_sailors
                 else:
                     pass
+            await updateProgress("Drawing player wars...", 6, 8)
             for playerWar in self.game.playerWars:
                 warnum = self.game.playerWars.index(playerWar)
                 if warnum < 4:
@@ -1106,8 +1123,10 @@ class statsChannel(AbstractChannel):
             pass
         #================END  SECTION================#
         # Date
+        await updateProgress("Drawing date...", 7, 8)
         imgDraw.text((round(5177 - imgDraw.textsize(self.game.date.fancyStr,
                                                     font)[0] / 2), 60), self.game.date.fancyStr, (255, 255, 255), font)
+        await updateProgress("**Image generation complete.** Uploading...", 8, 8)
         return imgFinal
 
     async def responsive(self, message: discord.Message) -> bool:
@@ -1175,10 +1194,8 @@ class statsChannel(AbstractChannel):
             if message.content.strip("\n\t ").lower() == "done":
                 self.doneMod == True
                 # Create the Image and convert to discord.File
-                await self.interactChannel.send("**Generating Image...**")
                 img: discord.File = imageToFile(await self.generateImage())
                 try:
-                    await self.interactChannel.send("**Image generation complete...**")
                     await self.displayChannel.send(file=img)
                 # If we're not allowed to send on the server, just give it in dms. They can post it themselves.
                 except discord.Forbidden:
