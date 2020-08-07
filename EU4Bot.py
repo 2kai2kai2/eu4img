@@ -293,7 +293,7 @@ class ReserveChannel(AbstractChannel):
             del(self)
         # RESERVE [nation]
         elif text.upper().startswith(self.prefix() + "RESERVE "):
-            res = text.split(" ", 1)[1].strip("\n\t ")
+            res = text.split(maxsplit=1)[1].strip("\n\t ")
             tag = EU4Lib.country(res)
             if tag is not None:
                 if EU4Reserve.isBanned(str(self.displayChannel.id), tag, conn=checkConn()):
@@ -659,10 +659,10 @@ class statsChannel(AbstractChannel):
         for line in lines:
             linenum += 1
             if "{" in line:
-                if line.count("{") == line.count("}"):
+                if line.count("}") == 0 and line.count("{") == 1:
+                    brackets.append(line.strip("\t ={\n"))
+                elif line.count("{") == line.count("}"):
                     continue
-                elif line.count("}") == 0 and line.count("{") == 1:
-                    brackets.append(line.rstrip("\n "))
                 elif line.count("}") == 0 and line.count("{") > 1:
                     for x in range(line.count("{")):
                         brackets.append("{")  # TODO: fix this so it has more
@@ -673,171 +673,174 @@ class statsChannel(AbstractChannel):
                     brackets.pop()
                 except IndexError:  # No brackets to close
                     pass
-            # Get rid of long, useless sections
-            # elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
-            #    continue
-            # Get player names and country tags
-
-            # This is where we do stuff
-            elif len(brackets) == 0:
-                # Get current gamedate
-                if line.startswith("date="):
-                    self.game.date = eu4Date(line.strip('date=\n '))
-                # Get save DLC (not sure if we use this...)
-                elif brackets == ["dlc_enabled={"]:
-                    self.game.dlc.append(line.strip('\t"\n'))
-                # Check if game is mp
-                elif "multi_player=" in line:
-                    if "yes" in line:
-                        self.game.mp = True
-                    else:
-                        self.game.mp = False
-                # Get current age
-                elif "current_age=" in line and brackets == []:
-                    self.game.age = line[12:].strip('"\n')
-            elif brackets == ["players_countries={"]:
-                # In the file, the format is like this:
-                # players_countries={
-                #   "playername"
-                #   "SWE"
-                #
-                # Where "   " is a tab \t
-                # Prepare to assign the player by recording it for the next line
-                if lastPlayerInList is None:
-                    lastPlayerInList = line.strip('\t"\n')
-                # Add to playertags based on what was saved in the previous line as the player name
+            else:
+                if "=" in line and not ("\"" in line and line.index("\"") < line.index("=")):
+                    linekey, lineval = line.split("=", maxsplit=1)
+                    lineval = lineval.strip()
+                    linekey = linekey.strip()
                 else:
-                    self.game.playertags[line.strip(
-                        '\t"\n ')] = lastPlayerInList
-                    lastPlayerInList = None
-            # Get top 8
-            elif "country=" in line and brackets == ["great_powers={", "\toriginal={"]:
-                if len(self.game.GP) < 8:  # Make sure to not include leaving GPs
-                    self.game.GP.append(line.strip('\tcountry="\n'))
-            # Get HRE emperor tag
-            elif "\temperor=" in line and brackets == ["empire={"]:
-                self.game.HRE = line.strip('\temperor="\n')
-            # Get Celestial emperor tag
-            elif "emperor=" in line and brackets == ["celestial_empire={"]:
-                self.game.china = line.strip('\temperor="\n')
-            # Get target of crusade ('---' if none)
-            elif "crusade_target=" in line and brackets == ["religion_instance_data={", "\tcatholic={", "\t\tpapacy={"]:
-                self.game.crusade = line.strip('\tcrusade_target="\n')
-            # Get papal controller
-            elif "previous_controller=" in line and brackets == ["religion_instance_data={", "\tcatholic={", "\t\tpapacy={"]:
-                continue
-            # Country-specific data (for players)
-            elif len(brackets) > 1 and brackets[0] == "countries={":
-                if len(brackets) == 2:
-                    if "government_rank=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")] = Nation(
-                            brackets[1].strip("\n\t ={"))
-                    elif "raw_development=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")].development = round(
-                            float(line.strip("\traw_devlopmnt=\n")))
-                    elif "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")].capitalID = int(
-                            line.strip("\tcapitl=\n"))
-                    elif "score_place=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")].scorePlace = round(
-                            float(line.strip("\tscore_place=\n")))
-                    elif "prestige=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")].prestige = round(
-                            float(line.strip("\tprestige=\n")))
-                    elif "stability=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")].stability = round(
-                            float(line.strip("\tstability=\n")))
-                    elif "treasury=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")].treasury = round(
-                            float(line.strip("\ttreasury=\n")))
-                    # elif "\tmanpower=" in line:
-                        #x.manpower = round(float(line.strip("\tmanpower=\n")))
-                    # elif "max_manpower=" in line:
-                        #x.maxManpower = round(float(line.strip("\tmax_manpower=\n")))
-                    elif "overlord=\"" in line:
-                        self.game.allNations[brackets[1].strip(
-                            "\n\t ={")].overlord = line.split("\"")[1]
-                elif len(brackets) == 3:
-                    # Get each loan and add its amount to debt
-                    if brackets[2] == "\t\tloan={" and "amount=" in line:
-                        self.game.allNations[brackets[1].strip(
-                            "\n\t ={")].debt += round(float(line.strip("\tamount=\n")))
-                    # Get Income from the previous month
-                    elif brackets[2] == "\t\tledger={" and "\tlastmonthincome=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")].totalIncome = round(
-                            float(line.strip("\tlastmonthincome=\n")), 2)
-                    # Get Expense from the previous month
-                    elif brackets[2] == "\t\tledger={" and "\tlastmonthexpense=" in line:
-                        self.game.allNations[brackets[1].strip("\n\t ={")].totalExpense = round(
-                            float(line.strip("\tlastmonthexpense=\n")), 2)
-                    elif brackets[2] == "\t\tsubjects={":
-                        for subject in line.strip().split():
-                            self.game.allNations[brackets[1].strip(
-                                "\n\t ={")].subjects.append(subject)
-                    elif brackets[2] == "\t\tallies={":
-                        for ally in line.strip().split():
-                            self.game.allNations[brackets[1].strip(
-                                "\n\t ={")].allies.append(ally)
-                elif len(brackets) == 4:
-                    # Add 1 to army size for each regiment
-                    if brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "morale=" in line:
-                        self.game.allNations[brackets[1].strip(
-                            "\n\t ={")].army += 1000
-                    # Subtract damage done to units from army size
-                    # This needs to be separate from ^ because for full regiments there is no "strength=" tag
-                    elif brackets[2] == "\t\tarmy={" and "regiment={" in brackets[3] and "strength=" in line:
-                        try:
-                            self.game.allNations[brackets[1].strip("\n\t ={")].army = round(
-                                self.game.allNations[brackets[1].strip("\n\t ={")].army - 1000 + 1000 * float(line.strip("\tstrength=\n")))
-                        except ValueError:
-                            continue
-                    # Add 1 for each ship
-                    elif brackets[2] == "\t\tnavy={" and brackets[3] == "\t\t\tship={" and "\thome=" in line:
-                        self.game.allNations[brackets[1].strip(
-                            "\n\t ={")].navy += 1
-                    elif brackets[2] == "\t\tcolors={" and brackets[3] == "\t\t\tmap_color={":
-                        self.game.allNations[brackets[1].strip("\n\t ={")].mapColor = tuple(
-                            map(lambda x: int(x), line.strip().split()))
-                    elif brackets[2] == "\t\tcolors={" and brackets[3] == "\t\t\tcountry_color={":
-                        self.game.allNations[brackets[1].strip("\n\t ={")].natColor = tuple(
-                            map(lambda x: int(x), line.strip().split()))
-                # End new save stuff
-            elif len(brackets) > 0 and brackets[0] == "previous_war={":
-                if len(brackets) == 1 and "\tname=\"" in line:
-                    if currentReadWar is not None and currentReadWar.isPlayerWar(self.game.playertags):
-                        currentReadWar.endDate = currentWarLastLeave
-                        self.game.playerWars.append(currentReadWar)
-                    currentReadWar = war(line.split("=")[1].strip("\n\t \""))
-                elif len(brackets) == 3 and brackets[1] == "\thistory={":
-                    if "add_attacker=\"" in line:
-                        currentReadWar.attackers.append(line.split("\"")[1])
-                        if currentReadWar.startDate is None:
-                            currentReadWar.startDate = eu4Date(
-                                brackets[2].strip("\t={\n "))
-                    elif "add_defender=\"" in line:
-                        currentReadWar.defenders.append(line.split("\"")[1])
-                    elif "rem_attacker=\"" in line or "rem_defender=\"" in line:
-                        currentWarLastLeave = eu4Date(
-                            brackets[2].strip("\t={\n "))
-                elif len(brackets) >= 2 and brackets[1] == "\tparticipants={":
-                    if len(brackets) == 2 and "\t\ttag=\"" in line:
-                        currentReadWarParticTag = line.split("\"")[1]
-                    elif len(brackets) == 4 and brackets[2] == "\t\tlosses={" and brackets[3] == "\t\t\tmembers={":
-                        if currentReadWarParticTag in currentReadWar.attackers:
-                            for x in line.strip("\n\t ").split():
-                                currentReadWar.attackerLosses += int(x)
-                        elif currentReadWarParticTag in currentReadWar.defenders:
-                            for x in line.strip("\n\t ").split():
-                                currentReadWar.defenderLosses += int(x)
+                    # This probably means it's the interior of a list or something like that.
+                    linekey = ""
+                    lineval = line.strip()
+                # This is where we do stuff
+                if len(brackets) == 0:
+                    # Get current gamedate
+                    if linekey == "date":
+                        self.game.date = eu4Date(lineval)
+                    # Get save DLC (not sure if we use this...)
+                    elif brackets == ["dlc_enabled"]:
+                        self.game.dlc.append(lineval.strip("\""))
+                    # Check if game is mp
+                    elif "multi_player" == linekey:
+                        if "yes" == lineval:
+                            self.game.mp = True
                         else:
-                            print(
-                                "Something went wrong with the attacker/defender list.")
-                elif len(brackets) == 1 and "\toutcome=" in line:
-                    currentReadWar.result = int(line.strip("\toutcme=\n "))
-                    if currentReadWar.isPlayerWar(self.game.playertags):
-                        currentReadWar.endDate = currentWarLastLeave
-                        self.game.playerWars.append(currentReadWar)
-                        currentReadWar = None
+                            self.game.mp = False
+                    # Get current age
+                    elif "current_age" in line and len(brackets) == 0:
+                        self.game.age = lineval.strip("\"")
+                # Get player names and country tags
+                elif brackets == ["players_countries"]:
+                    # In the file, the format is like this:
+                    # players_countries={
+                    #   "playername"
+                    #   "SWE"
+                    #
+                    # Where "   " is a tab \t
+                    # Prepare to assign the player by recording it for the next line
+                    if lastPlayerInList is None:
+                        lastPlayerInList = lineval.strip("\"")
+                    # Add to playertags based on what was saved in the previous line as the player name
+                    else:
+                        self.game.playertags[lineval.strip(
+                            "\"")] = lastPlayerInList
+                        lastPlayerInList = None
+                # Get top 8
+                elif "country" == linekey and brackets == ["great_powers", "original"]:
+                    if len(self.game.GP) < 8:  # Make sure to not include leaving GPs
+                        self.game.GP.append(lineval.strip("\""))
+                # Get HRE emperor tag
+                elif "emperor" == linekey and brackets == ["empire"]:
+                    self.game.HRE = lineval.strip("\"")
+                # Get Celestial emperor tag
+                elif "emperor" == linekey and brackets == ["celestial_empire"]:
+                    self.game.china = lineval.strip("\"")
+                # Get target of crusade ('---' if none)
+                elif "crusade_target" == linekey and brackets == ["religion_instance_data", "catholic", "papacy"]:
+                    self.game.crusade = lineval.strip("\"")
+                # Get papal controller
+                elif "previous_controller" == linekey and brackets == ["religion_instance_data", "catholic", "papacy"]:
+                    continue
+                # Country-specific data (for players)
+                elif len(brackets) > 1 and brackets[0] == "countries":
+                    try:
+                        bracketNation = self.game.allNations[brackets[1]]
+                    except:
+                        # This should be the government_rank= line where we create the Nation object.
+                        pass
+                    if len(brackets) == 2:
+                        if "government_rank" == linekey:
+                            # This one is assignment so should NOT be referring to bracketNation
+                            self.game.allNations[brackets[1]] = Nation(
+                                brackets[1])
+                        elif "raw_development" == linekey:
+                            bracketNation.development = round(
+                                float(lineval))
+                        elif "capital" == linekey:
+                            bracketNation.capitalID = int(lineval)
+                        elif "score_place" == linekey:
+                            bracketNation.scorePlace = round(
+                                float(lineval))
+                        elif "prestige" == linekey:
+                            bracketNation.prestige = round(float(lineval))
+                        elif "stability" == linekey:
+                            bracketNation.stability = round(float(lineval))
+                        elif "treasury" == linekey:
+                            bracketNation.treasury = round(float(lineval))
+                        # elif "manpower" == linekey:
+                            #bracketNation.manpower = round(float(lineval))
+                        # elif "max_manpower" == linekey:
+                            #bracketNation.maxManpower = round(float(lineval))
+                        elif "overlord" == linekey:
+                            bracketNation.overlord = lineval.strip("\"")
+                    elif len(brackets) == 3:
+                        # Get each loan and add its amount to debt
+                        if brackets[2] == "loan" and "amount" == linekey:
+                            bracketNation.debt += round(
+                                float(lineval))
+                        # Get Income from the previous month
+                        elif brackets[2] == "ledger" and "lastmonthincome" == linekey:
+                            bracketNation.totalIncome = round(
+                                float(lineval), 2)
+                        # Get Expense from the previous month
+                        elif brackets[2] == "ledger" and "lastmonthexpense" == linekey:
+                            bracketNation.totalExpense = round(
+                                float(lineval), 2)
+                        elif brackets[2] == "subjects":
+                            for subject in line.split():
+                                bracketNation.subjects.append(subject)
+                        elif brackets[2] == "allies":
+                            for ally in line.split():
+                                bracketNation.allies.append(ally)
+                    elif len(brackets) == 4:
+                        # Add 1 to army size for each regiment
+                        if brackets[2] == "army" and brackets[3] == "regiment" and "morale" == linekey:
+                            bracketNation.army += 1000
+                        # Subtract damage done to units from army size
+                        # This needs to be separate from ^ because for full regiments there is no "strength=" tag
+                        elif brackets[2] == "army" and brackets[3] == "regiment" and "strength" == linekey:
+                            try:
+                                bracketNation.army = round(
+                                    bracketNation.army - 1000 + 1000 * float(lineval))
+                            except ValueError:
+                                continue
+                        # Add 1 for each ship
+                        elif brackets[2] == "navy" and brackets[3] == "ship" and "home" == linekey:
+                            bracketNation.navy += 1
+                        elif brackets[2] == "colors" and brackets[3] == "map_color":
+                            bracketNation.mapColor = tuple(
+                                map(lambda x: int(x), line.split()))
+                        elif brackets[2] == "colors" and brackets[3] == "country_color":
+                            bracketNation.natColor = tuple(
+                                map(lambda x: int(x), line.split()))
+                    # End new save stuff
+                elif len(brackets) > 0 and brackets[0] == "previous_war":
+                    if len(brackets) == 1 and "name" == linekey:
+                        if currentReadWar is not None and currentReadWar.isPlayerWar(self.game.playertags):
+                            currentReadWar.endDate = currentWarLastLeave
+                            self.game.playerWars.append(currentReadWar)
+                        currentReadWar = war(lineval.strip("\""))
+                    elif len(brackets) == 3 and brackets[1] == "history":
+                        if "add_attacker" == linekey:
+                            currentReadWar.attackers.append(
+                                lineval.strip("\""))
+                            if currentReadWar.startDate is None:
+                                currentReadWar.startDate = eu4Date(
+                                    brackets[2])
+                        elif "add_defender" == linekey:
+                            currentReadWar.defenders.append(
+                                lineval.strip("\""))
+                        elif "rem_attacker" == linekey or "rem_defender" == linekey:
+                            currentWarLastLeave = eu4Date(brackets[2])
+                    elif len(brackets) >= 2 and brackets[1] == "participants":
+                        if len(brackets) == 2 and "tag" == linekey:
+                            currentReadWarParticTag = lineval.strip("\"")
+                        elif len(brackets) == 4 and brackets[2] == "losses" and brackets[3] == "members":
+                            if currentReadWarParticTag in currentReadWar.attackers:
+                                for x in line.split():
+                                    currentReadWar.attackerLosses += int(x)
+                            elif currentReadWarParticTag in currentReadWar.defenders:
+                                for x in line.split():
+                                    currentReadWar.defenderLosses += int(x)
+                            else:
+                                print(
+                                    "Something went wrong with the attacker/defender list.")
+                    elif len(brackets) == 1 and "outcome" == linekey:
+                        currentReadWar.result = int(lineval)
+                        if currentReadWar.isPlayerWar(self.game.playertags):
+                            currentReadWar.endDate = currentWarLastLeave
+                            self.game.playerWars.append(currentReadWar)
+                            currentReadWar = None
         # Finalize data
         # These signify that it's probably not a valid save file.
         if self.game.GP == [] or self.game.date is None or self.game.age is None:
@@ -1181,8 +1184,8 @@ class statsChannel(AbstractChannel):
             try:
                 await self.readFile(saveFile)
             except Exception as e:
-                await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```" + repr(e) + "```")
-                return
+               await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```" + repr(e) + "```")
+               return
             else:
                 await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
                 self.hasReadFile = True
@@ -1447,7 +1450,7 @@ class asiresChannel(AbstractChannel):
             del(self)
         # RESERVE [nation1], [nation2], [nation3]
         elif text.upper().startswith(self.prefix() + "RESERVE "):
-            await self.add(message.author, text.split(" ", 1)[1].strip("\n\t "))
+            await self.add(message.author, text.split(maxsplit=1)[1].strip("\n\t "))
             await message.delete()
             await self.updateText()
         # ADMRES [nation1], [nation2], [nation3] @[player]
