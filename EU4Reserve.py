@@ -881,45 +881,59 @@ def isBanned(reserve: Union[str, AbstractReserve], tag: str, conn: Optional[psyc
 
 def createMap(reserve: Reserve) -> Image.Image:
     """
-    Creates a map based on a Reserve object with x's on all the capitals of reserved reservePicks.
+    Creates a map based on a Reserve object with x's on the capitals of all reserved reservePicks.
     Returns an Image object.
     """
     countries: List[reservePick] = reserve.players
-    mapFinal: Image.Image = Image.open("src/map_1444.png")
     srcFile = open("src/save_1444.eu4", "r", encoding="cp1252")
     lines = srcFile.readlines()
+    srcFile.close()
+    del(srcFile)
     brackets: List[str] = []
     linenum = 0
+    inCountries = False
+    done = False
     for line in lines:
         linenum += 1
-
-        if "{" in line:
-            if line.count("{") == line.count("}"):
-                continue
-            elif line.count("}") == 0 and line.count("{") == 1:
-                brackets.append(line.rstrip("\n "))
-            elif line.count("}") == 0 and line.count("{") > 1:
-                for x in range(line.count("{")):
-                    brackets.append("{")  # TODO: fix this so it has more
-            else:
-                print("Unexpected brackets at line #" +
-                      str(linenum) + ": " + line)
-        elif "}" in line:
-            try:
-                brackets.pop()
-            except IndexError:  # This shouldn't happen.
-                print("No brackets to delete.")
-                print("Line", linenum, ":", line)
-        # Get rid of long, useless sections
-        elif len(brackets) < 0 and ("trade={" == brackets[1] or "provinces={" == brackets[0] or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
-            continue
-        elif len(brackets) > 1 and brackets[0] == "countries={":
-            for x in countries:
-                if x.tag in brackets[1]:
-                    # Here we have all the stats for country x on the players list
-                    if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
-                        x.capitalID = int(line.strip("\tcapitl=\n"))
-    srcFile.close()
+        if inCountries:
+            if "{" in line:
+                opencount = line.count("{")
+                closecount = line.count("}")
+                if opencount == closecount:
+                    continue
+                elif closecount == 0 and opencount == 1:
+                    brackets.append(line.rstrip("\n "))
+                elif closecount == 0 and opencount > 1:
+                    for x in range(opencount):
+                        brackets.append("{")  # TODO: fix this so it has more
+                else:
+                    print("Unexpected brackets at line " +
+                          str(linenum) + ": " + line)
+            elif "}" in line:
+                try:
+                    brackets.pop()
+                except IndexError:  # This shouldn't happen.
+                    print("No brackets to delete.")
+                    print("Line " + linenum + ": " + line)
+            elif len(brackets) == 2 and brackets[0] == "countries={":
+                if "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
+                    for x in countries:
+                        if x.tag in brackets[1]:
+                            x.capitalID = int(line.strip("\tcapitl=\n"))
+                            for nat in countries:
+                                if nat.capitalID == 0:
+                                    break
+                            else:
+                                inCountries = False
+                                done = True
+                            break
+        elif "countries={" in line and not "players_countries={" in line and not "interesting_countries={" in line:
+            inCountries = True
+            brackets.append(line.rstrip("\n "))
+        elif done:
+            break
+    del(lines)
+    mapFinal: Image.Image = Image.open("src/map_1444.png")
     imgX: Image.Image = Image.open("src/xIcon.png")
     for x in countries:
         loc = EU4Lib.province(x.capitalID)

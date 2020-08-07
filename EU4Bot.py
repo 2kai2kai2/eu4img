@@ -118,7 +118,7 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscU
         u = user
     else:
         print("ERROR: Could not find discord user to check for admin.")
-        print(user)
+        print(str(user))
         return False  # pass uh something went wrong.. false i guess?
     # OK now check
     role = getRoleFromStr(
@@ -859,7 +859,7 @@ class statsChannel(AbstractChannel):
         self.game.playerWars.sort(key=lambda x: x.warScale(
             self.game.playertags), reverse=True)
 
-    async def generateImage(self, sendUpdates = True) -> Image.Image:
+    async def generateImage(self, sendUpdates=True) -> Image.Image:
         """
         Returns a stats Image based off the self.game data.
 
@@ -871,7 +871,8 @@ class statsChannel(AbstractChannel):
 
         async def updateProgress(text: str, num: int, maxnum: int):
             if progressMessage is not None:
-                newstr = "**Generating Image...**\n" + text + " (" + str(num) + "/" + str(maxnum) + ")"
+                newstr = "**Generating Image...**\n" + text + \
+                    " (" + str(num) + "/" + str(maxnum) + ")"
                 await progressMessage.edit(content=newstr)
 
         def armyDisplay(army: int) -> str:
@@ -959,7 +960,8 @@ class statsChannel(AbstractChannel):
         # Copy map into bottom of final image
         await updateProgress("Finalizing map section...", 4, 8)
         imgFinal: Image.Image = Image.open("src/finalTemplate.png")
-        imgFinal.paste(self.politicalImage, (0, imgFinal.size[1]-self.politicalImage.size[1]))
+        imgFinal.paste(self.politicalImage,
+                       (0, imgFinal.size[1]-self.politicalImage.size[1]))
         del(self.politicalImage)
         # The top has 5632x1119
         # Getting fonts
