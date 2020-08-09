@@ -200,8 +200,6 @@ class eu4Date:
         return self == other or self > other
 
 
-intregex = re.compile(r"\d+")
-floatregex = re.compile(r"\d+\.\d+")
 dateregex = re.compile(r"\d{1,4}\.\d{1,2}\.\d{1,2}")
 groupregex = re.compile(r"\{(.|\n)*\}")
 
@@ -213,30 +211,27 @@ def splitStrings(text: str) -> List[str]:
     When splitting groups, exclude the start and end brackets.
     """
     items: List[str] = []
-    # This will only contain "{" and "\"" and whenever we run into something to close the last one, it is removed.
-    # However, brackets can never be within quotes.
-    bracketOrder: List[str] = []
+    # There can be as many open brackets as you want, but if quotes are open then anything until they are closed will be ignored.
+    bracketCount = 0
+    quotes = False
     lastsplit = 0
     for i in range(len(text)):
         char = text[i]
-        if len(bracketOrder) == 0 and char.isspace():
+        if bracketCount == 0 and not quotes and char.isspace():
             split = text[lastsplit:i]
             lastsplit = i
-            if not split.isspace() and not split == "":
+            if not (split.isspace() or split == ""):
                 items.append(split.strip())
-        elif char == "{" and not (len(bracketOrder) > 0 and bracketOrder[-1] == "\""):
-            bracketOrder.append(char)
-        elif char == "}" and not (len(bracketOrder) > 0 and bracketOrder[-1] == "\""):
-            if bracketOrder[-1] == "{":
-                bracketOrder.pop()
+        elif char == "{" and not quotes:
+            bracketCount += 1
+        elif char == "}" and not quotes:
+            if bracketCount > 0:
+                bracketCount -= 1
         elif char == "\"":
-            if len(bracketOrder) > 0 and bracketOrder[-1] == "\"":
-                bracketOrder.pop()
-            else:
-                bracketOrder.append(char)
+            quotes = not quotes
     # At the end, if there isn't whitespace then we need to just add whatever the last thing was.
     split = text[lastsplit:]
-    if not split.isspace():
+    if not (split.isspace() or split == ""):
         items.append(split.strip())
     return items
 
@@ -253,17 +248,14 @@ def parseGroup(group: List[str]) -> Union[List[str], dict]:
         return dictGroup
     else:
         # It's a list.
-        listGroup = []
-        for item in group:
-            listGroup.append(parseType(item))
-        return listGroup
+        return list(map(parseType, group))
 
 
 def parseType(text: str) -> Union[str, int, float, eu4Date, List[str], dict]:
     text = text.strip()
-    if re.fullmatch(intregex, text) is not None:
+    if text.isdigit():
         return int(text)
-    elif re.fullmatch(floatregex, text) is not None:
+    elif text.isdecimal():
         return float(text)
     elif re.fullmatch(dateregex, text) is not None:
         return eu4Date(text)
@@ -278,18 +270,19 @@ def formatFix(text: str) -> str:
     return text.replace("map_area_data{", "map_area_data={").replace("EU4txt", "")
 
 
+
 starttime = time.time()
 file = open("src/save_1444.eu4", "r", encoding="cp1252")
-text = formatFix(file.read())
+text = file.read()
 file.close()
 totaltime = time.time() - starttime
 print("File load: " + str(totaltime) + "s. | " +
       str(totaltime/len(text)) + "s/char")
 
-data = {}
 starttime = time.time()
-g = parseGroup(splitStrings(testtext)[1:])
-# print(g)
+count = 1
+for i in range(count):
+    parseGroup(splitStrings(formatFix(text)))
 totaltime = time.time() - starttime
 print("Parsing: " + str(totaltime) + "s. | " +
-      str(totaltime/len(text)) + "s/char")
+      str(totaltime/len(text)/count) + "s/char")
