@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\00d51c13b8d9f8779b8a99e54953677b\pybind11-populate-mkdir.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\00d51c13b8d9f8779b8a99e54953677b\pybind11-populate-download.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\00d51c13b8d9f8779b8a99e54953677b\pybind11-populate-update.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\00d51c13b8d9f8779b8a99e54953677b\pybind11-populate-patch.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\00d51c13b8d9f8779b8a99e54953677b\pybind11-populate-configure.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\00d51c13b8d9f8779b8a99e54953677b\pybind11-populate-build.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\00d51c13b8d9f8779b8a99e54953677b\pybind11-populate-install.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\00d51c13b8d9f8779b8a99e54953677b\pybind11-populate-test.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\df69664aeb21ad754714489e365e6536\pybind11-populate-complete.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\1c19d5affaae269a5846a0081b26941e\pybind11-populate.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\Users\2kai2\GitHub\eu4img\cppModules\build\_deps\pybind11-subbuild\CMakeFiles\pybind11-populate" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{DDF0B305-66AA-3575-9E69-CFD17F114212}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

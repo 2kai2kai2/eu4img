@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/pybind11-populate"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/1c19d5affaae269a5846a0081b26941e/pybind11-populate.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/df69664aeb21ad754714489e365e6536/pybind11-populate-complete.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/00d51c13b8d9f8779b8a99e54953677b/pybind11-populate-install.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/00d51c13b8d9f8779b8a99e54953677b/pybind11-populate-mkdir.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/00d51c13b8d9f8779b8a99e54953677b/pybind11-populate-download.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/00d51c13b8d9f8779b8a99e54953677b/pybind11-populate-update.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/00d51c13b8d9f8779b8a99e54953677b/pybind11-populate-patch.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/00d51c13b8d9f8779b8a99e54953677b/pybind11-populate-configure.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/00d51c13b8d9f8779b8a99e54953677b/pybind11-populate-build.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModules/build/_deps/pybind11-subbuild/CMakeFiles/00d51c13b8d9f8779b8a99e54953677b/pybind11-populate-test.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"pybind11-populate"
+		],
+		"name" : "pybind11-populate"
+	}
+}

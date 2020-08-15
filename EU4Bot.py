@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
-from typing import List, Optional, Union, Tuple
+from typing import List, Optional, Union, Tuple, Dict
 import asyncio
 
 import discord
@@ -14,6 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 import EU4Lib
 import EU4Reserve
 import GuildManager
+import EU4cpplib
+import time
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
@@ -928,30 +930,13 @@ class statsChannel(AbstractChannel):
             ystart = int(max(0, height / pieces * slice - pieces))
             pixlist: List[Tuple[int, int, int]] = list(
                 self.politicalImage.crop([0, ystart, width, min(height, ystart+sliceheight)]).getdata())
-            for x in range(width):
-                for sy in range(int(len(pixlist)/width)):
-                    if sy == 0:
-                        # For some reason it draws borders on the first row of each slice. I think it might be something with the crop method but I have no clue why.
-                        continue
-                    y = ystart + sy
-                    index = x + sy * width
-                    color = pixlist[index]
-                    if color in playerColors:
-                        # This is the inverse color of the player or player overlord
-                        playerColor = playerColors[color]
-                        for neighbor in (index - 1 - width, index - width, index + 1 - width, index - 1, index + 1, index - 1 + width, index + width, index + 1 + width):
-                            try:
-                                neighborColor = pixlist[neighbor]
-                            except IndexError:
-                                continue
-                            else:
-                                if neighborColor not in playerColors or playerColors[neighborColor] != playerColor:
-                                    try:
-                                        drawColors[playerColor].append((x, y))
-                                    except KeyError:
-                                        drawColors[playerColor] = [(x, y)]
-                                    finally:
-                                        break
+            sliceDraw: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = EU4cpplib.drawBorders(
+                playerColors, pixlist, width, ystart)
+            for c in sliceDraw:
+                if c in drawColors:
+                    drawColors[c] += sliceDraw[c]
+                else:
+                    drawColors[c] = sliceDraw[c]
             del(pixlist)
         mapDraw = ImageDraw.Draw(self.politicalImage)
         await updateProgress("Drawing player borders...", 3, 8)
@@ -1184,8 +1169,8 @@ class statsChannel(AbstractChannel):
             try:
                 await self.readFile(saveFile)
             except Exception as e:
-               await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```" + repr(e) + "```")
-               return
+                await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```" + repr(e) + "```")
+                return
             else:
                 await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
                 self.hasReadFile = True
