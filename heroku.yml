@@ -5,7 +5,3 @@ setup:
 build:
   docker:
     worker: Dockerfile
-run:
-  worker: 
-    command:
-      - python EU4Bot.py
