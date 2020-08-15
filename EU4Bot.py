@@ -15,7 +15,6 @@ import EU4Lib
 import EU4Reserve
 import GuildManager
 import EU4cpplib
-import time
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
@@ -932,12 +931,12 @@ class statsChannel(AbstractChannel):
                 self.politicalImage.crop([0, ystart, width, min(height, ystart+sliceheight)]).getdata())
             sliceDraw: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = EU4cpplib.drawBorders(
                 playerColors, pixlist, width, ystart)
+            del(pixlist)
             for c in sliceDraw:
                 if c in drawColors:
                     drawColors[c] += sliceDraw[c]
                 else:
                     drawColors[c] = sliceDraw[c]
-            del(pixlist)
         mapDraw = ImageDraw.Draw(self.politicalImage)
         await updateProgress("Drawing player borders...", 3, 8)
         for drawColor in drawColors:
