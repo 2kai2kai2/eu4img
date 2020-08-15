@@ -1,2 +1,2 @@
 FROM heroku/heroku:18-build
-CMD tree
+CMD python ../../EU4Bot.py
