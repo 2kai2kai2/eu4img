@@ -15,7 +15,7 @@ import EU4Lib
 import EU4Reserve
 import GuildManager
 import cppimport
-EU4cpplib = cppimport.imp("EU4cpplib")
+EU4cpplib = cppimport.imp("graphics")
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
