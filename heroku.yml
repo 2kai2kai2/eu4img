@@ -1,9 +1,11 @@
 setup:
-    addons:
-      - plan: heroku-postgresql
-        as: DATABASE
+  addons:
+    - plan: heroku-postgresql
+      as: DATABASE
 build:
-    docker:
-        worker: Dockerfile
+  docker:
+    worker: Dockerfile
 run:
-    worker: python EU4Bot.py
+  worker: 
+    command:
+      - python EU4Bot.py
