@@ -5,6 +5,7 @@ from random import shuffle
 from typing import List, Optional, Union, Tuple, Dict
 import asyncio
 
+import cppimport
 import discord
 import psycopg2
 import requests
@@ -14,7 +15,8 @@ from PIL import Image, ImageDraw, ImageFont
 import EU4Lib
 import EU4Reserve
 import GuildManager
-import cppimport
+
+print("Compiling C++ modules...")
 EU4cpplib = cppimport.imp("graphics")
 
 load_dotenv()
