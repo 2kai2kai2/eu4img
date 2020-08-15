@@ -14,8 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 import EU4Lib
 import EU4Reserve
 import GuildManager
-import cppimport.import_hook
-import EU4cpplib
+import cppimport
+EU4cpplib = cppimport.imp("EU4cpplib")
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
