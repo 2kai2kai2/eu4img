@@ -1,3 +1,5 @@
+// cppimport
+// ^ That needs to be the first line for cppimport to work
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <cstdlib>

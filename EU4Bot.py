@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 import EU4Lib
 import EU4Reserve
 import GuildManager
+import cppimport.import_hook
 import EU4cpplib
 
 load_dotenv()
