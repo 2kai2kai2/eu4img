@@ -3,8 +3,8 @@ cd buildwin
 cmake ..
 cmake --build . --config Release
 cd ..
-mkdir buildarm
-cd buildarm
-cmake .. -G "MinGW Makefiles"
+mkdir buildlin
+cd buildlin
+cmake .. -G "MinGW Makefiles" -D CMAKE_TOOLCHAIN_FILE=linuxtoolchain.cmake
 cmake --build . --config Release
 pause

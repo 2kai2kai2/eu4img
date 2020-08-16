@@ -1,3 +1,0 @@
-"D:\Program Files\CMake\bin\cmake.exe" -E rm -f CMakeFiles\EU4cpplib.dir/objects.a
-D:\mingw-w64\mingw64\bin\ar.exe cr CMakeFiles\EU4cpplib.dir/objects.a @CMakeFiles\EU4cpplib.dir\objects1.rsp
-D:\mingw-w64\mingw64\bin\g++.exe -shared -o EU4cpplib.cp38-win_amd64.pyd -Wl,--major-image-version,0,--minor-image-version,0 -Wl,--whole-archive CMakeFiles\EU4cpplib.dir/objects.a -Wl,--no-whole-archive @CMakeFiles\EU4cpplib.dir\linklibs.rsp
