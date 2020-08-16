@@ -22,3 +22,5 @@ bison
 libisl15
 libisl-dev
 make
+python-dev
+python-pybind11
