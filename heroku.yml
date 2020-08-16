@@ -2,4 +2,4 @@ build:
     docker:
         worker: Dockerfile
 run:
-    worker: EU4Bot.py
+    worker: python3 EU4Bot.py
