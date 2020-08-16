@@ -1,0 +1,10 @@
+^C:\USERS\2KAI2\GITHUB\EU4IMG\CPPMODULEDEV\CMAKELISTS.TXT
+setlocal
+"D:\Program Files\CMake\bin\cmake.exe" -SC:/Users/2kai2/GitHub/eu4img/cppModuleDev -BC:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildwin --check-stamp-file C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildwin/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

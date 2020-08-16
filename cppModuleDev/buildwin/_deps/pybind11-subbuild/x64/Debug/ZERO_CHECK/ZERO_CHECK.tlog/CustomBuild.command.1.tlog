@@ -1,0 +1,10 @@
+^C:\USERS\2KAI2\GITHUB\EU4IMG\CPPMODULEDEV\BUILDWIN\_DEPS\PYBIND11-SUBBUILD\CMAKEFILES\B613380E0903915A41263B8DEAB2034B\GENERATE.STAMP.RULE
+setlocal
+"D:\Program Files\CMake\bin\cmake.exe" -SC:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildwin/_deps/pybind11-subbuild -BC:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildwin/_deps/pybind11-subbuild --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildwin/_deps/pybind11-subbuild/pybind11-populate.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

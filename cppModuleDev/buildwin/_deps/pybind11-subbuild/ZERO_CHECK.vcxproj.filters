@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\2kai2\GitHub\eu4img\cppModuleDev\buildwin\_deps\pybind11-subbuild\CMakeFiles\b613380e0903915a41263b8deab2034b\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{DA56243F-52F4-3879-AC31-1834931B0013}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

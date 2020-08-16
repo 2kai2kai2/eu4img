@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/CMakeFiles/pybind11-populate"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/CMakeFiles/pybind11-populate.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/CMakeFiles/pybind11-populate-complete.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/pybind11-populate-prefix/src/pybind11-populate-stamp/pybind11-populate-install.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/pybind11-populate-prefix/src/pybind11-populate-stamp/pybind11-populate-mkdir.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/pybind11-populate-prefix/src/pybind11-populate-stamp/pybind11-populate-download.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/pybind11-populate-prefix/src/pybind11-populate-stamp/pybind11-populate-update.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/pybind11-populate-prefix/src/pybind11-populate-stamp/pybind11-populate-patch.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/pybind11-populate-prefix/src/pybind11-populate-stamp/pybind11-populate-configure.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/pybind11-populate-prefix/src/pybind11-populate-stamp/pybind11-populate-build.rule"
+		},
+		{
+			"file" : "C:/Users/2kai2/GitHub/eu4img/cppModuleDev/buildarm/_deps/pybind11-subbuild/pybind11-populate-prefix/src/pybind11-populate-stamp/pybind11-populate-test.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"pybind11-populate"
+		],
+		"name" : "pybind11-populate"
+	}
+}
