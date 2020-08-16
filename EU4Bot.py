@@ -17,7 +17,14 @@ import EU4Reserve
 import GuildManager
 
 print("Compiling C++ modules...")
-EU4cpplib = cppimport.imp("graphics")
+try:
+    EU4cpplib = cppimport.imp("graphics")
+except:
+    cppWorks = False
+    print("C++ compiling failed.")
+else:
+    cppWorks = True
+    print("C++ compiling successful.")
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
@@ -932,14 +939,41 @@ class statsChannel(AbstractChannel):
             ystart = int(max(0, height / pieces * slice - pieces))
             pixlist: List[Tuple[int, int, int]] = list(
                 self.politicalImage.crop([0, ystart, width, min(height, ystart+sliceheight)]).getdata())
-            sliceDraw: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = EU4cpplib.drawBorders(
-                playerColors, pixlist, width, ystart)
-            del(pixlist)
-            for c in sliceDraw:
-                if c in drawColors:
-                    drawColors[c] += sliceDraw[c]
-                else:
-                    drawColors[c] = sliceDraw[c]
+            if cppWorks:
+                sliceDraw: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = EU4cpplib.drawBorders(
+                    playerColors, pixlist, width, ystart)
+                del(pixlist)
+                for c in sliceDraw:
+                    if c in drawColors:
+                        drawColors[c] += sliceDraw[c]
+                    else:
+                        drawColors[c] = sliceDraw[c]
+            else:
+                for x in range(width):
+                    for sy in range(int(len(pixlist)/width)):
+                        if sy == 0:
+                            # For some reason it draws borders on the first row of each slice. I think it might be something with the crop method but I have no clue why.	                if c in drawColors:
+                            continue
+                        y = ystart + sy
+                        index = x + sy * width
+                        color = pixlist[index]	
+                        if color in playerColors:
+                            # This is the inverse color of the player or player overlord	
+                            playerColor = playerColors[color]	
+                            for neighbor in (index - 1 - width, index - width, index + 1 - width, index - 1, index + 1, index - 1 + width, index + width, index + 1 + width):	
+                                try:	
+                                    neighborColor = pixlist[neighbor]	
+                                except IndexError:	
+                                    continue	
+                                else:	
+                                    if neighborColor not in playerColors or playerColors[neighborColor] != playerColor:	
+                                        try:	
+                                            drawColors[playerColor].append((x, y))	
+                                        except KeyError:	
+                                            drawColors[playerColor] = [(x, y)]	
+                                        finally:	
+                                            break
+                del(pixlist)
         mapDraw = ImageDraw.Draw(self.politicalImage)
         await updateProgress("Drawing player borders...", 3, 8)
         for drawColor in drawColors:
