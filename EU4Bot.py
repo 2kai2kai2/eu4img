@@ -17,7 +17,14 @@ import EU4Reserve
 import GuildManager
 
 print("Compiling C++ modules...")
-EU4cpplib = cppimport.imp("graphics")
+try:
+    EU4cpplib = cppimport.imp("graphics")
+except:
+    cppcompiled = False
+    print("C++ module compilation failed.")
+else:
+    cppcompiled = True
+    print("C++ module compilation successful.")
 
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
