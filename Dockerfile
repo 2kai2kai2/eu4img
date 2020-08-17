@@ -1,2 +1,2 @@
 FROM heroku/heroku:18-build
-CMD ls
+CMD python app/EU4Bot.py
