@@ -1,2 +1,2 @@
 FROM heroku/heroku:18-build
-ENTRYPOINT python EU4Bot.py
+ENTRYPOINT ["python", EU4Bot.py]
