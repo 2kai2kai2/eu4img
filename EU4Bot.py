@@ -4,6 +4,7 @@ from io import BytesIO, StringIO
 from random import shuffle
 from typing import List, Optional, Union, Tuple, Dict
 import asyncio
+import traceback
 
 import cppimport
 import discord
@@ -19,9 +20,10 @@ import GuildManager
 print("Compiling C++ modules...")
 try:
     EU4cpplib = cppimport.imp("graphics")
-except:
+except Exception as e:
     cppcompiled = False
     print("C++ module compilation failed.")
+    print(traceback.print_exc())
 else:
     cppcompiled = True
     print("C++ module compilation successful.")
