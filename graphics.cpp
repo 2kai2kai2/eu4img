@@ -4,8 +4,9 @@
 /*
 <%
 import pybind11
+import sysconfig
 setup_pybind11(cfg)
-cfg['include_dirs'] = [pybind11.get_include()]
+cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
 %>
 */
 
