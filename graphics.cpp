@@ -1,5 +1,14 @@
 // cppimport
 // ^ That needs to be the first line for cppimport to work
+
+/*
+<%
+setup_pybind11(cfg)
+cfg['include_dirs'] = ['pybind11/include']
+%>
+*/
+
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <cstdlib>
