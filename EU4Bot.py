@@ -18,7 +18,8 @@ import GuildManager
 
 print("Compiling C++ modules...")
 try:
-    EU4cpplib = cppimport.imp("graphics")
+    # EU4cpplib = cppimport.imp("graphics")
+    pass
 except:
     cppcompiled = False
     print("C++ module compilation failed.")
