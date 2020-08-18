@@ -1,5 +1,5 @@
 FROM heroku/heroku:18-build
-RUN sudo apt-get install python3-dev
+RUN sudo apt install python3-dev
 ADD . .
 ADD https://bootstrap.pypa.io/get-pip.py get-pip.py
 RUN python3 get-pip.py
