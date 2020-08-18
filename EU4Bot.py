@@ -1,10 +1,10 @@
+import asyncio
 import os
+import traceback
 from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
-from typing import List, Optional, Union, Tuple, Dict
-import asyncio
-import traceback
+from typing import Dict, List, Optional, Tuple, Union
 
 import cppimport
 import discord

@@ -1,9 +1,9 @@
+import datetime
 import json
 import os
+import time
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union
-import time
-import datetime
 
 import psycopg2
 from dotenv import load_dotenv

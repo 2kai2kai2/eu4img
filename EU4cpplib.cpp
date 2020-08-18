@@ -32,17 +32,10 @@ std::map<std::tuple<int, int, int>, std::list<std::tuple<int, int>>> drawBorders
     return out;
 };
 
-
-int add(int i, int j) {
-    return i + j;
-    new std::list<int>();
-}
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(EU4cpplib, m) {
     m.doc() = "Libraries for eu4img written in C++ to improve speed and resource-consumption.";
 
     m.def("drawBorders", &drawBorders, py::arg("playerColors"), py::arg("pixels"), py::arg("width"), py::arg("yOffset") = 0);
-    m.def("add", &add, "A function which adds two numbers", py::arg("a"), py::arg("b"));
 }
