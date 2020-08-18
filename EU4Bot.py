@@ -148,8 +148,8 @@ class eu4Date:
 
     @property
     def fancyStr(self):
-        monthnames = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
-                      7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
+        monthnames: Dict[int, str] = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+                                      7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
         return str(self.day) + " " + monthnames[self.month] + " " + str(self.year)
 
     def __str__(self):
@@ -597,7 +597,7 @@ class war():
         """
         Calculates a score for how important the war is for deciding which to display. May be somewhat arbitrary or subjective.
         """
-        if playertags is None or playertags == {}:  # Ignore player involvement
+        if playertags is None or playertags == []:  # Ignore player involvement
             # Base off casualties
             return self.attackerLosses + self.defenderLosses
         else:  # Include player involvement
@@ -607,8 +607,8 @@ class war():
 
 class saveGame():
     def __init__(self):
-        self.allNations: dict = {}
-        self.playertags: dict = {}
+        self.allNations: Dict[str, Nation] = {}
+        self.playertags: Dict[str, str] = {}
         self.dlc: List[str] = []
         self.GP: List[str] = []
         self.date: Optional[eu4Date] = None
@@ -624,7 +624,7 @@ class statsChannel(AbstractChannel):
     def __init__(self, user: DiscUser, initChannel: DiscTextChannels):
         self.user = user
         self.interactChannel: DiscTextChannels = None
-        self.displayChannel = initChannel
+        self.displayChannel: DiscTextChannels = initChannel
         self.hasReadFile = False
         self.politicalImage: Image.Image = None
         self.game = saveGame()
@@ -909,7 +909,8 @@ class statsChannel(AbstractChannel):
             return (255 - color[0], 255 - color[1], 255 - color[2])
 
         await updateProgress("Finding players to draw borders...", 1, 8)
-        playerColors = {}  # Formatting: (map color) = (player contrast color)
+        # Formatting: (map color) = (player contrast color)
+        playerColors: Dict[Tuple[int, int, int], Tuple[int, int, int]] = {}
         for natTag in self.game.allNations:
             try:
                 nat: Nation = self.game.allNations[natTag]
@@ -929,7 +930,8 @@ class statsChannel(AbstractChannel):
                 pass
         # Modify the image
         await updateProgress("Calculating player borders...", 2, 8)
-        drawColors = {}  # Formatting: (draw color) = [(x, y), (x, y), ...]
+        # Formatting: (draw color) = [(x, y), (x, y), ...]
+        drawColors: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = {}
         width = self.politicalImage.width
         height = self.politicalImage.height
         # So basically, I'm hitting my memory cap of 512MB which means that we can't have the full pixel list at one time.
@@ -1227,7 +1229,7 @@ class statsChannel(AbstractChannel):
                     2].strip("\t\n ")
                 tag = EU4Lib.country(natName)
                 if tag is None:
-                    await message.add_reaction("\u2754")
+                    await message.add_reaction("\u2754")  # Question Mark
                 elif tag in self.game.playertags:
                     await sendUserMessage(self.user, EU4Lib.tagToName(tag) + " is already played. If you wish to replace the player, please remove it first.")
                 elif not tag in self.game.allNations:
@@ -1235,18 +1237,18 @@ class statsChannel(AbstractChannel):
                 else:
                     self.game.playertags[tag] = player
                     await self.modMsg.edit(content=self.modPromptStr())
-                    await message.add_reaction("\u2705")
+                    await message.add_reaction("\u2705")  # Check Mark
             # remove [nation]
             elif message.content.strip("\n\t ").lower().startswith("remove "):
                 name = message.content.strip("\n\t ").partition(" ")[
                     2].strip("\t\n ")
                 tag = EU4Lib.country(name)
                 if tag is None:
-                    await message.add_reaction("\u2754")
+                    await message.add_reaction("\u2754")  # Question Mark
                 elif tag in self.game.playertags:
                     del(self.game.playertags[tag])
                     await self.modMsg.edit(content=self.modPromptStr())
-                    await message.add_reaction("\u2705")
+                    await message.add_reaction("\u2705")  # Check Mark
                 else:
                     pass
                     # await self.interactChannel.send("Did not recognize " + tag.upper() + " as a played nation.")
@@ -1356,7 +1358,7 @@ class asiresChannel(AbstractChannel):
                 str(self.displayChannel.id), conn=checkConn()).players
             finalReserves: List[EU4Reserve.reservePick] = []
             # This stores the capitals of all possible tags, so that their factions can be determined.
-            tagCapitals = dict()
+            tagCapitals: Dict[str, int] = {}
             # Add all possibly reserved nations to the tagCapitals dictionary with a capital of -1
             for res in reserves:
                 for tag in res.picks:

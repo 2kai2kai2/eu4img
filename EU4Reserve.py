@@ -3,7 +3,7 @@ import json
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import psycopg2
 from dotenv import load_dotenv
@@ -138,7 +138,7 @@ class AbstractPick(ABC):
         self.time: int = None
 
     @abstractmethod
-    def toDict(self) -> dict:
+    def toDict(self) -> Dict[str, Any]:
         pass
 
     def timeStr(self) -> str:
@@ -157,7 +157,7 @@ class reservePick(AbstractPick):
         self.capitalID: int = 0
         self.time: int = time
 
-    def toDict(self) -> dict:
+    def toDict(self) -> Dict[str, Any]:
         return {"player": self.player, "tag": self.tag, "time": self.time}
 
 
@@ -172,14 +172,14 @@ class asiPick(AbstractPick):
         self.priority = priority
         self.time: int = time
 
-    def toDict(self) -> dict:
+    def toDict(self) -> Dict[str, Any]:
         return {"player": self.player, "priority": self.priority, "picks": self.picks, "time": self.time}
 
 
 class AbstractReserve(ABC):
     @abstractmethod
     def __init__(self, name: str):
-        self.players: list = []
+        self.players: List[AbstractPick] = []
         self.name = name  # Should be channelID
         self.textmsg: Optional[int] = None
 
@@ -203,7 +203,7 @@ class AbstractReserve(ABC):
         pass
 
     @abstractmethod
-    def toDict(self) -> dict:
+    def toDict(self) -> Dict[str, Any]:
         pass
 
 
@@ -259,7 +259,7 @@ class Reserve(AbstractReserve):
     def delete(self):
         pass
 
-    def toDict(self) -> dict:
+    def toDict(self) -> Dict[str, Any]:
         pickDictList = [pick.toDict() for pick in self.players]
         return {"kind": "reserve", "textmsg": self.textmsg, "imgmsg": self.imgmsg, "reserves": pickDictList, "bans": self.bans}
 
@@ -269,7 +269,7 @@ class ASIReserve(AbstractReserve):
         self.players: List[asiPick] = []
         self.name = name  # Should be channelID
         self.textmsg: Optional[int] = None
-        self.bans = []
+        self.bans: List[str] = []
 
     def add(self, pick: asiPick) -> int:
         """
@@ -304,7 +304,7 @@ class ASIReserve(AbstractReserve):
     def delete(self):
         pass
 
-    def toDict(self) -> dict:
+    def toDict(self) -> Dict[str, Any]:
         pickDictList = [pick.toDict() for pick in self.players]
         return {"kind": "asi", "textmsg": self.textmsg, "reserves": pickDictList}
 
@@ -332,7 +332,7 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
             print(
                 "Something is wrong with the save json formatting. You can try to delete the file to reset.")
             return []
-        resList = []
+        resList: List[AbstractReserve] = []
         for res in jsonLoad:
             if jsonLoad[res]["kind"] == "reserve":
                 r = Reserve(res)
@@ -363,7 +363,7 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
                 resList.append(r)
         return resList
     else:  # With the new SQL format, this should only be called if there is a connection when everything is being loaded initially.
-        resList = []
+        resList: List[AbstractReserve] = []
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:
             cur.execute("SELECT * FROM Reserves")
@@ -381,7 +381,7 @@ def save(reserves: List[AbstractReserve]):
     """
     Overwrites the json save file with the given reserve list.
     """
-    jsonSave = {}
+    jsonSave: Dict[str, Any] = {}
     for res in reserves:
         jsonSave[res.name] = res.toDict()
     with open("ressave.json", "w") as x:
