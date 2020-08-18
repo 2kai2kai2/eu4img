@@ -4,6 +4,7 @@ EU4img.zip
 #Files created upon testing
 __pycache__/
 final.png
+*.pyd
 
 #Shortcuts
 save games.lnk

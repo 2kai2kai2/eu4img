@@ -1,6 +1,3 @@
-// cppimport
-// ^ That needs to be the first line for cppimport to work
-
 /*
 <%
 import pybind11
