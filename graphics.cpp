@@ -9,14 +9,13 @@ cfg['include_dirs'] = [pybind11.get_include()]
 %>
 */
 
-
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <cstdlib>
 
 std::map<std::tuple<int, int, int>, std::list<std::tuple<int, int>>> drawBorders(std::map<std::tuple<int, int, int>, std::tuple<int, int, int>> playerColors, std::vector<std::tuple<int, int, int>> pixels, int width, int yOffset) {
     std::map<std::tuple<int, int, int>, std::list<std::tuple<int, int>>> out;
-    for (int i = width + 1; i < pixels.size() - width - 1; i++) {
+    for (unsigned int i = width + 1; i < pixels.size() - width - 1; i++) {
         // If it's ever less than three times width, it'll never even enter the for loop.
         // We don't run the first and last lines so that they don't try to refer to out of bounds neighbors.
         if (playerColors.count(pixels.at(i)) == 1) {
