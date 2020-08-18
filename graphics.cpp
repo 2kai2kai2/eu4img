@@ -3,8 +3,9 @@
 
 /*
 <%
+import pybind11
 setup_pybind11(cfg)
-cfg['include_dirs'] = ['pybind11/include']
+cfg['include_dirs'] = [pybind11.get_include()]
 %>
 */
 
