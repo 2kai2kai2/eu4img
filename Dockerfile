@@ -1,3 +1,3 @@
 FROM heroku/heroku:18-build
 ADD . .
-CMD python app/EU4Bot.py
+CMD python EU4Bot.py
