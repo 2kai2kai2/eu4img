@@ -12,7 +12,7 @@ def country(text: str) -> Optional[str]:
     If the nation is not recognized, returns None.
     """
     # Read out the countries file
-    srcFile = open("src/countries_l_english.yml")
+    srcFile = open("src/countries_l_english.yml", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     # If it could be a tag, check for that.
@@ -35,7 +35,7 @@ def tagToName(tag: str) -> Optional[str]:
     If the tag is not recognized, returns None.
     """
     # Read out the countries file
-    srcFile = open("src/countries_l_english.yml")
+    srcFile = open("src/countries_l_english.yml", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     # If it could be a valid tag
@@ -96,7 +96,7 @@ def flag(tag: str) -> Image.Image:
     Returns Image of size (128, 128).
     """
     # Read file
-    srcFile = open("src/flagfiles.txt", "r")
+    srcFile = open("src/flagfiles.txt", "r", encoding="cp1252")
     line = srcFile.read()
     srcFile.close()
     # Get the number for the order of the flag; starts at 0
@@ -120,7 +120,7 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     Raises an error if the province is not found.
     """
     # Read file
-    srcFile = open("src/area.txt", "r")
+    srcFile = open("src/area.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     # Search file
@@ -145,7 +145,7 @@ def region(areaName: str) -> str:
     Raises an error if the area is not found.
     """
     # Read file
-    srcFile = open("src/region.txt", "r")
+    srcFile = open("src/region.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     # Search File
@@ -170,7 +170,7 @@ def superregion(regionName: str) -> str:
     Raises an error if the region is not found.
     """
     # Read file
-    srcFile = open("src/superregion.txt", "r")
+    srcFile = open("src/superregion.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     # Search file
@@ -194,7 +194,7 @@ def continent(provinceID: Union[str, int]) -> str:
     Raises an error if the province is not found.
     """
     # Read file
-    srcFile = open("src/continent.txt", "r")
+    srcFile = open("src/continent.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     # Search file
