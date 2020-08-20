@@ -4,7 +4,7 @@ import traceback
 from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
-from typing import Dict, Final, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import cppimport
 import discord
@@ -28,6 +28,8 @@ else:
     cppcompiled = True
     print("C++ module compilation successful.")
 
+
+# Load environment variables
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
 client = discord.Client()
@@ -39,6 +41,7 @@ try:
     conn.autocommit = True
 except:
     conn = None
+
 
 # Create reused typing Unions
 DiscUser = Union[discord.User, discord.Member]
@@ -71,11 +74,11 @@ async def sendUserMessage(user: Union[str, int, DiscUser], message: str) -> disc
     """
     Sends a user a specified DM via discord. Returns the discord Message object sent.
     """
-    u = None
+    u: DiscUser = None
     if isinstance(user, str) or isinstance(user, int):  # id
-        u = client.get_user(int(user))
+        u: DiscUser = client.get_user(int(user))
     elif isinstance(user, discord.User) or isinstance(user, discord.Member):
-        u = user
+        u: DiscUser = user
     else:
         print("ERROR: Could not find discord user to send message.")
         print(user)
@@ -95,13 +98,14 @@ def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Opt
     if roleName is None:
         return None
     # Get server object
-    s = None
+    s: discord.Guild = None
     if isinstance(server, str) or isinstance(server, int):
-        s = client.get_guild(int(server))
+        s: discord.Guild = client.get_guild(int(server))
     elif isinstance(server, discord.Guild):
-        s = server
+        s: discord.Guild = server
     else:
         print("ERROR: Could not find discord server get role.")
+        return None
     for role in s.roles:
         if role.name.strip("\n\t @").lower() == roleName.strip("\n\t @").lower():
             return role
@@ -115,20 +119,20 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscU
     # Get server object
     s: discord.Guild = None
     if isinstance(server, str) or isinstance(server, int):
-        s = client.get_guild(int(server))
+        s: discord.Guild = client.get_guild(int(server))
     elif isinstance(server, discord.Guild):
-        s = server
+        s: discord.Guild = server
     else:
         print("ERROR: Could not find discord server to check for admin.")
         return False
     # Get member object
-    u: discord.Member = None
+    u: DiscUser = None
     if isinstance(user, str) or isinstance(user, int):  # id
-        u = s.get_member(int(user))
+        u: DiscUser = s.get_member(int(user))
     elif isinstance(user, discord.User):
-        u = s.get_member(user.id)
+        u: DiscUser = s.get_member(user.id)
     elif isinstance(user, discord.Member):
-        u = user
+        u: DiscUser = user
     else:
         print("ERROR: Could not find discord user to check for admin.")
         print(str(user))
@@ -342,8 +346,8 @@ class ReserveChannel(AbstractChannel):
         elif text.upper().startswith(self.prefix() + "ADDBAN") and checkResAdmin(message.guild, message.author):
             # This is implemented by having lists of recognized and unrecognized bans, doing the recognized ones, and informing about the result.
             bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
-            bantags = []
-            fails = []
+            bantags: List[str] = []
+            fails: List[str] = []
             for bannat in bannations:
                 tag = EU4Lib.country(bannat.strip("\n\t ,"))
                 if tag is not None:
@@ -375,8 +379,8 @@ class ReserveChannel(AbstractChannel):
         elif text.upper().startswith(self.prefix() + "DELBAN") and checkResAdmin(message.guild, message.author):
             # This is implemented by having lists of recognized and unrecognized bans, doing the recognized ones, and informing about the result.
             bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
-            bantags = []
-            fails = []
+            bantags: List[str] = []
+            fails: List[str] = []
             for bannat in bannations:
                 tag = EU4Lib.country(bannat.strip("\n\t ,"))
                 if tag is not None:
@@ -555,9 +559,9 @@ class Nation:
 
 
 class war():
-    WHITEPEACE: Final[int] = 1
-    ATTACKERWIN: Final[int] = 2
-    DEFENDERWIN: Final[int] = 3
+    WHITEPEACE: int = 1
+    ATTACKERWIN: int = 2
+    DEFENDERWIN: int = 3
 
     def __init__(self, name: str):
         self.name = name
@@ -569,7 +573,7 @@ class war():
         self.endDate: eu4Date = None
         self.result: int = 0
 
-    def isPlayerWar(self, playertags: List[str]):
+    def isPlayerWar(self, playertags: List[str]) -> bool:
         """
         Returns True if there are players on both sides of a war.
         """
@@ -585,19 +589,19 @@ class war():
                 break
         return attacker and defender
 
-    def playerAttackers(self, playertags: List[str]):
+    def playerAttackers(self, playertags: List[str]) -> List[str]:
         """
         Returns a list of tags for nations on the attacking side played by players.
         """
         return list(filter(lambda x: x in self.attackers, playertags))
 
-    def playerDefenders(self, playertags: List[str]):
+    def playerDefenders(self, playertags: List[str]) -> List[str]:
         """
         Returns a list of tags for nations on the defending side played by players.
         """
         return list(filter(lambda x: x in self.defenders, playertags))
 
-    def warScale(self, playertags: List[str] = []):
+    def warScale(self, playertags: List[str] = []) -> int:
         """
         Calculates a score for how important the war is for deciding which to display. May be somewhat arbitrary or subjective.
         """
@@ -650,12 +654,12 @@ class statsChannel(AbstractChannel):
         Makes and returns a string giving information and instructions for player list modification.
         """
         prompt = "**Current players list:**```"
-        for x in self.game.playertags:
-            if EU4Lib.tagToName(x) is None:
-                prompt += "\n" + x + ": " + self.game.playertags[x]
+        for tag in self.game.playertags:
+            if EU4Lib.tagToName(tag) is None:
+                prompt += "\n" + tag + ": " + self.game.playertags[tag]
             else:
                 prompt += "\n" + \
-                    EU4Lib.tagToName(x) + ": " + self.game.playertags[x]
+                    EU4Lib.tagToName(tag) + ": " + self.game.playertags[tag]
         prompt += "```\n**Do you want to make any changes?\nType `done` to finish. Commands:\n`remove [nation]`\n`add [player], [nation]`**"
         return prompt
 
@@ -664,6 +668,7 @@ class statsChannel(AbstractChannel):
         Gets all data from file and saves it to the self.game.
         """
         lines: List[str] = file.readlines()
+        file.close()
         del(file)
         brackets: List[str] = []
         currentReadWar: war = None
@@ -691,7 +696,7 @@ class statsChannel(AbstractChannel):
                 except IndexError:  # No brackets to close
                     pass
             else:
-                if "=" in line and not ("\"" in line and line.index("\"") < line.index("=")):
+                if "=" in line and not ('"' in line and line.index('"') < line.index("=")):
                     linekey, lineval = line.split("=", maxsplit=1)
                     lineval = lineval.strip()
                     linekey = linekey.strip()
@@ -706,16 +711,16 @@ class statsChannel(AbstractChannel):
                         self.game.date = eu4Date(lineval)
                     # Get save DLC (not sure if we use this...)
                     elif brackets == ["dlc_enabled"]:
-                        self.game.dlc.append(lineval.strip("\""))
+                        self.game.dlc.append(lineval.strip('"'))
                     # Check if game is mp
-                    elif "multi_player" == linekey:
+                    elif linekey == "multi_player":
                         if "yes" == lineval:
                             self.game.mp = True
                         else:
                             self.game.mp = False
                     # Get current age
-                    elif "current_age" in line and len(brackets) == 0:
-                        self.game.age = lineval.strip("\"")
+                    elif linekey == "current_age" and len(brackets) == 0:
+                        self.game.age = lineval.strip('"')
                 # Get player names and country tags
                 elif brackets == ["players_countries"]:
                     # In the file, the format is like this:
@@ -726,27 +731,27 @@ class statsChannel(AbstractChannel):
                     # Where "   " is a tab \t
                     # Prepare to assign the player by recording it for the next line
                     if lastPlayerInList is None:
-                        lastPlayerInList = lineval.strip("\"")
+                        lastPlayerInList = lineval.strip('"')
                     # Add to playertags based on what was saved in the previous line as the player name
                     else:
                         self.game.playertags[lineval.strip(
-                            "\"")] = lastPlayerInList
+                            '"')] = lastPlayerInList
                         lastPlayerInList = None
                 # Get top 8
-                elif "country" == linekey and brackets == ["great_powers", "original"]:
+                elif linekey == "country" and brackets == ["great_powers", "original"]:
                     if len(self.game.GP) < 8:  # Make sure to not include leaving GPs
-                        self.game.GP.append(lineval.strip("\""))
+                        self.game.GP.append(lineval.strip('"'))
                 # Get HRE emperor tag
-                elif "emperor" == linekey and brackets == ["empire"]:
-                    self.game.HRE = lineval.strip("\"")
+                elif linekey == "emperor" and brackets == ["empire"]:
+                    self.game.HRE = lineval.strip('"')
                 # Get Celestial emperor tag
-                elif "emperor" == linekey and brackets == ["celestial_empire"]:
-                    self.game.china = lineval.strip("\"")
+                elif linekey == "emperor" and brackets == ["celestial_empire"]:
+                    self.game.china = lineval.strip('"')
                 # Get target of crusade ('---' if none)
-                elif "crusade_target" == linekey and brackets == ["religion_instance_data", "catholic", "papacy"]:
-                    self.game.crusade = lineval.strip("\"")
+                elif linekey == "crusade_target" and brackets == ["religion_instance_data", "catholic", "papacy"]:
+                    self.game.crusade = lineval.strip('"')
                 # Get papal controller
-                elif "previous_controller" == linekey and brackets == ["religion_instance_data", "catholic", "papacy"]:
+                elif linekey == "previous_controller" and brackets == ["religion_instance_data", "catholic", "papacy"]:
                     continue
                 # Country-specific data (for players)
                 elif len(brackets) > 1 and brackets[0] == "countries":
@@ -756,41 +761,41 @@ class statsChannel(AbstractChannel):
                         # This should be the government_rank= line where we create the Nation object.
                         pass
                     if len(brackets) == 2:
-                        if "government_rank" == linekey:
+                        if linekey == "government_rank":
                             # This one is assignment so should NOT be referring to bracketNation
                             self.game.allNations[brackets[1]] = Nation(
                                 brackets[1])
-                        elif "raw_development" == linekey:
+                        elif linekey == "raw_development":
                             bracketNation.development = round(
                                 float(lineval))
-                        elif "capital" == linekey:
+                        elif linekey == "capital":
                             bracketNation.capitalID = int(lineval)
-                        elif "score_place" == linekey:
+                        elif linekey == "score_place":
                             bracketNation.scorePlace = round(
                                 float(lineval))
-                        elif "prestige" == linekey:
+                        elif linekey == "prestige":
                             bracketNation.prestige = round(float(lineval))
-                        elif "stability" == linekey:
+                        elif linekey == "stability":
                             bracketNation.stability = round(float(lineval))
-                        elif "treasury" == linekey:
+                        elif linekey == "treasury":
                             bracketNation.treasury = round(float(lineval))
-                        # elif "manpower" == linekey:
+                        # elif linekey == "manpower":
                             #bracketNation.manpower = round(float(lineval))
-                        # elif "max_manpower" == linekey:
+                        # elif linekey == "max_manpower":
                             #bracketNation.maxManpower = round(float(lineval))
-                        elif "overlord" == linekey:
-                            bracketNation.overlord = lineval.strip("\"")
+                        elif linekey == "overlord":
+                            bracketNation.overlord = lineval.strip('"')
                     elif len(brackets) == 3:
                         # Get each loan and add its amount to debt
-                        if brackets[2] == "loan" and "amount" == linekey:
+                        if brackets[2] == "loan" and linekey == "amount":
                             bracketNation.debt += round(
                                 float(lineval))
                         # Get Income from the previous month
-                        elif brackets[2] == "ledger" and "lastmonthincome" == linekey:
+                        elif brackets[2] == "ledger" and linekey == "lastmonthincome":
                             bracketNation.totalIncome = round(
                                 float(lineval), 2)
                         # Get Expense from the previous month
-                        elif brackets[2] == "ledger" and "lastmonthexpense" == linekey:
+                        elif brackets[2] == "ledger" and linekey == "lastmonthexpense":
                             bracketNation.totalExpense = round(
                                 float(lineval), 2)
                         elif brackets[2] == "subjects":
@@ -801,18 +806,18 @@ class statsChannel(AbstractChannel):
                                 bracketNation.allies.append(ally)
                     elif len(brackets) == 4:
                         # Add 1 to army size for each regiment
-                        if brackets[2] == "army" and brackets[3] == "regiment" and "morale" == linekey:
+                        if brackets[2] == "army" and brackets[3] == "regiment" and linekey == "morale":
                             bracketNation.army += 1000
                         # Subtract damage done to units from army size
-                        # This needs to be separate from ^ because for full regiments there is no "strength=" tag
-                        elif brackets[2] == "army" and brackets[3] == "regiment" and "strength" == linekey:
+                        elif brackets[2] == "army" and brackets[3] == "regiment" and linekey == "strength":
                             try:
                                 bracketNation.army = round(
                                     bracketNation.army - 1000 + 1000 * float(lineval))
                             except ValueError:
+                                # Full unit
                                 continue
                         # Add 1 for each ship
-                        elif brackets[2] == "navy" and brackets[3] == "ship" and "home" == linekey:
+                        elif brackets[2] == "navy" and brackets[3] == "ship" and linekey == "home":
                             bracketNation.navy += 1
                         elif brackets[2] == "colors" and brackets[3] == "map_color":
                             bracketNation.mapColor = tuple(
@@ -822,26 +827,26 @@ class statsChannel(AbstractChannel):
                                 map(lambda x: int(x), line.split()))
                 # Read wars
                 elif len(brackets) > 0 and brackets[0] == "previous_war":
-                    if len(brackets) == 1 and "name" == linekey:
+                    if len(brackets) == 1 and linekey == "name":
                         if currentReadWar is not None and currentReadWar.isPlayerWar(self.game.playertags):
                             currentReadWar.endDate = currentWarLastLeave
                             self.game.playerWars.append(currentReadWar)
-                        currentReadWar = war(lineval.strip("\""))
+                        currentReadWar = war(lineval.strip('"'))
                     elif len(brackets) == 3 and brackets[1] == "history":
-                        if "add_attacker" == linekey:
+                        if linekey == "add_attacker":
                             currentReadWar.attackers.append(
-                                lineval.strip("\""))
+                                lineval.strip('"'))
                             if currentReadWar.startDate is None:
                                 currentReadWar.startDate = eu4Date(
                                     brackets[2])
-                        elif "add_defender" == linekey:
+                        elif linekey == "add_defender":
                             currentReadWar.defenders.append(
-                                lineval.strip("\""))
-                        elif "rem_attacker" == linekey or "rem_defender" == linekey:
+                                lineval.strip('"'))
+                        elif linekey == "rem_attacker" or linekey == "rem_defender":
                             currentWarLastLeave = eu4Date(brackets[2])
                     elif len(brackets) >= 2 and brackets[1] == "participants":
-                        if len(brackets) == 2 and "tag" == linekey:
-                            currentReadWarParticTag = lineval.strip("\"")
+                        if len(brackets) == 2 and linekey == "tag":
+                            currentReadWarParticTag = lineval.strip('"')
                         elif len(brackets) == 4 and brackets[2] == "losses" and brackets[3] == "members":
                             if currentReadWarParticTag in currentReadWar.attackers:
                                 for x in line.split():
@@ -852,7 +857,7 @@ class statsChannel(AbstractChannel):
                             else:
                                 print(
                                     "Something went wrong with the attacker/defender list.")
-                    elif len(brackets) == 1 and "outcome" == linekey:
+                    elif len(brackets) == 1 and linekey == "outcome":
                         currentReadWar.result = int(lineval)
                         if currentReadWar.isPlayerWar(self.game.playertags):
                             currentReadWar.endDate = currentWarLastLeave
@@ -863,20 +868,20 @@ class statsChannel(AbstractChannel):
         if self.game.GP == [] or self.game.date is None or self.game.age is None:
             raise Exception(
                 "This probably isn't a valid .eu4 uncompressed save file from " + self.user.mention)
-        for x in self.game.allNations.copy().keys():
-            if self.game.allNations[x].development == 0:
+        for nat in self.game.allNations.copy().keys():
+            if self.game.allNations[nat].development == 0:
                 try:
-                    del(self.game.allNations[x])
+                    del(self.game.allNations[nat])
                 except:
                     pass
                 try:
-                    del(self.game.playertags[x])
+                    del(self.game.playertags[nat])
                 except:
                     pass
             # else:
-                # print(self.game.allNations[x].fullDataStr())
+                # print(self.game.allNations[nat].fullDataStr())
         # Sort Data:
-        self.game.playerWars.sort(key=lambda x: x.warScale(
+        self.game.playerWars.sort(key=lambda nat: nat.warScale(
             self.game.playertags), reverse=True)
 
     async def generateImage(self, sendUpdates=True) -> Image.Image:
@@ -1375,6 +1380,8 @@ class asiresChannel(AbstractChannel):
             # Get the actual capitals and add to tagCapitals.
             srcFile = open("src/save_1444.eu4", "r", encoding="cp1252")
             lines = srcFile.readlines()
+            srcFile.close()
+            del(srcFile)
             brackets: List[str] = []
             linenum = 0
             for line in lines:
@@ -1567,12 +1574,12 @@ class asiresChannel(AbstractChannel):
         """
         Adds a user's reservation.
         """
-        picks = text.split(",")
+        picks: List[str] = text.split(",")
         # Check that there is the correct format.
         if not len(picks) == 3:
             await sendUserMessage(user, "Your reserve in " + self.interactChannel.mention + " needs to be 3 elements in the format 'a,b,c'")
             return
-        tags = []
+        tags: List[str] = []
         # Find each tag or cancel if one is invalid.
         for pick in picks:
             tag = EU4Lib.country(pick.strip("\n\t "))
@@ -1664,6 +1671,7 @@ async def on_ready():
             rescount += 1
     print("Loaded " + str(rescount) + " channels and removed " +
           str(closedcount) + " no longer existing channels.")
+    # Set activity
     await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for new lands"))
 
 
