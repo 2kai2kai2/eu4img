@@ -4,7 +4,7 @@ import traceback
 from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Final, List, Optional, Tuple, Union
 
 import cppimport
 import discord
@@ -147,12 +147,12 @@ class eu4Date:
         self.day = int(daystr)
 
     @property
-    def fancyStr(self):
+    def fancyStr(self) -> str:
         monthnames: Dict[int, str] = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
                                       7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
         return str(self.day) + " " + monthnames[self.month] + " " + str(self.year)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.year) + "." + str(self.month) + "." + str(self.day)
 
     def __eq__(self, other) -> bool:
@@ -555,6 +555,10 @@ class Nation:
 
 
 class war():
+    WHITEPEACE: Final[int] = 1
+    ATTACKERWIN: Final[int] = 2
+    DEFENDERWIN: Final[int] = 3
+
     def __init__(self, name: str):
         self.name = name
         self.attackers: List[str] = []
@@ -563,7 +567,7 @@ class war():
         self.defenderLosses: int = 0
         self.startDate: eu4Date = None
         self.endDate: eu4Date = None
-        self.result: int = 0  # 1 = WP; 2 = Attacker wins; 3 = Defender wins
+        self.result: int = 0
 
     def isPlayerWar(self, playertags: List[str]):
         """
@@ -816,7 +820,7 @@ class statsChannel(AbstractChannel):
                         elif brackets[2] == "colors" and brackets[3] == "country_color":
                             bracketNation.natColor = tuple(
                                 map(lambda x: int(x), line.split()))
-                    # End new save stuff
+                # Read wars
                 elif len(brackets) > 0 and brackets[0] == "previous_war":
                     if len(brackets) == 1 and "name" == linekey:
                         if currentReadWar is not None and currentReadWar.isPlayerWar(self.game.playertags):
@@ -951,6 +955,10 @@ class statsChannel(AbstractChannel):
                     drawColors[c] += sliceDraw[c]
                 else:
                     drawColors[c] = sliceDraw[c]
+        try:
+            del(drawColors[(0, 0, 0)])
+        except:
+            pass
         mapDraw = ImageDraw.Draw(self.politicalImage)
         await updateProgress("Drawing player borders...", 3, 8)
         for drawColor in drawColors:
@@ -1124,14 +1132,14 @@ class statsChannel(AbstractChannel):
                     imgDraw.text((round(x + 437.5 - imgDraw.textsize(dateStr, fontmini)
                                         [0]/2), y + 115), dateStr, (255, 255, 255), fontmini, align="center")
                     # Draw result
-                    if playerWar.result == 1:  # WP
+                    if playerWar.result == war.WHITEPEACE:
                         WPIcon = Image.open("src/icon_peace.png")
                         imgFinal.paste(WPIcon, (x + 437 - 32, y + 140), WPIcon)
-                    elif playerWar.result == 2:  # Attacker
+                    elif playerWar.result == war.ATTACKERWIN:
                         WinnerIcon = Image.open("src/star.png")
                         imgFinal.paste(
                             WinnerIcon, (x + 290, y + 148), WinnerIcon)
-                    elif playerWar.result == 3:  # Defender
+                    elif playerWar.result == war.DEFENDERWIN:
                         WinnerIcon = Image.open("src/star.png")
                         imgFinal.paste(
                             WinnerIcon, (x + 12 + 585 - 48, y + 148), WinnerIcon)
