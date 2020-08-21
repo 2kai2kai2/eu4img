@@ -274,7 +274,7 @@ class ReserveChannel(AbstractChannel):
             str(self.displayChannel.id), imgmsg=id, conn=checkConn())
 
     async def process(self, message: discord.Message):
-        text: str = message.content.strip("\n\t ")
+        text: str = message.content.strip()
         if text.upper() == self.prefix() + "HELP":  # HELP
             stringHelp = "__**Command help for " + message.channel.mention + ":**__"
             stringHelp += "\n**" + self.prefix() + "HELP**\nGets you this information!"
@@ -310,7 +310,7 @@ class ReserveChannel(AbstractChannel):
             del(self)
         # RESERVE [nation]
         elif text.upper().startswith(self.prefix() + "RESERVE "):
-            res = text.split(maxsplit=1)[1].strip("\n\t ")
+            res = text.split(maxsplit=1)[1].strip()
             tag = EU4Lib.country(res)
             if tag is not None:
                 if EU4Reserve.isBanned(str(self.displayChannel.id), tag, conn=checkConn()):
@@ -940,32 +940,14 @@ class statsChannel(AbstractChannel):
         # Modify the image
         await updateProgress("Calculating player borders...", 2, 8)
         # Formatting: (draw color) = [(x, y), (x, y), ...]
-        drawColors: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = {}
-        width = self.politicalImage.width
-        height = self.politicalImage.height
-        # So basically, I'm hitting my memory cap of 512MB which means that we can't have the full pixel list at one time.
-        # Instead, I'm going to have it cut up the image into pieces and go through each by itself.
-        pieces = 5
-        sliceheight = int(height / pieces + pieces * 2)
-        for slice in range(pieces):
-            await updateProgress("Calculating player borders [sector " + str(slice) + "/" + str(pieces) + "]...", 2, 8)
-            ystart = int(max(0, height / pieces * slice - pieces))
-            pixlist: List[Tuple[int, int, int]] = list(
-                self.politicalImage.crop([0, ystart, width, min(height, ystart+sliceheight)]).getdata())
-            sliceDraw: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = EU4cpplib.drawBorders(
-                playerColors, pixlist, width, ystart)
-            del(pixlist)
-            for c in sliceDraw:
-                if c in drawColors:
-                    drawColors[c] += sliceDraw[c]
-                else:
-                    drawColors[c] = sliceDraw[c]
+        drawColors: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = EU4cpplib.drawBorders(
+            playerColors, self.politicalImage.tobytes(), self.politicalImage.width, self.politicalImage.height)
         try:
             del(drawColors[(0, 0, 0)])
         except:
             pass
-        mapDraw = ImageDraw.Draw(self.politicalImage)
         await updateProgress("Drawing player borders...", 3, 8)
+        mapDraw = ImageDraw.Draw(self.politicalImage)
         for drawColor in drawColors:
             mapDraw.point(drawColors[drawColor], drawColor)
         del(drawColors)
@@ -1176,7 +1158,7 @@ class statsChannel(AbstractChannel):
                     await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**")
                     return
             else:  # str
-                saveURL: str = message.content.strip("\n\t ")
+                saveURL: str = message.content.strip()
                 try:
                     response = requests.get(saveURL)
                 except:
@@ -1217,11 +1199,14 @@ class statsChannel(AbstractChannel):
                     await self.interactChannel.send("**Your image was not the right size.** (5632, 2048)\nDid you submit a Political Mapmode screenshot? (f10)\n**Please try another image.**")
                     self.politicalImage = None
                 else:
-                    self.modMsg = await self.interactChannel.send(self.modPromptStr())
+                    if message.content.strip().lower() == "done":
+                        await self.process(message)
+                    else:
+                        self.modMsg = await self.interactChannel.send(self.modPromptStr())
         # Third step - player list modification
         elif self.hasReadFile and (self.politicalImage is not None) and (not self.doneMod):
             # done
-            if message.content.strip("\n\t ").lower() == "done":
+            if message.content.strip().lower() == "done":
                 self.doneMod == True
                 # Create the Image and convert to discord.File
                 img: discord.File = imageToFile(await self.generateImage())
@@ -1235,11 +1220,11 @@ class statsChannel(AbstractChannel):
                 interactions.remove(self)
                 del(self)
             # add [player], [nation]
-            elif message.content.strip("\n\t ").lower().startswith("add "):
-                player = message.content.strip("\n\t ").partition(
-                    " ")[2].partition(",")[0].strip("\t\n ")
-                natName = message.content.strip("\n\t ").partition(",")[
-                    2].strip("\t\n ")
+            elif message.content.strip().lower().startswith("add "):
+                player = message.content.strip().partition(
+                    " ")[2].partition(",")[0].strip()
+                natName = message.content.strip().partition(",")[
+                    2].strip()
                 tag = EU4Lib.country(natName)
                 if tag is None:
                     await message.add_reaction("\u2754")  # Question Mark
@@ -1252,9 +1237,9 @@ class statsChannel(AbstractChannel):
                     await self.modMsg.edit(content=self.modPromptStr())
                     await message.add_reaction("\u2705")  # Check Mark
             # remove [nation]
-            elif message.content.strip("\n\t ").lower().startswith("remove "):
-                name = message.content.strip("\n\t ").partition(" ")[
-                    2].strip("\t\n ")
+            elif message.content.strip().lower().startswith("remove "):
+                name = message.content.strip().partition(" ")[
+                    2].strip()
                 tag = EU4Lib.country(name)
                 if tag is None:
                     await message.add_reaction("\u2754")  # Question Mark
@@ -1342,7 +1327,7 @@ class asiresChannel(AbstractChannel):
         return message.channel == self.interactChannel
 
     async def process(self, message: discord.Message):
-        text = message.content.strip("\n\t ")
+        text = message.content.strip()
         if text.upper() == self.prefix() + "HELP":  # HELP
             stringHelp = "__**Command help for " + message.channel.mention + ":**__"
             stringHelp += "\n**" + self.prefix() + "HELP**\nGets you this information!"
@@ -1463,7 +1448,7 @@ class asiresChannel(AbstractChannel):
             del(self)
         # RESERVE [nation1], [nation2], [nation3]
         elif text.upper().startswith(self.prefix() + "RESERVE "):
-            await self.add(message.author, text.split(maxsplit=1)[1].strip("\n\t "))
+            await self.add(message.author, text.split(maxsplit=1)[1].strip())
             await message.delete()
             await self.updateText()
         # ADMRES [nation1], [nation2], [nation3] @[player]
@@ -1479,8 +1464,8 @@ class asiresChannel(AbstractChannel):
                     await message.delete()
                     return
                 for pick in picks:
-                    if EU4Lib.country(pick.strip("\n\t ")) is None:
-                        await sendUserMessage(message.author, "Your reservation of " + pick.strip("\n\t ") + " in " + self.interactChannel.mention + " for " + message.mentions[0].mention + " was not a recognized nation.")
+                    if EU4Lib.country(pick.strip()) is None:
+                        await sendUserMessage(message.author, "Your reservation of " + pick.strip() + " in " + self.interactChannel.mention + " for " + message.mentions[0].mention + " was not a recognized nation.")
                         await message.delete()
                         return
                 # At this point the reservation should be valid, because otherwise add will send the failure to the target.
@@ -1502,7 +1487,7 @@ class asiresChannel(AbstractChannel):
             # Get the tag for the specified nation
             pick = EU4Lib.country(res)
             if pick is None:  # Nation is invalid; tag not found.
-                await sendUserMessage(message.author, "Your reservation of " + res.strip("\n\t ") + " in " + self.interactChannel.mention + " for " + user.mention + " was not a recognized nation.")
+                await sendUserMessage(message.author, "Your reservation of " + res.strip() + " in " + self.interactChannel.mention + " for " + user.mention + " was not a recognized nation.")
                 await message.delete()
                 return
             # Now reserve
@@ -1582,11 +1567,11 @@ class asiresChannel(AbstractChannel):
         tags: List[str] = []
         # Find each tag or cancel if one is invalid.
         for pick in picks:
-            tag = EU4Lib.country(pick.strip("\n\t "))
+            tag = EU4Lib.country(pick.strip())
             if tag is not None:
                 tags.append(tag)
             else:
-                await sendUserMessage(user, "Your reservation of " + pick.strip("\n\t ") + " in " + self.interactChannel.mention + " was not a recognized nation.")
+                await sendUserMessage(user, "Your reservation of " + pick.strip() + " in " + self.interactChannel.mention + " was not a recognized nation.")
                 return
         # Create and add player's reservation to the reserve.
         res = EU4Reserve.asiPick(user.mention)
@@ -1678,7 +1663,7 @@ async def on_ready():
 @client.event
 async def on_message(message: discord.Message):
     if not message.author.bot:
-        text = message.content.strip("\n\t ")
+        text = message.content.strip()
         for interaction in interactions:
             if await interaction.responsive(message):
                 await interaction.process(message)
@@ -1740,7 +1725,7 @@ async def on_message(message: discord.Message):
                     await c.updateText()
                     interactions.append(c)
             elif text.upper().startswith(prefix + "PREFIX") and checkResAdmin(message.guild, message.author):
-                newPrefix = text.partition(" ")[2].strip("\n\t ")
+                newPrefix = text.partition(" ")[2].strip()
                 if len(newPrefix) < 1:
                     await sendUserMessage(message.author, "The prefix must be at least 1 character.")
                 elif any(char.isalpha() for char in newPrefix):
@@ -1755,9 +1740,9 @@ async def on_message(message: discord.Message):
                     newRank = message.role_mentions[0]
                 else:
                     newRank = getRoleFromStr(
-                        message.guild, text.partition(" ")[2].strip("\n\t "))
+                        message.guild, text.partition(" ")[2].strip())
                 if newRank is None:
-                    await sendUserMessage(message.author, "The rank " + text.partition(" ")[2].strip("\n\t ") + " is not a valid rank on " + message.guild.name)
+                    await sendUserMessage(message.author, "The rank " + text.partition(" ")[2].strip() + " is not a valid rank on " + message.guild.name)
                 else:
                     GuildManager.setAdmin(
                         message.guild, newRank.name, conn=checkConn())
