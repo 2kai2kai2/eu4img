@@ -1,6 +1,10 @@
-from typing import List, Optional, Union, Tuple
 import re
 import time
+from typing import List, Optional, Tuple, Union
+
+import cppimport.import_hook
+
+import EU4cppparser
 
 """
 My idea for how to start going about this is to go through each item on the first level and get the key and value.
@@ -152,91 +156,15 @@ gameplaysettings={
 }
 """
 
-
-class eu4Date:
-    def __init__(self, datestr: str):
-        yearstr, monthstr, daystr = datestr.strip().split(".")
-        self.year = int(yearstr)
-        self.month = int(monthstr)
-        self.day = int(daystr)
-
-    @property
-    def fancyStr(self):
-        monthnames = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
-                      7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
-        return str(self.day) + " " + monthnames[self.month] + " " + str(self.year)
-
-    def __str__(self):
-        return str(self.year) + "." + str(self.month) + "." + str(self.day)
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            return False
-        return self.year == other.year and self.month == other.month and self.day == other.day
-
-    def __ne__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            return True
-        return self.year != other.year or self.month != other.month or self.day != other.day
-
-    def __lt__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            raise TypeError("eu4Date can only be compared with eu4Date.")
-        return self.year < other.year or (self.year == other.year and (self.month < other.month or (self.month == other.month and self.day < other.day)))
-
-    def __le__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            raise TypeError("eu4Date can only be compared with eu4Date.")
-        return self == other or self < other
-
-    def __gt__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            raise TypeError("eu4Date can only be compared with eu4Date.")
-        return self.year > other.year or (self.year == other.year and (self.month > other.month or (self.month == other.month and self.day > other.day)))
-
-    def __ge__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            raise TypeError("eu4Date can only be compared with eu4Date.")
-        return self == other or self > other
+eu4Types = Union[str, int, float, EU4cppparser.EU4Date, List[str], dict]
 
 
-dateregex = re.compile(r"\d{1,4}\.\d{1,2}\.\d{1,2}")
-groupregex = re.compile(r"\{(.|\n)*\}")
-
-
-def splitStrings(text: str) -> List[str]:
+def parseGroup(group: List[str]) -> Union[List[eu4Types], dict]:
     """
-    Splits along all whitespace not within "{" brackets or quotes.
+    Parses the text of a list of string items (either values or key-value pairs)
 
-    When splitting groups, exclude the start and end brackets.
+    Returns either a list or a dict of 
     """
-    items: List[str] = []
-    # There can be as many open brackets as you want, but if quotes are open then anything until they are closed will be ignored.
-    bracketCount = 0
-    quotes = False
-    lastsplit = 0
-    for i in range(len(text)):
-        char = text[i]
-        if bracketCount == 0 and not quotes and char.isspace():
-            split = text[lastsplit:i]
-            lastsplit = i
-            if not (split.isspace() or split == ""):
-                items.append(split.strip())
-        elif char == "{" and not quotes:
-            bracketCount += 1
-        elif char == "}" and not quotes:
-            if bracketCount > 0:
-                bracketCount -= 1
-        elif char == "\"":
-            quotes = not quotes
-    # At the end, if there isn't whitespace then we need to just add whatever the last thing was.
-    split = text[lastsplit:]
-    if not (split.isspace() or split == ""):
-        items.append(split.strip())
-    return items
-
-
-def parseGroup(group: List[str]) -> Union[List[str], dict]:
     if len(group) == 0:
         return []
     elif "=" in group[0] and ("{" not in group[0] or (group[0].index("=") < group[0].index("{"))):
@@ -251,17 +179,17 @@ def parseGroup(group: List[str]) -> Union[List[str], dict]:
         return list(map(parseType, group))
 
 
-def parseType(text: str) -> Union[str, int, float, eu4Date, List[str], dict]:
+def parseType(text: str) -> eu4Types:
     text = text.strip()
-    if text.isdigit():
+    if text.isdigit():  # int
         return int(text)
-    elif text.isdecimal():
+    elif text.isdecimal():  # float
         return float(text)
-    elif re.fullmatch(dateregex, text) is not None:
-        return eu4Date(text)
-    elif re.fullmatch(groupregex, text) is not None:
+    elif EU4cppparser.EU4Date.stringValid(text):  # date
+        return EU4cppparser.EU4Date(text)
+    elif text[0] == "{" and text[-1] == "}":  # group
         # The string starts and ends with {} so we need to remove that for splitting
-        return parseGroup(splitStrings(text[1:-1]))
+        return parseGroup(EU4cppparser.splitStrings(text[1:-1]))
     else:  # str
         return text.strip("\"")
 
@@ -270,19 +198,19 @@ def formatFix(text: str) -> str:
     return text.replace("map_area_data{", "map_area_data={").replace("EU4txt", "")
 
 
-
 starttime = time.time()
 file = open("src/save_1444.eu4", "r", encoding="cp1252")
-text = file.read()
+text = formatFix(file.read())
 file.close()
 totaltime = time.time() - starttime
 print("File load: " + str(totaltime) + "s. | " +
       str(totaltime/len(text)) + "s/char")
 
 starttime = time.time()
-count = 1
+count = 10
 for i in range(count):
-    parseGroup(splitStrings(formatFix(text)))
+    parseGroup(EU4cppparser.splitStrings(text))
+    print("Finished " + str(i + 1) + "/" + str(count))
 totaltime = time.time() - starttime
-print("Parsing: " + str(totaltime) + "s. | " +
+print("Parsing: " + str(totaltime/count) + "s. | " +
       str(totaltime/len(text)/count) + "s/char")

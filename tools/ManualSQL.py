@@ -21,7 +21,7 @@ while True:
             cur.execute(command)
             try:
                 print(cur.fetchall())
-            except ProgrammingError:
+            except psycopg2.ProgrammingError:
                 pass
         except Exception as e:
             print(repr(e))
