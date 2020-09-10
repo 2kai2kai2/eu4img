@@ -9,9 +9,10 @@ cfg['compiler_args'] = ['-std=c++20', '/std:c++latest']
 %>
 */
 
+#include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/operators.h>
+
 #include <string>
 #include <variant>
 
@@ -27,12 +28,12 @@ struct EU4Date {
     EU4Date(const std::string &text) {
         size_t sep1 = text.find('.');
         size_t sep2 = text.rfind('.');
-        year = std::stoi(text.substr(0, sep1));
-        month = std::stoi(text.substr(sep1 + 1, sep2 - sep1));
-        day = std::stoi(text.substr(sep2 + 1));
+        this->year = std::stoi(text.substr(0, sep1));
+        this->month = std::stoi(text.substr(sep1 + 1, sep2 - sep1));
+        this->day = std::stoi(text.substr(sep2 + 1));
     }
 
-    EU4Date(const unsigned int &year, const unsigned char &month, const unsigned char &day) : year(year), month(month), day(day) {}
+    EU4Date(const unsigned int &year, const unsigned char &month, const unsigned char &day) : year(year), month(month), day(day) { }
 
     static bool stringValid(const std::string &text) {
         // This does not mean that the date is valid. It could be March 45th, 1345

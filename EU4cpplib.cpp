@@ -9,7 +9,11 @@ cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <cstdlib>
+
+#include <list>
+#include <map>
+#include <string>
+#include <tuple>
 
 
 namespace py = pybind11;
