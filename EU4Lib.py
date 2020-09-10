@@ -20,6 +20,11 @@ def country(text: str) -> Optional[str]:
         for line in lines:
             if line[1:4] == text.upper():
                 return text.upper()
+        if text[1:].isdigit():
+            # This is either a dynamic tag or some random characters.
+            firstchar = text[0].upper()
+            if firstchar == "C" or firstchar == "D" or firstchar == "E" or firstchar == "K" or firstchar == "T":
+                return text.upper()
     # text is not a recognized tag, search names
     for line in lines:
         if ('"' + text.lower() + '"') in line.lower():
@@ -40,6 +45,23 @@ def tagToName(tag: str) -> Optional[str]:
     srcFile.close()
     # If it could be a valid tag
     if len(tag) == 3:
+        if tag[1:].isdigit():
+            # Dynamic tag
+            if tag[0] == "C":
+                # Colonial Nation
+                return "Colonial Nation C" + tag[1:]
+            elif tag[0] == "D":
+                # Custom Nation
+                return "Custom Nation D" + tag[1:]
+            elif tag[0] == "E":
+                # Estate Disaster-Released Nation
+                return "Estate Nation E" + tag[1:]
+            elif tag[0] == "K":
+                # Client State
+                return "Client State K" + tag[1:]
+            elif tag[0] == "T":
+                # Trading City
+                return "Trading City T" + tag[1:]
         # Then search for it and return the first thing in quotes on that line
         for line in lines:
             if line[1:4] == tag.upper():

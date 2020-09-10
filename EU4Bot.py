@@ -987,7 +987,7 @@ class statsChannel(AbstractChannel):
                 if (natnum < 16):
                     # x: Country flag
                     flag: Image.Image = None
-                    if (nat.tag.startswith("C") and nat.tag[1:].upper() == nat.tag[1:].lower() and nat.overlord is not None):
+                    if (nat.tag.startswith("C") and nat.tag[1:].isdigit() and nat.overlord is not None):
                         # This is a colonial nation, so make that flag instead.
                         flag = EU4Lib.colonialFlag(
                             nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
@@ -1049,7 +1049,7 @@ class statsChannel(AbstractChannel):
                             self.game.playertags).index(nat)
                         if natnum < 8:
                             flag: Image.Image = None
-                            if (nat.startswith("C") and nat[1:].upper() == nat[1:].lower() and self.game.allNations[nat].overlord is not None):
+                            if (nat.startswith("C") and nat[1:].isdigit() and self.game.allNations[nat].overlord is not None):
                                 # This is a colonial nation, so make that flag instead.
                                 try:
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
@@ -1075,7 +1075,7 @@ class statsChannel(AbstractChannel):
                             self.game.playertags).index(nat)
                         if natnum < 8:
                             flag: Image.Image = None
-                            if (nat.startswith("C") and nat[1:].upper() == nat[1:].lower() and self.game.allNations[nat].overlord is not None):
+                            if (nat.startswith("C") and nat[1:].isdigit() and self.game.allNations[nat].overlord is not None):
                                 # This is a colonial nation, so make that flag instead.
                                 try:
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
