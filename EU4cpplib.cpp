@@ -15,9 +15,7 @@ cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
 #include <string>
 #include <tuple>
 
-
 namespace py = pybind11;
-
 
 std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::list<std::tuple<size_t, size_t>>> drawBorders(std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::tuple<uint8_t, uint8_t, uint8_t>> playerColors, std::string pixels, size_t width, size_t height) {
     std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::list<std::tuple<size_t, size_t>>> out;
@@ -49,7 +47,6 @@ std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::list<std::tuple<size_t, siz
     }
     return out;
 };
-
 
 PYBIND11_MODULE(EU4cpplib, m) {
     m.doc() = "Libraries for eu4img written in C++ to improve speed and resource-consumption.";

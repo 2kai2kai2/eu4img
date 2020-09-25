@@ -1,6 +1,5 @@
-import re
 import time
-from typing import List, Optional, Tuple, Union
+from typing import List, Union
 
 import cppimport.import_hook
 

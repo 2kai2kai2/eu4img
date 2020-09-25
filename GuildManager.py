@@ -1,11 +1,8 @@
 import json
-import os
 from typing import List, Optional, Union
 
 import discord
 import psycopg2
-from dotenv import load_dotenv
-
 
 """
 Data Structure - Json

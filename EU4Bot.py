@@ -1,4 +1,3 @@
-import asyncio
 import os
 import traceback
 from abc import ABC, abstractmethod
@@ -112,7 +111,7 @@ def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Opt
     return None
 
 
-def checkResAdmin(server: Union[str, int, discord.Guild], user: [str, int, DiscUser]) -> bool:
+def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str, int, DiscUser]) -> bool:
     """
     Returns whether or not a user has bot admin control roles as set in .env on a server.
     """
