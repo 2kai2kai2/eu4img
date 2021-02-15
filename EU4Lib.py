@@ -49,19 +49,19 @@ def tagToName(tag: str) -> Optional[str]:
             # Dynamic tag
             if tag[0] == "C":
                 # Colonial Nation
-                return "Colonial Nation C" + tag[1:]
+                return f"Colonial Nation C{tag[1:]}"
             elif tag[0] == "D":
                 # Custom Nation
-                return "Custom Nation D" + tag[1:]
+                return f"Custom Nation D{tag[1:]}"
             elif tag[0] == "E":
                 # Estate Disaster-Released Nation
-                return "Estate Nation E" + tag[1:]
+                return f"Estate Nation E{tag[1:]}"
             elif tag[0] == "K":
                 # Client State
-                return "Client State K" + tag[1:]
+                return f"Client State K{tag[1:]}"
             elif tag[0] == "T":
                 # Trading City
-                return "Trading City T" + tag[1:]
+                return f"Trading City T{tag[1:]}"
         # Then search for it and return the first thing in quotes on that line
         for line in lines:
             if line[1:4] == tag.upper():
@@ -125,7 +125,7 @@ def flag(tag: str) -> Image.Image:
     a = line.partition(tag)  # Separate into a 3-tuple around tag
     flagnum = a[0].count(".tga")  # Get image number starting at 0
     # Get the file based on 256 flags per
-    flagfile = Image.open("src/flagfiles_" + str(int(flagnum/256)) + ".tga")
+    flagfile = Image.open(f"src/flagfiles_{int(flagnum/256)}.tga")
     # Get the location of the flag within the file
     x = 128*((flagnum % 256) % 16)
     y = 128*int((flagnum % 256)/16)
@@ -156,7 +156,7 @@ def provinceArea(provinceID: Union[str, int]) -> str:
             if str(provinceID) in line.split():
                 return currentArea
     # Was not found
-    raise ValueError(str(provinceID) + " was not a valid province.")
+    raise ValueError(f"{provinceID} was not a valid province.")
 
 
 def region(areaName: str) -> str:
@@ -181,7 +181,7 @@ def region(areaName: str) -> str:
             if line.strip("\n\t ") == areaName:
                 return currentRegion
     # Was not found
-    raise ValueError(str(areaName) + " was not a valid area.")
+    raise ValueError(f"{areaName} was not a valid area.")
 
 
 def superregion(regionName: str) -> str:
@@ -206,7 +206,7 @@ def superregion(regionName: str) -> str:
             if line.strip("\n\t ") == regionName:
                 return currentSuperregion
     # Was not found
-    raise ValueError(str(regionName) + " was not a valid region.")
+    raise ValueError(f"{regionName} was not a valid region.")
 
 
 def continent(provinceID: Union[str, int]) -> str:
@@ -230,7 +230,7 @@ def continent(provinceID: Union[str, int]) -> str:
             if str(provinceID) in line.split():
                 return currentContinent
     # Was not found
-    raise ValueError(str(provinceID) + " was not a valid province.")
+    raise ValueError(f"{provinceID} was not a valid province.")
 
 
 def isIn(provinceID: Union[str, int], group: str) -> bool:
@@ -278,8 +278,8 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
             elif str(provinceID) in line.split():
                 return currentColReg
     # Was not found
-    raise ValueError(str(provinceID) +
-                     " was not a valid province in a colonial region.")
+    raise ValueError(
+        f"{provinceID} was not a valid province in a colonial region.")
 
 
 def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
@@ -303,10 +303,10 @@ def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
             color = (int(colorR), int(colorG), int(colorB))
     # Raise error if the colonial region or color was invalid
     if currentColReg is None:
-        raise ValueError("Colonial Region \"" + colReg + "\" was not found.")
+        raise ValueError(f"Colonial Region \"{colReg}\" was not found.")
     elif colorR is None or colorG is None or colorB is None:
         raise ValueError(
-            "Something went very wrong. No color was found in the source file for the Colonial Region \"" + colReg + "\".")
+            f"Something went very wrong. No color was found in the source file for the Colonial Region \"{colReg}\".")
     # Image editing
     flagimg: Image.Image = flag(overlordTag)
     flagDraw = ImageDraw.Draw(flagimg)
@@ -333,26 +333,26 @@ class dataReq:
                 if isinstance(r, str):
                     self.response = r
                 else:
-                    raise ValueError("PROVINCE NAME request for " +
-                                     self.key + " was the wrong type.")
+                    raise ValueError(
+                        f"PROVINCE NAME request for {self.key} was the wrong type.")
             elif self.request == self.REQUEST_PROVINCE_TRADE:
                 if isinstance(r, str):
                     self.response = r
                 else:
                     raise ValueError(
-                        "PROVINCE TRADE request for " + self.key + " was the wrong type.")
+                        f"PROVINCE TRADE request for {self.key} was the wrong type.")
             elif self.request == self.REQUEST_PROVINCE_CULTURE_ORIGINAL:
                 if isinstance(r, str):
                     self.response = r
                 else:
                     raise ValueError(
-                        "PROVINCE CULTURE ORIGINAL request for " + self.key + " was the wrong type.")
+                        f"PROVINCE CULTURE ORIGINAL request for {self.key} was the wrong type.")
             elif self.request == self.REQUEST_PROVINCE_RELIGION_ORIGINAL:
                 if isinstance(r, str):
                     self.response = r
                 else:
                     raise ValueError(
-                        "PROVINCE RELIGION ORIGINAL request for " + self.key + " was the wrong type.")
+                        f"PROVINCE RELIGION ORIGINAL request for {self.key} was the wrong type.")
             # More things
         # More datatypes
 

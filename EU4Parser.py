@@ -202,14 +202,12 @@ file = open("src/save_1444.eu4", "r", encoding="cp1252")
 text = formatFix(file.read())
 file.close()
 totaltime = time.time() - starttime
-print("File load: " + str(totaltime) + "s. | " +
-      str(totaltime/len(text)) + "s/char")
+print(f"File load: {totaltime}s. | {totaltime/len(text)}s/char")
 
 starttime = time.time()
 count = 10
 for i in range(count):
     parseGroup(EU4cppparser.splitStrings(text))
-    print("Finished " + str(i + 1) + "/" + str(count))
+    print(f"Finished {i + 1}/{count}")
 totaltime = time.time() - starttime
-print("Parsing: " + str(totaltime/count) + "s. | " +
-      str(totaltime/len(text)/count) + "s/char")
+print(f"Parsing: {totaltime/count}s. | {totaltime/len(text)/count}s/char")
