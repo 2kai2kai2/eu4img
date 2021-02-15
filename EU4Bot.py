@@ -1,3 +1,4 @@
+import asyncio
 import os
 import traceback
 from abc import ABC, abstractmethod
@@ -7,6 +8,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import cppimport
 import discord
+from discord import file
 import psycopg2
 import requests
 from dotenv import load_dotenv
@@ -15,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 import EU4Lib
 import EU4Reserve
 import GuildManager
+import Skanderbeg
 
 print("Compiling C++ modules...")
 try:
@@ -28,7 +31,7 @@ else:
     print("C++ module compilation successful.")
 
 
-# Load environment variables
+# Load Discord Client
 load_dotenv()
 token: str = os.getenv('DISCORD_TOKEN')
 client = discord.Client()
@@ -40,7 +43,10 @@ try:
     conn.autocommit = True
 except:
     conn = None
-
+# Load Skanderbeg key if it exists
+SKANDERBEGKEY = os.environ['SKANDERBEG_KEY']
+if SKANDERBEGKEY == "" or SKANDERBEGKEY.isspace():
+    SKANDERBEGKEY = None
 
 # Create reused typing Unions
 DiscUser = Union[discord.User, discord.Member]
@@ -637,6 +643,8 @@ class statsChannel(AbstractChannel):
         self.game = saveGame()
         self.modMsg: discord.Message = None
         self.doneMod = False
+        self.skanderbeg = True
+        self.skanderbegURL: Optional[asyncio.Task] = None
 
     async def asyncInit(self):
         """
@@ -1147,12 +1155,14 @@ class statsChannel(AbstractChannel):
         if message.content.upper() == GuildManager.getGuildSave(self.displayChannel.guild, conn=checkConn()).prefix + "CANCEL":
             await self.interactChannel.send("**Cancelling the stats operation.**")
             interactions.remove(self)
+            if self.skanderbegURL is not None:
+                self.skanderbegURL.cancel()
             del(self)
         elif not self.hasReadFile:  # First step - get .eu4 file
-            saveFile: Optional[StringIO] = None
+            saveFile: Optional[bytes] = None
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".eu4"):
                 try:
-                    saveFile = StringIO((await message.attachments[0].read()).decode("cp1252"))
+                    saveFile = await message.attachments[0].read()
                 except:
                     await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**")
                     return
@@ -1165,7 +1175,7 @@ class statsChannel(AbstractChannel):
                     return
                 if response.status_code == 200:  # 200 == requests.codes.ok
                     try:
-                        saveFile = StringIO(response.content.decode("cp1252"))
+                        saveFile = response.content
                     except Exception as e:
                         await self.interactChannel.send("**Something went wrong in decoding your .eu4 file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**\n```"+repr(e)+"```")
                         return
@@ -1174,14 +1184,18 @@ class statsChannel(AbstractChannel):
                     return
             await self.interactChannel.send("**Recieved save file. Processing...**")
             try:
-                await self.readFile(saveFile)
+                await self.readFile(StringIO(saveFile.decode("cp1252")))
             except Exception as e:
                 await self.interactChannel.send("**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```" + repr(e) + "```")
                 return
             else:
                 await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
                 self.hasReadFile = True
-                del(saveFile)
+                if self.skanderbeg and SKANDERBEGKEY is not None:
+                    self.skanderbegURL = asyncio.create_task(Skanderbeg.upload(saveFile, f"{self.game.date.fancyStr} - Cartographer Upload", SKANDERBEGKEY))
+                    # We don't manually delete saveFile here, but that's probably fine since once the upload is done there shouldn't be any other references
+                else:
+                    del(saveFile)
         # Second step - get .png file
         elif self.hasReadFile and (self.politicalImage is None):
             if len(message.attachments) == 0:  # Check there is a file
@@ -1210,12 +1224,20 @@ class statsChannel(AbstractChannel):
                 # Create the Image and convert to discord.File
                 img: discord.File = imageToFile(await self.generateImage())
                 try:
-                    await self.displayChannel.send(file=img)
+                    if self.skanderbeg:
+                        if self.skanderbegURL.done():
+                            await self.displayChannel.send(self.skanderbegURL.result(), file=img)
+                        else:
+                            imgmsg: discord.Message = await self.displayChannel.send("*Uploading to Skanderbeg.pm...*", file=img)
+                            await self.interactChannel.send(f"Sent image to {self.displayChannel.mention}; waiting on upload to Skanderbeg.")
+                            await imgmsg.edit(content=await self.skanderbegURL)
+                    else:
+                        await self.displayChannel.send(file=img)
                 # If we're not allowed to send on the server, just give it in dms. They can post it themselves.
                 except discord.Forbidden:
                     await self.interactChannel.send("**Unable to send the image to " + self.displayChannel.mention + " due to lack of permissions. Posting image here:**\nYou can right-click and copy link then post that.", file=imageToFile(img))
                 else:
-                    await self.interactChannel.send("**Image posted to " + self.displayChannel.mention + "**")
+                    await self.interactChannel.send("**Done! Check " + self.displayChannel.mention + "**")
                 interactions.remove(self)
                 del(self)
             # add [player], [nation]
@@ -1394,7 +1416,6 @@ class asiresChannel(AbstractChannel):
                             # Here we have all the stats for country x on the players list
                             if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
                                 tagCapitals[x] = int(line.strip("\tcapitl=\n"))
-            srcFile.close()
             # Draft Executive Reserves
             for res in reserves:
                 if res.priority:
@@ -1662,7 +1683,7 @@ async def on_ready():
 @client.event
 async def on_message(message: discord.Message):
     if not message.author.bot:
-        text = message.content.strip()
+        text: str = message.content.strip()
         for interaction in interactions:
             if await interaction.responsive(message):
                 await interaction.process(message)
@@ -1697,9 +1718,11 @@ async def on_message(message: discord.Message):
                 await c.updateText()
                 await c.updateImg()
                 interactions.append(c)
-            elif text.upper() == prefix + "STATS" and checkResAdmin(message.guild, message.author):
-                interactions.append(await statsChannel(message.author, message.channel).asyncInit())
+            elif text.upper().startswith(prefix + "STATS") and checkResAdmin(message.guild, message.author):
+                c = await statsChannel(message.author, message.channel).asyncInit()
                 await message.delete()
+                c.skanderbeg = "false" not in text.lower()
+                interactions.append(c)
             elif text.upper() == prefix + "NEWASI" and checkResAdmin(message.guild, message.author):
                 c = asiresChannel(message.guild, message.channel)
                 await message.delete()
