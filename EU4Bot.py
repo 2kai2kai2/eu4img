@@ -8,7 +8,6 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import cppimport
 import discord
-from discord import file
 import psycopg2
 import requests
 from dotenv import load_dotenv
@@ -33,18 +32,18 @@ else:
 
 # Load Discord Client
 load_dotenv()
-token: str = os.getenv('DISCORD_TOKEN')
+token: str = os.getenv("DISCORD_TOKEN")
 client = discord.Client()
-# Get database if it exists; if not None and methods will open a json file.
+# Load database if it exists; if not then conn = None and methods will open a json file.
 try:
-    DATABASEURL = os.environ['DATABASE_URL']
+    DATABASEURL = os.getenv("DATABASE_URL")
     conn: psycopg2.extensions.connection = psycopg2.connect(
         DATABASEURL, sslmode='require')
     conn.autocommit = True
 except:
     conn = None
 # Load Skanderbeg key if it exists
-SKANDERBEGKEY = os.environ['SKANDERBEG_KEY']
+SKANDERBEGKEY = os.getenv("SKANDERBEG_KEY")
 if SKANDERBEGKEY == "" or SKANDERBEGKEY.isspace():
     SKANDERBEGKEY = None
 
@@ -1192,7 +1191,8 @@ class statsChannel(AbstractChannel):
                 await self.interactChannel.send("**Send the Political Mapmode screenshot in this channel (png):**")
                 self.hasReadFile = True
                 if self.skanderbeg and SKANDERBEGKEY is not None:
-                    self.skanderbegURL = asyncio.create_task(Skanderbeg.upload(saveFile, f"{self.game.date.fancyStr} - Cartographer Upload", SKANDERBEGKEY))
+                    self.skanderbegURL = asyncio.create_task(Skanderbeg.upload(
+                        saveFile, f"{self.game.date.fancyStr} - Cartographer Upload", SKANDERBEGKEY))
                     # We don't manually delete saveFile here, but that's probably fine since once the upload is done there shouldn't be any other references
                 else:
                     del(saveFile)
