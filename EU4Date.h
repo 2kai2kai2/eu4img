@@ -38,7 +38,7 @@ struct EU4Date {
     }
 
     std::string fancyString() const {
-        static const std::string monthNames[12] = {"January", "Febuary", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+        static const std::string monthNames[12] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
         return std::to_string(this->day) + " " + monthNames[this->month - 1] + " " + std::to_string(this->year);
     }
 

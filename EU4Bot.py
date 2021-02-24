@@ -84,9 +84,7 @@ async def sendUserMessage(user: Union[str, int, DiscUser], message: str) -> disc
     elif isinstance(user, discord.User) or isinstance(user, discord.Member):
         u: DiscUser = user
     else:
-        print("ERROR: Could not find discord user to send message.")
-        print(user)
-        return  # pass uh something went wrong
+        raise TypeError(f"Invalid type for user. Invalid object: {user}")
     if u.dm_channel is None:
         await u.create_dm()
     msg = await u.dm_channel.send(message)
@@ -108,8 +106,8 @@ def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Opt
     elif isinstance(server, discord.Guild):
         s: discord.Guild = server
     else:
-        print("ERROR: Could not find discord server get role.")
-        return None
+        raise TypeError(
+            f"Invalid type for Discord server. Invalid object: {server}")
     for role in s.roles:
         if role.name.strip("\n\t @").lower() == roleName.strip("\n\t @").lower():
             return role
@@ -127,8 +125,8 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str, int, 
     elif isinstance(server, discord.Guild):
         s: discord.Guild = server
     else:
-        print("ERROR: Could not find discord server to check for admin.")
-        return False
+        raise TypeError(
+            f"Invalid type for Discord server. Invalid object: {server}")
     # Get member object
     u: DiscUser = None
     if isinstance(user, str) or isinstance(user, int):  # id
@@ -138,60 +136,12 @@ def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str, int, 
     elif isinstance(user, discord.Member):
         u: DiscUser = user
     else:
-        print("ERROR: Could not find discord user to check for admin.")
-        print(str(user))
-        return False  # pass uh something went wrong.. false i guess?
+        raise TypeError(
+            f"Invalid type for Discord member. Invalid object: {user}")
     # OK now check
     role = getRoleFromStr(
         s, GuildManager.getGuildSave(s, conn=checkConn()).admin)
     return (role is not None and role <= u.top_role) or u.top_role.id == s.roles[-1].id or u._user.id == 249680375280959489
-
-
-class eu4Date:
-    def __init__(self, datestr: str):
-        yearstr, monthstr, daystr = datestr.strip().split(".")
-        self.year = int(yearstr)
-        self.month = int(monthstr)
-        self.day = int(daystr)
-
-    @property
-    def fancyStr(self) -> str:
-        monthnames: Dict[int, str] = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
-                                      7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
-        return str(self.day) + " " + monthnames[self.month] + " " + str(self.year)
-
-    def __str__(self) -> str:
-        return str(self.year) + "." + str(self.month) + "." + str(self.day)
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            return False
-        return self.year == other.year and self.month == other.month and self.day == other.day
-
-    def __ne__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            return True
-        return self.year != other.year or self.month != other.month or self.day != other.day
-
-    def __lt__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            raise TypeError("eu4Date can only be compared with eu4Date.")
-        return self.year < other.year or (self.year == other.year and (self.month < other.month or (self.month == other.month and self.day < other.day)))
-
-    def __le__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            raise TypeError("eu4Date can only be compared with eu4Date.")
-        return self == other or self < other
-
-    def __gt__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            raise TypeError("eu4Date can only be compared with eu4Date.")
-        return self.year > other.year or (self.year == other.year and (self.month > other.month or (self.month == other.month and self.day > other.day)))
-
-    def __ge__(self, other) -> bool:
-        if not isinstance(other, eu4Date):
-            raise TypeError("eu4Date can only be compared with eu4Date.")
-        return self == other or self > other
 
 
 class AbstractChannel(ABC):
@@ -301,7 +251,8 @@ class ReserveChannel(AbstractChannel):
         elif text.upper() == f"{self.prefix()}END" and checkResAdmin(message.guild, message.author):  # END
             await message.delete()
             # Load the reserve
-            reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(str(self.interactChannel.id), conn=checkConn())
+            reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(
+                str(self.interactChannel.id), conn=checkConn())
             string = "**Final players list:**"
             # Text String - Players
             if reserve is None or len(reserve.players) == 0:
@@ -372,11 +323,13 @@ class ReserveChannel(AbstractChannel):
                                   bantags, conn=checkConn())
                 string += f"Added the following nations to the ban list in {self.displayChannel.mention}: "
                 for tag in bantags:
-                    string += EU4Lib.tagToName(tag) + ("" if tag is bantags[-1] else ",")
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is bantags[-1] else ",")
             if len(fails) > 0:
                 string += "\nDid not recognize the following nations: "
                 for tag in fails:
-                    string += EU4Lib.tagToName(tag) + ("" if tag is fails[-1] else ", ")
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is fails[-1] else ", ")
                 string += "\n The unrecognized nations were not added to the ban list."
             if string != "":
                 await sendUserMessage(message.author, string)
@@ -400,11 +353,13 @@ class ReserveChannel(AbstractChannel):
                     str(self.displayChannel.id), bantags, conn=checkConn())
                 string += f"Removed the following nations from the ban list in {self.displayChannel.mention}: "
                 for tag in bantags:
-                    string += EU4Lib.tagToName(tag) + ("" if tag is bantags[-1] else ",")
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is bantags[-1] else ",")
             if len(fails) > 0:
                 string += "\nDid not recognize the following nations: "
                 for tag in fails:
-                    string += EU4Lib.tagToName(tag) + ("" if tag is fails[-1] else ", ")
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is fails[-1] else ", ")
                 string += "\n The unrecognized nations were not removed from the ban list."
             if string != "":
                 await sendUserMessage(message.author, string)
@@ -425,7 +380,8 @@ class ReserveChannel(AbstractChannel):
             string += "*none or unspecified*"
         for tag in reserve.bans:
             name = EU4Lib.tagToName(tag)
-            string += (tag if name is None else name) + ("" if tag is reserve.bans[-1] else ", ")
+            string += (tag if name is None else name) + \
+                ("" if tag is reserve.bans[-1] else ", ")
         string += "\n**Current players list:**"
         # Text String - Players
         if reserve is None or len(reserve.players) == 0:
@@ -564,8 +520,8 @@ class war():
         self.defenders: List[str] = []
         self.attackerLosses: int = 0
         self.defenderLosses: int = 0
-        self.startDate: eu4Date = None
-        self.endDate: eu4Date = None
+        self.startDate: EU4cpplib.EU4Date = None
+        self.endDate: EU4cpplib.eu4Date = None
         self.result: int = 0
 
     def isPlayerWar(self, playertags: List[str]) -> bool:
@@ -614,7 +570,7 @@ class saveGame():
         self.playertags: Dict[str, str] = {}
         self.dlc: List[str] = []
         self.GP: List[str] = []
-        self.date: Optional[eu4Date] = None
+        self.date: Optional[EU4cpplib.EU4Date] = None
         self.mp: bool = True
         self.age: Optional[str] = None
         self.HRE: str = None
@@ -667,7 +623,7 @@ class statsChannel(AbstractChannel):
         brackets: List[str] = []
         currentReadWar: war = None
         currentReadWarParticTag: str = None
-        currentWarLastLeave: eu4Date = None
+        currentWarLastLeave: EU4cpplib.EU4Date = None
         lastPlayerInList: str = None
 
         # Reading save file...
@@ -702,7 +658,7 @@ class statsChannel(AbstractChannel):
                 if len(brackets) == 0:
                     # Get current gamedate
                     if linekey == "date":
-                        self.game.date = eu4Date(lineval)
+                        self.game.date = EU4cpplib.EU4Date(lineval)
                     # Get save DLC (not sure if we use this...)
                     elif brackets == ["dlc_enabled"]:
                         self.game.dlc.append(lineval.strip('"'))
@@ -831,13 +787,14 @@ class statsChannel(AbstractChannel):
                             currentReadWar.attackers.append(
                                 lineval.strip('"'))
                             if currentReadWar.startDate is None:
-                                currentReadWar.startDate = eu4Date(
+                                currentReadWar.startDate = EU4cpplib.EU4Date(
                                     brackets[2])
                         elif linekey == "add_defender":
                             currentReadWar.defenders.append(
                                 lineval.strip('"'))
                         elif linekey == "rem_attacker" or linekey == "rem_defender":
-                            currentWarLastLeave = eu4Date(brackets[2])
+                            currentWarLastLeave = EU4cpplib.EU4Date(
+                                brackets[2])
                     elif len(brackets) >= 2 and brackets[1] == "participants":
                         if len(brackets) == 2 and linekey == "tag":
                             currentReadWarParticTag = lineval.strip('"')
@@ -1128,8 +1085,8 @@ class statsChannel(AbstractChannel):
         #================END  SECTION================#
         # Date
         await updateProgress("Drawing date...", 7, 8)
-        imgDraw.text((round(5177 - imgDraw.textsize(self.game.date.fancyStr,
-                                                    font)[0] / 2), 60), self.game.date.fancyStr, (255, 255, 255), font)
+        imgDraw.text((round(5177 - imgDraw.textsize(self.game.date.fancyStr(),
+                                                    font)[0] / 2), 60), self.game.date.fancyStr(), (255, 255, 255), font)
         await updateProgress("**Image generation complete.** Uploading...", 8, 8)
         return imgFinal
 
@@ -1178,7 +1135,7 @@ class statsChannel(AbstractChannel):
                 self.hasReadFile = True
                 if self.skanderbeg and SKANDERBEGKEY is not None:
                     self.skanderbegURL = asyncio.create_task(Skanderbeg.upload(
-                        saveFile, f"{self.game.date.fancyStr} - Cartographer Upload", SKANDERBEGKEY))
+                        saveFile, f"{self.game.date.fancyStr()} - Cartographer Upload", SKANDERBEGKEY))
                     # We don't manually delete saveFile here, but that's probably fine since once the upload is done there shouldn't be any other references
                 else:
                     del(saveFile)
@@ -1333,7 +1290,7 @@ class asiresChannel(AbstractChannel):
 
     async def process(self, message: discord.Message):
         text = message.content.strip()
-        if text.upper() == self.prefix() + "HELP":  # HELP
+        if text.upper() == f"{self.prefix()}HELP":  # HELP
             stringHelp = f"__**Command help for {message.channel.mention}:**__"
             stringHelp += f"\n**{self.prefix()}HELP**\nGets you this information!"
             stringHelp += f"\n**{self.prefix()}RESERVE [nation1], [nation2], [nation3]**\nReserves your picks or overwrites your previous reservation.\nThese are in the order of first pick to third. Don't include the brackets."
@@ -1364,12 +1321,9 @@ class asiresChannel(AbstractChannel):
                         tagCapitals[tag.upper()] = -1
             # Get the actual capitals and add to tagCapitals.
             srcFile = open("src/save_1444.eu4", "r", encoding="cp1252")
-            lines = srcFile.readlines()
-            srcFile.close()
-            del(srcFile)
             brackets: List[str] = []
             linenum = 0
-            for line in lines:
+            for line in srcFile:
                 linenum += 1
                 if "{" in line:
                     if line.count("{") == line.count("}"):
@@ -1467,7 +1421,7 @@ class asiresChannel(AbstractChannel):
                 await sendUserMessage(message.author, f"Your reservation in {self.displayChannel.mention} needs to @ a player.")
             await message.delete()
         # ADMRES [nation] @[optional_player]
-        elif text.upper().startswith(self.prefix() + "EXECRES") and checkResAdmin(message.guild, message.author):
+        elif text.upper().startswith(f"{self.prefix()}EXECRES") and checkResAdmin(message.guild, message.author):
             # Get the part "[nation]" by stripping the rest
             res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
             # Get the user to target

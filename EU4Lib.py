@@ -13,20 +13,18 @@ def country(text: str) -> Optional[str]:
     """
     # Read out the countries file
     srcFile = open("src/countries_l_english.yml", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     # If it could be a tag, check for that.
     if len(text) == 3:
-        for line in lines:
-            if line[1:4] == text.upper():
-                return text.upper()
         if text[1:].isdigit():
             # This is either a dynamic tag or some random characters.
             firstchar = text[0].upper()
             if firstchar == "C" or firstchar == "D" or firstchar == "E" or firstchar == "K" or firstchar == "T":
                 return text.upper()
+        for line in srcFile:
+            if line[1:4] == text.upper():
+                return text.upper()
     # text is not a recognized tag, search names
-    for line in lines:
+    for line in srcFile:
         if ('"' + text.lower() + '"') in line.lower():
             return line[1:4]
     # text is unknown
@@ -39,10 +37,6 @@ def tagToName(tag: str) -> Optional[str]:
 
     If the tag is not recognized, returns None.
     """
-    # Read out the countries file
-    srcFile = open("src/countries_l_english.yml", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     # If it could be a valid tag
     if len(tag) == 3:
         if tag[1:].isdigit():
@@ -63,7 +57,9 @@ def tagToName(tag: str) -> Optional[str]:
                 # Trading City
                 return f"Trading City T{tag[1:]}"
         # Then search for it and return the first thing in quotes on that line
-        for line in lines:
+        # Read out the countries file
+        srcFile = open("src/countries_l_english.yml", encoding="cp1252")
+        for line in srcFile:
             if line[1:4] == tag.upper():
                 return line[8:].split("\"", 1)[0].strip("\" \t\n")
     # Tag was not found or is not valid 3-character str
@@ -78,8 +74,6 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     """
     # Read file
     srcFile = open("src/positions.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     """
     Format of the file:
     1={
@@ -97,16 +91,16 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     So we want the 3085.000 1723.000 from the 1={ because the first two are the location of the city in the province
     """
     beyond = 0
-    for line in lines:
+    for line in srcFile:
         if beyond == 2:  # Two after the province, this is the line with the position.
-            vals = line.strip("\t\n ").split(" ")
+            vals = line.strip().split(" ")
             # need to subtract the y value because the position starts from the bottom rather than the top like images
             return (float(vals[0]), 2048-float(vals[1]))
         if beyond == 1:  # One after the province, wait one more line for the position
             beyond = 2
             continue
         # So we have the province... Wait two lines for the position
-        if line.strip("\n ") == (str(id)+"={"):
+        if line.strip() == (str(id)+"={"):
             beyond = 1
             continue
 
@@ -143,11 +137,9 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     """
     # Read file
     srcFile = open("src/area.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     # Search file
     currentArea = None
-    for line in lines:
+    for line in srcFile:
         # Set the current area for when it goes again and has the provinces
         if " = {" in line and not "\tcolor = {" in line:
             currentArea = line.split(" ")[0].strip("\t ={\n")
@@ -168,17 +160,15 @@ def region(areaName: str) -> str:
     """
     # Read file
     srcFile = open("src/region.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     # Search File
     currentRegion = None
-    for line in lines:
+    for line in srcFile:
         # Get the region for the next lines
         if " = {" in line and not line.startswith("\t"):
             currentRegion = line.split(" ")[0].strip("\t ={\n")
         # If it's the right area, return the region
         else:
-            if line.strip("\n\t ") == areaName:
+            if line.strip() == areaName:
                 return currentRegion
     # Was not found
     raise ValueError(f"{areaName} was not a valid area.")
@@ -193,17 +183,15 @@ def superregion(regionName: str) -> str:
     """
     # Read file
     srcFile = open("src/superregion.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     # Search file
     currentSuperregion = None
-    for line in lines:
+    for line in srcFile:
         # Get the superregion for the next lines
         if " = {" in line and not line.startswith("\t"):
             currentSuperregion = line.split(" ")[0].strip("\t ={\n")
         # If it's the right region, return the superregion
         else:
-            if line.strip("\n\t ") == regionName:
+            if line.strip() == regionName:
                 return currentSuperregion
     # Was not found
     raise ValueError(f"{regionName} was not a valid region.")
@@ -217,11 +205,9 @@ def continent(provinceID: Union[str, int]) -> str:
     """
     # Read file
     srcFile = open("src/continent.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     # Search file
     currentContinent = None
-    for line in lines:
+    for line in srcFile:
         # Get the continent for the following lines
         if " = {" in line:
             currentContinent = line.split(" ")[0].strip("\t ={\n")
@@ -261,12 +247,10 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
     """
     # Read file
     srcFile = open("src/00_colonial_regions.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     # Search file
     currentColReg: Optional[str] = None
     provsOpen = False
-    for line in lines:
+    for line in srcFile:
         # First get the colonial region. No indent.
         if not line.startswith("\t") and " = {" in line:
             currentColReg = line.strip("= {\n\t")
@@ -290,11 +274,9 @@ def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
     color: Tuple[int, int, int] = None
     # Read file
     srcFile = open("src/00_colonial_regions.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
     # Search file
     currentColReg: Optional[str] = None
-    for line in lines:
+    for line in srcFile:
         # First get the colonial region. No indent.
         if not line.startswith("\t") and " = {" in line:
             currentColReg = line.strip("= {\n\t")
@@ -359,12 +341,12 @@ class dataReq:
 
 def provinceData(*requests: dataReq) -> List[dataReq]:
     data = requests
-    lines = open("src/save_1444.eu4", encoding="cp1252").readlines()
+    srcFile = open("src/save_1444.eu4", encoding="cp1252")
     brackets: List[str] = []
 
     # Reading save file...
     linenum = 0
-    for line in lines:
+    for line in srcFile:
         linenum += 1
         if "{" in line:
             if line.count("{") == line.count("}"):

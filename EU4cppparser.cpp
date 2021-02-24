@@ -57,10 +57,10 @@ std::list<std::string> splitStrings(const std::string &text) {
                 out.push_back(split);
             lastsplit = i;
         } else if (text[i] == '{' && !quotes) {
-            bracketCount++;
+            ++bracketCount;
         } else if (text[i] == '}' && !quotes) {
             if (bracketCount > 0)
-                bracketCount--;
+                --bracketCount;
         } else if (text[i] == '"') {
             quotes = !quotes;
         }

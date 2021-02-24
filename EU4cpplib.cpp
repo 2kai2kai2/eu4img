@@ -7,6 +7,7 @@ cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
 %>
 */
 
+#include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -14,6 +15,8 @@ cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
 #include <map>
 #include <string>
 #include <tuple>
+
+#include "EU4Date.h"
 
 namespace py = pybind11;
 
@@ -50,6 +53,23 @@ std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::list<std::tuple<size_t, siz
 
 PYBIND11_MODULE(EU4cpplib, m) {
     m.doc() = "Libraries for eu4img written in C++ to improve speed and resource-consumption.";
+
+    py::class_<EU4Date>(m, "EU4Date")
+        .def(py::init<const std::string &>(), py::arg("text"))
+        .def_readwrite("year", &EU4Date::year)
+        .def_readwrite("month", &EU4Date::month)
+        .def_readwrite("day", &EU4Date::day)
+        .def("__repr__", &EU4Date::toString)
+        .def("fancyStr", &EU4Date::fancyString)
+        .def(py::self == py::self)
+        .def(py::self != py::self)
+        .def(py::self < py::self)
+        .def(py::self > py::self)
+        .def(py::self <= py::self)
+        .def(py::self >= py::self)
+        .def("isValidDate", &EU4Date::isValidDate)
+        .def("isEU4Date", &EU4Date::isEU4Date)
+        .def_static("stringValid", &EU4Date::stringValid, py::arg("text"));
 
     m.def("drawBorders", &drawBorders, py::arg("playerColors"), py::arg("pixels"), py::arg("width"), py::arg("height"));
 }
