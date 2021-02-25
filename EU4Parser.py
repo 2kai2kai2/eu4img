@@ -155,43 +155,6 @@ gameplaysettings={
 }
 """
 
-eu4Types = Union[str, int, float, EU4cppparser.EU4Date, List[str], dict]
-
-
-def parseGroup(group: List[str]) -> Union[List[eu4Types], dict]:
-    """
-    Parses the text of a list of string items (either values or key-value pairs)
-
-    Returns either a list or a dict of 
-    """
-    if len(group) == 0:
-        return []
-    elif "=" in group[0] and ("{" not in group[0] or (group[0].index("=") < group[0].index("{"))):
-        # It's a dict.
-        dictGroup = {}
-        for item in group:
-            key, value = item.split("=", maxsplit=1)
-            dictGroup[key] = parseType(value)
-        return dictGroup
-    else:
-        # It's a list.
-        return list(map(parseType, group))
-
-
-def parseType(text: str) -> eu4Types:
-    text = text.strip()
-    if text.isdigit():  # int
-        return int(text)
-    elif text.isdecimal():  # float
-        return float(text)
-    elif EU4cppparser.EU4Date.stringValid(text):  # date
-        return EU4cppparser.EU4Date(text)
-    elif text[0] == "{" and text[-1] == "}":  # group
-        # The string starts and ends with {} so we need to remove that for splitting
-        return parseGroup(EU4cppparser.splitStrings(text[1:-1]))
-    else:  # str
-        return text.strip("\"")
-
 
 def formatFix(text: str) -> str:
     return text.replace("map_area_data{", "map_area_data={").replace("EU4txt", "")
@@ -207,7 +170,7 @@ print(f"File load: {totaltime}s. | {totaltime/len(text)}s/char")
 starttime = time.time()
 count = 10
 for i in range(count):
-    parseGroup(EU4cppparser.splitStrings(text))
+    EU4cppparser.parseValue("{"+text+"}")
     print(f"Finished {i + 1}/{count}")
 totaltime = time.time() - starttime
 print(f"Parsing: {totaltime/count}s. | {totaltime/len(text)/count}s/char")
