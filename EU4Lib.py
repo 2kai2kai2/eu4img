@@ -12,7 +12,7 @@ def country(text: str) -> Optional[str]:
     If the nation is not recognized, returns None.
     """
     # Read out the countries file
-    srcFile = open("src/countries_l_english.yml", encoding="cp1252")
+    srcFile = open("resources/countries_l_english.yml", encoding="cp1252")
     # If it could be a tag, check for that.
     if len(text) == 3:
         if text[1:].isdigit():
@@ -58,7 +58,7 @@ def tagToName(tag: str) -> Optional[str]:
                 return f"Trading City T{tag[1:]}"
         # Then search for it and return the first thing in quotes on that line
         # Read out the countries file
-        srcFile = open("src/countries_l_english.yml", encoding="cp1252")
+        srcFile = open("resources/countries_l_english.yml", encoding="cp1252")
         for line in srcFile:
             if line[1:4] == tag.upper():
                 return line[8:].split("\"", 1)[0].strip("\" \t\n")
@@ -73,7 +73,7 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     Returns a tuple of floats, (x, y).
     """
     # Read file
-    srcFile = open("src/positions.txt", "r", encoding="cp1252")
+    srcFile = open("resources/positions.txt", "r", encoding="cp1252")
     """
     Format of the file:
     1={
@@ -112,7 +112,7 @@ def provinces(ids: List[Union[str, int]]) -> Dict[int, Tuple[float, float]]:
     """
     out: Dict[int, Optional[Tuple[float, float]]] = {}
     idsprocessed = [int(x) for x in ids]
-    srcFile = open("src/positions.txt", "r", encoding="cp1252")
+    srcFile = open("resources/positions.txt", "r", encoding="cp1252")
     currentID = None
     beyond = 0
     for line in srcFile:
@@ -142,14 +142,14 @@ def flag(tag: str) -> Image.Image:
     Returns Image of size (128, 128).
     """
     # Read file
-    srcFile = open("src/flagfiles.txt", "r", encoding="cp1252")
+    srcFile = open("resources/flagfiles.txt", "r", encoding="cp1252")
     line = srcFile.read()
     srcFile.close()
     # Get the number for the order of the flag; starts at 0
     a = line.partition(tag)  # Separate into a 3-tuple around tag
     flagnum = a[0].count(".tga")  # Get image number starting at 0
     # Get the file based on 256 flags per
-    flagfile = Image.open(f"src/flagfiles_{int(flagnum/256)}.tga")
+    flagfile = Image.open(f"resources/flagfiles_{int(flagnum/256)}.tga")
     # Get the location of the flag within the file
     x = 128*((flagnum % 256) % 16)
     y = 128*int((flagnum % 256)/16)
@@ -166,7 +166,7 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     Raises an error if the province is not found.
     """
     # Read file
-    srcFile = open("src/area.txt", "r", encoding="cp1252")
+    srcFile = open("resources/area.txt", "r", encoding="cp1252")
     # Search file
     currentArea = None
     for line in srcFile:
@@ -189,7 +189,7 @@ def region(areaName: str) -> str:
     Raises an error if the area is not found.
     """
     # Read file
-    srcFile = open("src/region.txt", "r", encoding="cp1252")
+    srcFile = open("resources/region.txt", "r", encoding="cp1252")
     # Search File
     currentRegion = None
     for line in srcFile:
@@ -212,7 +212,7 @@ def superregion(regionName: str) -> str:
     Raises an error if the region is not found.
     """
     # Read file
-    srcFile = open("src/superregion.txt", "r", encoding="cp1252")
+    srcFile = open("resources/superregion.txt", "r", encoding="cp1252")
     # Search file
     currentSuperregion = None
     for line in srcFile:
@@ -234,7 +234,7 @@ def continent(provinceID: Union[str, int]) -> str:
     Raises an error if the province is not found.
     """
     # Read file
-    srcFile = open("src/continent.txt", "r", encoding="cp1252")
+    srcFile = open("resources/continent.txt", "r", encoding="cp1252")
     # Search file
     currentContinent = None
     for line in srcFile:
@@ -276,7 +276,7 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
     Raises an error if the province is not found in a colonial region.
     """
     # Read file
-    srcFile = open("src/00_colonial_regions.txt", "r", encoding="cp1252")
+    srcFile = open("resources/00_colonial_regions.txt", "r", encoding="cp1252")
     # Search file
     currentColReg: Optional[str] = None
     provsOpen = False
@@ -303,7 +303,7 @@ def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
     # First find the correct colonial region color
     color: Tuple[int, int, int] = None
     # Read file
-    srcFile = open("src/00_colonial_regions.txt", "r", encoding="cp1252")
+    srcFile = open("resources/00_colonial_regions.txt", "r", encoding="cp1252")
     # Search file
     currentColReg: Optional[str] = None
     for line in srcFile:
@@ -371,7 +371,7 @@ class dataReq:
 
 def provinceData(*requests: dataReq) -> List[dataReq]:
     data = requests
-    srcFile = open("src/save_1444.eu4", encoding="cp1252")
+    srcFile = open("resources/save_1444.eu4", encoding="cp1252")
     brackets: List[str] = []
 
     # Reading save file...

@@ -904,15 +904,15 @@ class statsChannel(AbstractChannel):
         # Start Final Img Creation
         # Copy map into bottom of final image
         await updateProgress("Finalizing map section...", 4, 8)
-        imgFinal: Image.Image = Image.open("src/finalTemplate.png")
+        imgFinal: Image.Image = Image.open("resources/finalTemplate.png")
         imgFinal.paste(self.politicalImage,
                        (0, imgFinal.size[1]-self.politicalImage.size[1]))
         del(self.politicalImage)
         # The top has 5632x1119
         # Getting fonts
-        fontmini = ImageFont.truetype("src/GARA.TTF", 36)
-        fontsmall = ImageFont.truetype("src/GARA.TTF", 50)
-        font = ImageFont.truetype("src/GARA.TTF", 100)
+        fontmini = ImageFont.truetype("resources/GARA.TTF", 36)
+        fontsmall = ImageFont.truetype("resources/GARA.TTF", 50)
+        font = ImageFont.truetype("resources/GARA.TTF", 100)
         imgDraw = ImageDraw.Draw(imgFinal)
         #================MULTIPLAYER================#
         if True:  # mp == True:
@@ -950,21 +950,21 @@ class statsChannel(AbstractChannel):
                         playerName = playerName[:-1]
                     imgDraw.text((x+128, y), playerName, (255, 255, 255), font)
                     # x+760: Army size
-                    imgFinal.paste(Image.open("src/army.png"), (x+760, y))
+                    imgFinal.paste(Image.open("resources/army.png"), (x+760, y))
                     imgDraw.text((x+760+128, y),
                                  armyDisplay(nat.army), (255, 255, 255), font)
                     # x+1100: Navy size
-                    imgFinal.paste(Image.open("src/navy.png"), (x+1100, y))
+                    imgFinal.paste(Image.open("resources/navy.png"), (x+1100, y))
                     imgDraw.text((x+1100+128, y), str(nat.navy),
                                  (255, 255, 255), font)
                     # x+1440: Development
                     imgFinal.paste(Image.open(
-                        "src/development.png"), (x+1440, y))
+                        "resources/development.png"), (x+1440, y))
                     imgDraw.text((x+1440+128, y),
                                  str(nat.development), (255, 255, 255), font)
                     # x+1780: Income/Expense
                     monthlyProfit = nat.totalIncome-nat.totalExpense
-                    imgIncome = Image.open("src/income.png")
+                    imgIncome = Image.open("resources/income.png")
                     if monthlyProfit < 0:
                         imgIncome = imgIncome.crop((128, 0, 255, 127))
                         imgFinal.paste(imgIncome, (x+1780, y))
@@ -1013,7 +1013,7 @@ class statsChannel(AbstractChannel):
                                 natnum % 4) * (64 + 12)), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
                     # Draw Attacker Casualties
                     attackerIcon = Image.open(
-                        "src/bodycount_attacker_button.png")
+                        "resources/bodycount_attacker_button.png")
                     imgFinal.paste(
                         attackerIcon, (x + 290 - 12 - 32, y + 156), attackerIcon)
                     imgDraw.text((x + 290 - 12 - 32 - imgDraw.textsize(f"Losses: {armyDisplay(playerWar.attackerLosses)}", fontmini)[
@@ -1039,7 +1039,7 @@ class statsChannel(AbstractChannel):
                                 x + (natnum % 4) * (64 + 12) + 585), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
                     # Draw Defender Casualties
                     defenderIcon = Image.open(
-                        "src/bodycount_defender_button.png")
+                        "resources/bodycount_defender_button.png")
                     imgFinal.paste(
                         defenderIcon, (x + 12 + 585, y + 156), defenderIcon)
                     imgDraw.text((x + 12 + 32 + 585, y + 152),
@@ -1069,14 +1069,14 @@ class statsChannel(AbstractChannel):
                                         [0]/2), y + 115), dateStr, (255, 255, 255), fontmini, align="center")
                     # Draw result
                     if playerWar.result == war.WHITEPEACE:
-                        WPIcon = Image.open("src/icon_peace.png")
+                        WPIcon = Image.open("resources/icon_peace.png")
                         imgFinal.paste(WPIcon, (x + 437 - 32, y + 140), WPIcon)
                     elif playerWar.result == war.ATTACKERWIN:
-                        WinnerIcon = Image.open("src/star.png")
+                        WinnerIcon = Image.open("resources/star.png")
                         imgFinal.paste(
                             WinnerIcon, (x + 290, y + 148), WinnerIcon)
                     elif playerWar.result == war.DEFENDERWIN:
-                        WinnerIcon = Image.open("src/star.png")
+                        WinnerIcon = Image.open("resources/star.png")
                         imgFinal.paste(
                             WinnerIcon, (x + 12 + 585 - 48, y + 148), WinnerIcon)
         #================SINGLEPLAYER================#
@@ -1320,7 +1320,7 @@ class asiresChannel(AbstractChannel):
                     if tagCapitals.get(tag.upper()) is None:
                         tagCapitals[tag.upper()] = -1
             # Get the actual capitals and add to tagCapitals.
-            srcFile = open("src/save_1444.eu4", "r", encoding="cp1252")
+            srcFile = open("resources/save_1444.eu4", "r", encoding="cp1252")
             brackets: List[str] = []
             linenum = 0
             for line in srcFile:

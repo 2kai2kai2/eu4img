@@ -8,7 +8,7 @@ import EU4Lib
 start = time.time()
 tagCapitals: Dict[str, int] = {}
 
-saveFile = open("src/save_1444.eu4", "r", encoding="cp1252")
+saveFile = open("resources/save_1444.eu4", "r", encoding="cp1252")
 
 brackets: List[str] = []
 linenum = 0
@@ -53,7 +53,7 @@ for x in tagCapitals:
         capitalLocs[x] = locations[tagCapitals[x]]
 print("Found all capital locations.")
 
-writeFile = open("src/tagCapitals.txt", "w", encoding="cp1252")
+writeFile = open("resources/tagCapitals.txt", "w", encoding="cp1252")
 writeString = ""
 for x in capitalLocs:
     try:

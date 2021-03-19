@@ -52,5 +52,5 @@ for line in tagLines:
         line += f' "{deaccent(name)[4:]}"'
     writeString += f"{line}\n"
 
-open("src/countries_l_english.yml", "w", encoding="cp1252").write(writeString)
+open("resources/countries_l_english.yml", "w", encoding="cp1252").write(writeString)
 print("Written to file.")

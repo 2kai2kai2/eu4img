@@ -161,7 +161,7 @@ def formatFix(text: str) -> str:
 
 
 starttime = time.time()
-file = open("src/save_1444.eu4", "r", encoding="cp1252")
+file = open("resources/save_1444.eu4", "r", encoding="cp1252")
 text = formatFix(file.read())
 file.close()
 totaltime = time.time() - starttime

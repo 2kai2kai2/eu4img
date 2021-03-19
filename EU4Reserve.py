@@ -882,7 +882,7 @@ def createMap(reserve: Reserve) -> Image.Image:
     countries: List[reservePick] = reserve.players
     capitalLocs: Dict[str, Tuple[float, float]] = {}
 
-    srcFile = open("src/tagCapitals.txt", "r", encoding="cp1252")
+    srcFile = open("resources/tagCapitals.txt", "r", encoding="cp1252")
     lines = srcFile.readlines()
     srcFile.close()
     for line in lines:
@@ -896,8 +896,8 @@ def createMap(reserve: Reserve) -> Image.Image:
             break
     del(lines)
 
-    mapFinal: Image.Image = Image.open("src/map_1444.png")
-    imgX: Image.Image = Image.open("src/xIcon.png")
+    mapFinal: Image.Image = Image.open("resources/map_1444.png")
+    imgX: Image.Image = Image.open("resources/xIcon.png")
     for x in capitalLocs:
         mapFinal.paste(
             imgX, (int(capitalLocs[x][0]-imgX.size[0]/2), int(capitalLocs[x][1]-imgX.size[1]/2)), imgX)
