@@ -9,15 +9,12 @@ start = time.time()
 tagCapitals: Dict[str, int] = {}
 
 saveFile = open("src/save_1444.eu4", "r", encoding="cp1252")
-lines = saveFile.readlines()
-saveFile.close()
-del(saveFile)
 
 brackets: List[str] = []
 linenum = 0
 inCountries = False
 done = False
-for line in lines:
+for line in saveFile:
     linenum += 1
     if inCountries:
         if "{" in line:
@@ -26,46 +23,44 @@ for line in lines:
             if opencount == closecount:
                 continue
             elif closecount == 0 and opencount == 1:
-                brackets.append(line.rstrip("\n "))
+                brackets.append(line.rstrip())
             elif closecount == 0 and opencount > 1:
                 for x in range(opencount):
                     brackets.append("{")  # TODO: fix this so it has more
             else:
-                print("Unexpected brackets at line " +
-                      str(linenum) + ": " + line)
+                print(f"Unexpected brackets at line {linenum}: {line}")
         elif "}" in line:
             try:
                 brackets.pop()
             except IndexError:  # This shouldn't happen.
-                print("No brackets to delete.")
-                print("Line " + linenum + ": " + line)
+                print(f"Unexpected close brackets at line {linenum}: {line}")
         elif len(brackets) == 2 and brackets[0] == "countries={":
             if "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
                 tagCapitals[brackets[1].strip("\n\t ={")] = int(
                     line.strip("\tcapitl=\n"))
     elif "countries={" in line and not "players_countries={" in line and not "interesting_countries={" in line:
         inCountries = True
-        brackets.append(line.rstrip("\n "))
+        brackets.append(line.rstrip())
     elif done:
         break
-del(lines)
-print("Found all capitals.")
+print("Found all capital province ids.")
 
-capitalLocs: Dict[str, Tuple[int, int]] = {}
+locations: Dict[int, Tuple[float, float]
+                ] = EU4Lib.provinces(tagCapitals.values())
+capitalLocs: Dict[str, Tuple[float, float]] = {}
 for x in tagCapitals:
-    capitalLocs[x] = EU4Lib.province(tagCapitals[x])
-print("Found all locations.")
+    if tagCapitals[x] in locations:
+        capitalLocs[x] = locations[tagCapitals[x]]
+print("Found all capital locations.")
 
 writeFile = open("src/tagCapitals.txt", "w", encoding="cp1252")
 writeString = ""
 for x in capitalLocs:
     try:
-        writeString += x + "=" + \
-            str(capitalLocs[x][0]) + "," + str(capitalLocs[x][1]) + "\n"
+        writeString += f"{x}={capitalLocs[x][0]},{capitalLocs[x][1]}\n"
     except TypeError:
         # Tags like colonial nations, rebels, etc. have None as their capital
         pass
 writeFile.write(writeString)
-print("Written.")
-
-print(time.time() - start)
+print("Data written to file.")
+print(f"Total time taken: {time.time() - start}s.")

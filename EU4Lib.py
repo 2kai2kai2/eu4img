@@ -1,5 +1,5 @@
 # This will need to be updated. Currently for 1.30.2
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from PIL import Image, ImageDraw
 
@@ -103,6 +103,36 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
         if line.strip() == (str(id)+"={"):
             beyond = 1
             continue
+
+
+def provinces(ids: List[Union[str, int]]) -> Dict[int, Tuple[float, float]]:
+    """
+    Gets the location of multiple provinces on a screenshot map.
+    Similar to provinces() except that it will only go through the file once to find all provinces.
+    """
+    out: Dict[int, Optional[Tuple[float, float]]] = {}
+    idsprocessed = [int(x) for x in ids]
+    srcFile = open("src/positions.txt", "r", encoding="cp1252")
+    currentID = None
+    beyond = 0
+    for line in srcFile:
+        if beyond == 2:  # Two after the province, this is the line with the position.
+            vals = line.strip().split()
+            # need to subtract the y value because the position starts from the bottom rather than the top like images
+            out[currentID] = (float(vals[0]), 2048-float(vals[1]))
+            currentID = None
+            beyond = 0
+        if beyond == 1:  # One after the province, wait one more line for the position
+            beyond = 2
+            continue
+        # So we have the province... Wait two lines for the position
+        if line.strip("\t ={\n").isdigit():
+            id = int(line.strip("\t ={\n"))
+            if id in ids:
+                currentID = id
+                beyond = 1
+        
+    return out
 
 
 def flag(tag: str) -> Image.Image:
