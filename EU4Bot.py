@@ -473,6 +473,7 @@ class ReserveChannel(AbstractChannel):
 class Nation:
     def __init__(self, tag: str):
         self.tag: str = tag.upper()
+        self.othertags: List[str] = []
         self.development: int = 0
         self.prestige: int = None
         self.stability: int = None
@@ -497,7 +498,7 @@ class Nation:
         """
         Returns a brief multi-line human-readable text representation of the data contained in this Nation object.
         """
-        string = f"Tag: {self.tag}\n"
+        string = f"Tag: {self.tag} Previous Tags: {self.othertags}\n"
         string += f"Dev: {self.development} Prestige: {self.prestige} Stability: {self.stability}\n"
         string += f"Army: {self.army} Navy: {self.navy}\n"
         string += f"Treasury: {self.treasury} Debt: {self.debt}\n"
@@ -577,6 +578,18 @@ class saveGame():
         self.china: str = None
         self.crusade: str = None
         self.playerWars: List[war] = []
+    def allPlayerTags(self) -> List[str]:
+        if hasattr(self, "allplayertags"):
+            return self.allplayertags
+        else:
+            self.allplayertags: List[str] = [] # Player tags plus all previous tags those countries have had
+            for tag in self.playertags:
+                if tag not in self.allplayertags:
+                    self.allplayertags.append(tag)
+                for prevtag in self.allNations[tag].othertags:
+                    if prevtag not in self.allplayertags:
+                        self.allplayertags.append(prevtag)
+            return self.allplayertags
 
 
 class statsChannel(AbstractChannel):
@@ -715,6 +728,8 @@ class statsChannel(AbstractChannel):
                             # This one is assignment so should NOT be referring to bracketNation
                             self.game.allNations[brackets[1]] = Nation(
                                 brackets[1])
+                        elif linekey == "previous_country_tags":
+                            bracketNation.othertags.append(line[line.index('"')+1:line.rindex('"')])
                         elif linekey == "raw_development":
                             bracketNation.development = round(
                                 float(lineval))
@@ -853,12 +868,23 @@ class statsChannel(AbstractChannel):
             """
             Makes the army display text
 
-            The format is 12.3k when under 100k or 123k when equal to or above.
+            Under 100,000: "12.3k" or "12k" when 12,000
+            Under 1,000,000: "123k" rounded
+            Above 1,000,000: "1.23M" rounded
             """
-            armydisplay = str(round(army/1000, 1))
-            if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
-                armydisplay = armydisplay.partition(".")[0]
-            return f"{armydisplay}k"
+            if army < 1000000:
+                armydisplay = str(round(army/1000, 1))
+                if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
+                    armydisplay = armydisplay[:-2]
+                return f"{armydisplay}k"
+            else: #army >= 1M
+                armydisplay = str(round(army/1000000, 2))
+                if armydisplay.endswith(".0"):
+                    armydisplay = armydisplay[:-2]
+                elif armydisplay.endswith("0"):
+                    # This is the hundredth place. If the tenth place is 0, then floats will not include the hundredth place in a string and the previous if will catch it.
+                    armydisplay = armydisplay[:-1]
+                return f"{armydisplay}M"
 
         def invertColor(color: Tuple[int, int, int]) -> Tuple[int, int, int]:
             """
@@ -993,9 +1019,9 @@ class statsChannel(AbstractChannel):
                     x = 4742
                     y = 230 + 218 * warnum
                     # Draw Attacker Flags
-                    for nat in playerWar.playerAttackers(self.game.playertags):
+                    for nat in playerWar.playerAttackers(self.game.allPlayerTags()):
                         natnum = playerWar.playerAttackers(
-                            self.game.playertags).index(nat)
+                            self.game.allPlayerTags()).index(nat)
                         if natnum < 8:
                             flag: Image.Image = None
                             if (nat.startswith("C") and nat[1:].isdigit() and self.game.allNations[nat].overlord is not None):
@@ -1004,9 +1030,7 @@ class statsChannel(AbstractChannel):
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
                                         self.game.allNations[nat].capitalID))
                                 except:
-                                    print(
-                                        "Something went wrong in creating a colonial flag. Details:")
-                                    print(nat.fullDataStr())
+                                    raise RuntimeWarning(f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
                             else:
                                 flag = EU4Lib.flag(nat)
                             imgFinal.paste(flag.resize((64, 64)), (round(x + 3 * (12 + 64) - (
@@ -1019,9 +1043,9 @@ class statsChannel(AbstractChannel):
                     imgDraw.text((x + 290 - 12 - 32 - imgDraw.textsize(f"Losses: {armyDisplay(playerWar.attackerLosses)}", fontmini)[
                                  0], y + 152), f"Losses: {armyDisplay(playerWar.attackerLosses)}", (255, 255, 255), fontmini)
                     # Draw Defender Flags
-                    for nat in playerWar.playerDefenders(self.game.playertags):
+                    for nat in playerWar.playerDefenders(self.game.allPlayerTags()):
                         natnum = playerWar.playerDefenders(
-                            self.game.playertags).index(nat)
+                            self.game.allPlayerTags()).index(nat)
                         if natnum < 8:
                             flag: Image.Image = None
                             if (nat.startswith("C") and nat[1:].isdigit() and self.game.allNations[nat].overlord is not None):
@@ -1030,9 +1054,7 @@ class statsChannel(AbstractChannel):
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
                                         self.game.allNations[nat].capitalID))
                                 except:
-                                    print(
-                                        "Something went wrong in creating a colonial flag. Details:")
-                                    print(nat.fullDataStr())
+                                    raise RuntimeWarning(f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
                             else:
                                 flag = EU4Lib.flag(nat)
                             imgFinal.paste(flag.resize((64, 64)), (round(
