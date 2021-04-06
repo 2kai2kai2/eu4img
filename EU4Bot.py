@@ -132,6 +132,20 @@ async def findUser(id: Union[int, str]) -> discord.User:
         return author
 
 
+async def findChannel(id: Union[int, str]) -> DiscTextChannels:
+    id = int(id)
+    textc = client.get_channel(id)
+    if textc is None:
+        try:
+            textc = await client.fetch_channel(id)
+        except discord.NotFound:
+            pass
+    if textc is None:
+        raise ValueError(f"Could not find discord channel with ID {id}")
+    else:
+        return textc
+
+
 def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str, int, DiscUser]) -> bool:
     """
     Returns whether or not a user has bot admin control roles as set in .env on a server.
@@ -1664,37 +1678,7 @@ async def on_message(message: discord.Message):
         if (message.guild is not None and text.startswith(GuildManager.getGuildSave(message.guild, conn=checkConn()).prefix)):
             prefix = GuildManager.getGuildSave(
                 message.guild, conn=checkConn()).prefix
-            if text.upper() == f"{prefix}HELP":
-                stringHelp = "__**Command help:**__"
-                stringHelp += f"\n**{prefix}HELP**\nGets you this information!"
-                # Here we send info about commands only for admins
-                if checkResAdmin(message.guild, message.author):
-                    stringHelp += f"\n**{prefix}NEW**\nTurns the text channel into a reservation channel\n(more commands within that; use this command in it for info)"
-                    stringHelp += f"\n**{prefix}STATS**\nCreates a eu4 stats image in the channel.\nUses DMs to gather the necessary files for creation."
-                    stringHelp += f"\n**{prefix}NEWASI**\nTurns the text channel into a ASI reservation channel\nThis is specific to my discord."
-                    stringHelp += f"\n**{prefix}PREFIX [prefix]**\nChanges the bot prefix on this server."
-                    stringHelp += f"\n**{prefix}ADMINRANK [@rank]**\nChanges the minimum rank necessary for admin control of the bot.\nPlease be sure before changing this. The highest rank can always control the bot.\nThe @ is optional in specifying the rank."
-                    stringHelp += f"\n**{prefix}ADDDEFAULTBAN [nation], [nation], ...**\nAdds nations to the default ban list for the server. When a new reserve channel is created, this list will be copied into that channel's ban list. The channel ban list may be changed separately thereafter."
-                    stringHelp += f"\n**{prefix}DELDEFAULTBAN [nation], [nation], ...**\nRemoves nations from the default ban list for the server. As many nations as needed may be changed in one command, with commas between them."
-                await message.delete()
-                await sendUserMessage(message.author, stringHelp)
-            elif (text.upper() == f"{prefix}NEW") and checkResAdmin(message.guild, message.author):
-                c = ReserveChannel(message.author, message.channel)
-                await message.delete()
-                await c.updateText()
-                await c.updateImg()
-                interactions.append(c)
-            elif text.upper().startswith(f"{prefix}STATS") and checkResAdmin(message.guild, message.author):
-                c = await statsChannel(message.author, message.channel).asyncInit()
-                await message.delete()
-                c.skanderbeg = "false" not in text.lower()
-                interactions.append(c)
-            elif text.upper() == f"{prefix}NEWASI" and checkResAdmin(message.guild, message.author):
-                c = asiresChannel(message.guild, message.channel)
-                await message.delete()
-                await c.updateText()
-                interactions.append(c)
-            elif text.upper() == f"{prefix}LOAD" and checkResAdmin(message.guild, message.author):
+            if text.upper() == f"{prefix}LOAD" and checkResAdmin(message.guild, message.author):
                 res = EU4Reserve.getReserve(
                     str(message.channel.id), conn=checkConn())
                 if res is None:
@@ -1735,72 +1719,6 @@ async def on_message(message: discord.Message):
                     GuildManager.setAdmin(
                         message.guild, newRank.name, conn=checkConn())
                     await sendUserMessage(message.author, f"Admin rank set to {newRank.name} on {message.guild.name}")
-                await message.delete()
-            # ADDDEFAULTBAN [nation], [nation], ...
-            elif text.upper().startswith(f"{prefix}ADDDEFAULTBAN") and checkResAdmin(message.guild, message.author):
-                bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
-                bantags = []
-                fails = []
-                for bannat in bannations:
-                    tag = EU4Lib.country(bannat.strip("\n\t ,"))
-                    if tag is not None:
-                        bantags.append(tag)
-                    else:
-                        fails.append(bannat)
-                string = ""
-                if len(bantags) > 0:
-                    string += f"Added the following nations to the default ban list in {message.guild.name}: "
-                    for tag in bantags:
-                        GuildManager.addBan(
-                            message.guild, tag, conn=checkConn())
-                        string += EU4Lib.tagToName(tag) + \
-                            ("" if tag is bantags[-1] else ", ")
-                if len(fails) > 0:
-                    string += "\nDid not recognize the following nations: "
-                    for tag in fails:
-                        string += tag + ("" if tag is fails[-1] else ", ")
-                    string += "\nThe unrecognized nations were not added to the default ban list."
-                if string != "":
-                    string += "\nThe new default ban list: "
-                    newbanlist = GuildManager.getGuildSave(
-                        message.guild, conn=checkConn()).defaultBan
-                    for tag in newbanlist:
-                        string += EU4Lib.tagToName(tag) + \
-                            ("" if tag is newbanlist[-1] else ", ")
-                    await sendUserMessage(message.author, string)
-                await message.delete()
-            # DELDEFAULTBAN [nation], [nation], ...
-            elif text.upper().startswith(f"{prefix}DELDEFAULTBAN") and checkResAdmin(message.guild, message.author):
-                bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
-                bantags = []
-                fails = []
-                for bannat in bannations:
-                    tag = EU4Lib.country(bannat.strip("\n\t ,"))
-                    if tag is not None:
-                        bantags.append(tag)
-                    else:
-                        fails.append(bannat)
-                string = ""
-                if len(bantags) > 0:
-                    string += f"Removed the following nations from the default ban list in {message.guild.name}: "
-                    for tag in bantags:
-                        GuildManager.removeBan(
-                            message.guild, tag, conn=checkConn())
-                        string += EU4Lib.tagToName(tag) + \
-                            ("" if tag is bantags[-1] else ", ")
-                if len(fails) > 0:
-                    string += "\nDid not recognize the following nations: "
-                    for tag in fails:
-                        string += tag + ("" if tag is fails[-1] else ", ")
-                    string += "\nThe unrecognized nations were not successfully removed from the default ban list."
-                if string != "":
-                    string += "\nThe new default ban list: "
-                    newbanlist = GuildManager.getGuildSave(
-                        message.guild, conn=checkConn()).defaultBan
-                    for tag in newbanlist:
-                        string += EU4Lib.tagToName(tag) + \
-                            ("" if tag is newbanlist[-1] else ", ")
-                    await sendUserMessage(message.author, string)
                 await message.delete()
 
 
@@ -1878,11 +1796,11 @@ def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
 
 @client.event
 async def on_socket_raw_receive(msg: Union[bytes, str]):
-    wh = decompressWebhook(msg)
-    if wh["op"] == 0 and wh["t"] == "INTERACTION_CREATE":
+    hook = decompressWebhook(msg)
+    if hook["op"] == 0 and hook["t"] == "INTERACTION_CREATE":
         # This means it's an interaction.
         # https://discord.com/developers/docs/interactions/slash-commands#interaction
-        interaction: Dict[str, Any] = wh["d"]
+        interaction: Dict[str, Any] = hook["d"]
         # Verify this is for us
         if int(interaction["application_id"]) != (await client.application_info()).id or interaction["type"] != 2:
             # Not sure if this'll ever happen, but we're recieving an interaction not for us.
@@ -1894,17 +1812,17 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
         responsejson: Dict[str, Any] = {}
 
         if commandname.lower() == "help":
-            stringHelp = f"__**Command help:**__"
+            stringHelp = "__**Command help:**__"
             stringHelp += f"\n**/HELP**\nGets you this information!"
-            stringHelp += f"\n**/RESERVE [nation1], [nation2], [nation3]**\nReserves your picks or overwrites your previous reservation.\nThese are in the order of first pick to third. Don't include the brackets."
-            stringHelp += f"\n**/DELRESERVE**\nCancels your reservation."
             # Here we send info about commands only for admins
             if checkResAdmin(interaction["guild_id"], authorid):
-                stringHelp += f"\n**/END**\nStops allowing reservations and stops the bot's channel management.\nThen runs and displays the draft. Draft may need to be rearranged manually to ensure game balance."
-                stringHelp += f"\n**/ADMRES [nation1], [nation2], [nation3] [@user]**\nReserves picks on behalf of a player on the server.\nMake sure to actually @ the player."
-                stringHelp += f"\n**/EXECRES [nation] [optional @user]**\nReserves a pick on behalf of yourself or another player on the server.\nEnsures that this player gets the reservation first."
-                stringHelp += f"\n**/ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
-                stringHelp += f"\n**/UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
+                stringHelp += f"\n**/NEW**\nTurns the text channel into a reservation channel\n(more commands within that; use this command in it for info)"
+                stringHelp += f"\n**/STATS**\nCreates a eu4 stats image in the channel.\nUses DMs to gather the necessary files for creation."
+                stringHelp += f"\n**/NEWASI**\nTurns the text channel into a ASI reservation channel\nThis is specific to my discord."
+                stringHelp += f"\n**/PREFIX [prefix]**\nChanges the bot prefix on this server."
+                stringHelp += f"\n**/ADMINRANK [@rank]**\nChanges the minimum rank necessary for admin control of the bot.\nPlease be sure before changing this. The highest rank can always control the bot.\nThe @ is optional in specifying the rank."
+                stringHelp += f"\n**/ADDDEFAULTBAN [nation], [nation], ...**\nAdds nations to the default ban list for the server. When a new reserve channel is created, this list will be copied into that channel's ban list. The channel ban list may be changed separately thereafter."
+                stringHelp += f"\n**/DELDEFAULTBAN [nation], [nation], ...**\nRemoves nations from the default ban list for the server. As many nations as needed may be changed in one command, with commas between them."
             responsejson = {
                 "type": 4,
                 "data": {
@@ -1921,8 +1839,7 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
                 }
             }
             await session.post(responseurl, json=responsejson)
-            c = ReserveChannel(None, client.get_channel(
-                int(interaction["channel_id"])))
+            c = ReserveChannel(None, await findChannel(interaction["channel_id"]))
             await c.updateText()
             await c.updateImg()
             interactions.append(c)
@@ -1935,8 +1852,7 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
                 }
             }
             await session.post(responseurl, json=responsejson)
-            c = asiresChannel(None, client.get_channel(
-                int(interaction["channel_id"])))
+            c = asiresChannel(None, await findChannel(interaction["channel_id"]))
             await c.updateText()
             interactions.append(c)
             await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
@@ -1949,7 +1865,7 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
                 }
             }
             await session.post(responseurl, json=responsejson)
-            c = await statsChannel(await findUser(authorid), client.get_channel(int(interaction["channel_id"]))).asyncInit()
+            c = await statsChannel(await findUser(authorid), await findChannel(interaction["channel_id"])).asyncInit()
             if "options" in interaction["data"]:
                 for option in interaction["data"]["options"]:
                     if option["name"] == "skanderbeg":
@@ -1958,6 +1874,58 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
                 # Default if not specified
                 c.skanderbeg = False
             interactions.append(c)
+        elif commandname.lower() == "defaultban":
+            guild: discord.Guild = client.get_guild(
+                int(interaction["guild_id"]))
+            if guild is None:
+                responsejson = {
+                    "type": 4,
+                    "data": {
+                        "content": "Either this command was not sent in a server or something went very wrong.",
+                        "flags": 64
+                    }
+                }
+                await session.post(responseurl, json=responsejson)
+                return
+            subcommand: Dict[str, Any] = interaction["data"]["options"]
+            string = "Something went wrong."
+            if subcommand[0]["name"] == "add":
+                tag: str = subcommand[0]["options"][0]["value"]
+                if tag is not None:
+                    GuildManager.addBan(guild, tag, conn=checkConn())
+                string = f"Could not find country named {subcommand[0]['options'][0]['value']}." if tag is None else f"Adding {EU4Lib.tagToName(tag)} to default ban list."
+                string += "\nNew default ban list: "
+                banlist = GuildManager.getGuildSave(
+                    guild, conn=checkConn()).defaultBan
+                for tag in banlist:
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is banlist[-1] else ", ")
+            elif subcommand[0]["name"] == "del":
+                tag: str = subcommand[0]["options"][0]["value"]
+                if tag is not None:
+                    GuildManager.removeBan(guild, tag, conn=checkConn())
+                string = f"Could not find country named {subcommand[0]['options'][0]['value']}." if tag is None else f"Removing {EU4Lib.tagToName(tag)} from default ban list."
+                string += "\nNew default ban list: "
+                banlist = GuildManager.getGuildSave(
+                    guild, conn=checkConn()).defaultBan
+                for tag in banlist:
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is banlist[-1] else ", ")
+            elif subcommand[0]["name"] == "list":
+                string = "Default ban list: "
+                banlist = GuildManager.getGuildSave(
+                    guild, conn=checkConn()).defaultBan
+                for tag in banlist:
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is banlist[-1] else ", ")
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": string,
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
         else:
             responsejson = {
                 "type": 4,

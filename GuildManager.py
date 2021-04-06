@@ -228,11 +228,12 @@ def addBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg2.e
         guildName: str = str(guild)
     else:
         raise TypeError
+    ban = ban.upper()
     # File
     if conn is None:
         guilds = fileLoadGuilds()
         for gld in guilds:
-            if gld.name == guildName:
+            if gld.name == guildName and ban not in gld.defaultBan:
                 gld.defaultBan.append(ban)
         fileSaveGuilds(guilds)
     # SQL
@@ -249,10 +250,12 @@ def addBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg2.e
                 raise ValueError  # This guild is not joined.
             else:
                 newBanList: List[str] = current[4]
-                newBanList.append(ban)
-                cur.execute("DELETE FROM Guilds WHERE name=%s", [guildName])
-                cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
-                            guildName, current[1], current[2], current[3], newBanList])
+                if ban not in newBanList:
+                    newBanList.append(ban)
+                    cur.execute(
+                        "DELETE FROM Guilds WHERE name=%s", [guildName])
+                    cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
+                                guildName, current[1], current[2], current[3], newBanList])
         finally:
             cur.close()
 
@@ -267,11 +270,12 @@ def removeBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg
         guildName: str = str(guild)
     else:
         raise TypeError
+    ban = ban.upper()
     # File
     if conn is None:
         guilds = fileLoadGuilds()
         for gld in guilds:
-            if gld.name == guildName:
+            if gld.name == guildName and ban in gld.defaultBan:
                 try:
                     gld.defaultBan.remove(ban)
                 except:
@@ -291,10 +295,12 @@ def removeBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg
                 raise ValueError  # This guild is not joined.
             else:
                 newBanList: List[str] = current[4]
-                newBanList.remove(ban)
-                cur.execute("DELETE FROM Guilds WHERE name=%s", [guildName])
-                cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
-                            guildName, current[1], current[2], current[3], newBanList])
+                if ban in newBanList:
+                    newBanList.remove(ban)
+                    cur.execute(
+                        "DELETE FROM Guilds WHERE name=%s", [guildName])
+                    cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
+                                guildName, current[1], current[2], current[3], newBanList])
         finally:
             cur.close()
 

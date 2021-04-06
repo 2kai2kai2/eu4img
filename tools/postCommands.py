@@ -29,10 +29,45 @@ uploadCommand({
     "description": "Creates a Cartographer stats display.",
     "options": [
         {
+            "type": 5, # BOOLEAN
             "name": "skanderbeg",
             "description": "Specify whether to upload to skanderbeg.pm (default: False)",
-            "type": 5,
             "required": False
         }
+    ]
+})
+uploadCommand({
+    "name": "defaultban",
+    "description": "Modifies the default ban list for nation reservations.",
+    "options": [
+        {
+            "type": 1, # SUB_COMMAND
+            "name": "add",
+            "description": "Add a tag to the default ban list.",
+            "options": [
+                {
+                    "type": 3, # STRING
+                    "name": "tag",
+                    "description": "The name of the country to add to the ban list.",
+                    "required": True
+                }
+            ]
+        }, {
+            "type": 1, # SUB_COMMAND
+            "name": "del",
+            "description": "Remove a tag from the default ban list.",
+            "options": [
+                {
+                    "type": 3, # STRING
+                    "name": "tag",
+                    "description": "The name of the country to remove from the ban list.",
+                    "required": True
+                }
+            ]
+        }, {
+            "type": 1, # SUB_COMMAND
+            "name": "list",
+            "description": "Returns all nations currently on the default ban list."
+        }, 
     ]
 })
