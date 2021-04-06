@@ -1,11 +1,14 @@
 import asyncio
+import json
 import os
 import traceback
+import zlib
 from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+import aiohttp
 import cppimport
 import discord
 import psycopg2
@@ -34,6 +37,7 @@ else:
 load_dotenv()
 token: str = os.getenv("DISCORD_TOKEN")
 client = discord.Client()
+session: aiohttp.ClientSession = None
 # Load database if it exists; if not then conn = None and methods will open a json file.
 try:
     DATABASEURL = os.getenv("DATABASE_URL")
@@ -112,6 +116,20 @@ def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Opt
         if role.name.strip("\n\t @").lower() == roleName.strip("\n\t @").lower():
             return role
     return None
+
+
+async def findUser(id: Union[int, str]) -> discord.User:
+    id = int(id)
+    author = client.get_user(id)
+    if author is None:
+        try:
+            author = await client.fetch_user(id)
+        except discord.NotFound:
+            pass
+    if author is None:
+        raise ValueError(f"Could not find discord user with ID {id}")
+    else:
+        return author
 
 
 def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str, int, DiscUser]) -> bool:
@@ -578,11 +596,13 @@ class saveGame():
         self.china: str = None
         self.crusade: str = None
         self.playerWars: List[war] = []
+
     def allPlayerTags(self) -> List[str]:
         if hasattr(self, "allplayertags"):
             return self.allplayertags
         else:
-            self.allplayertags: List[str] = [] # Player tags plus all previous tags those countries have had
+            # Player tags plus all previous tags those countries have had
+            self.allplayertags: List[str] = []
             for tag in self.playertags:
                 if tag not in self.allplayertags:
                     self.allplayertags.append(tag)
@@ -729,7 +749,8 @@ class statsChannel(AbstractChannel):
                             self.game.allNations[brackets[1]] = Nation(
                                 brackets[1])
                         elif linekey == "previous_country_tags":
-                            bracketNation.othertags.append(line[line.index('"')+1:line.rindex('"')])
+                            bracketNation.othertags.append(
+                                line[line.index('"')+1:line.rindex('"')])
                         elif linekey == "raw_development":
                             bracketNation.development = round(
                                 float(lineval))
@@ -877,7 +898,7 @@ class statsChannel(AbstractChannel):
                 if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
                     armydisplay = armydisplay[:-2]
                 return f"{armydisplay}k"
-            else: #army >= 1M
+            else:  # army >= 1M
                 armydisplay = str(round(army/1000000, 2))
                 if armydisplay.endswith(".0"):
                     armydisplay = armydisplay[:-2]
@@ -976,11 +997,13 @@ class statsChannel(AbstractChannel):
                         playerName = playerName[:-1]
                     imgDraw.text((x+128, y), playerName, (255, 255, 255), font)
                     # x+760: Army size
-                    imgFinal.paste(Image.open("resources/army.png"), (x+760, y))
+                    imgFinal.paste(Image.open(
+                        "resources/army.png"), (x+760, y))
                     imgDraw.text((x+760+128, y),
                                  armyDisplay(nat.army), (255, 255, 255), font)
                     # x+1100: Navy size
-                    imgFinal.paste(Image.open("resources/navy.png"), (x+1100, y))
+                    imgFinal.paste(Image.open(
+                        "resources/navy.png"), (x+1100, y))
                     imgDraw.text((x+1100+128, y), str(nat.navy),
                                  (255, 255, 255), font)
                     # x+1440: Development
@@ -1030,7 +1053,8 @@ class statsChannel(AbstractChannel):
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
                                         self.game.allNations[nat].capitalID))
                                 except:
-                                    raise RuntimeWarning(f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
+                                    raise RuntimeWarning(
+                                        f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
                             else:
                                 flag = EU4Lib.flag(nat)
                             imgFinal.paste(flag.resize((64, 64)), (round(x + 3 * (12 + 64) - (
@@ -1054,7 +1078,8 @@ class statsChannel(AbstractChannel):
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
                                         self.game.allNations[nat].capitalID))
                                 except:
-                                    raise RuntimeWarning(f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
+                                    raise RuntimeWarning(
+                                        f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
                             else:
                                 flag = EU4Lib.flag(nat)
                             imgFinal.paste(flag.resize((64, 64)), (round(
@@ -1561,6 +1586,9 @@ interactions: List[AbstractChannel] = []
 @client.event
 async def on_ready():
     print("EU4 Reserve Bot!")
+    # Create http session
+    global session
+    session = aiohttp.ClientSession()
     # Register guilds
     print("Registering connected Guilds not yet registered...")
     newGuildCount = 0
@@ -1826,5 +1854,119 @@ async def on_guild_remove(guild: discord.Guild):
                     str(c.displayChannel.id), conn=checkConn())
             interactions.remove(c)
             del(c)
+
+
+ZLIB_SUFFIX = b'\x00\x00\xff\xff'
+inflator = zlib.decompressobj()
+zlibbuffer = bytearray()
+
+
+def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
+    global zlibbuffer
+    if isinstance(msg, str):
+        return json.loads(msg)
+    else:
+        zlibbuffer.extend(msg)
+        if len(msg) < 4 or msg[-4:] != ZLIB_SUFFIX:
+            # idk what happens here???
+            raise ValueError("Bytes without zlib suffix")
+        else:
+            jsontext = inflator.decompress(zlibbuffer)
+            zlibbuffer = bytearray()
+            return json.loads(jsontext)
+
+
+@client.event
+async def on_socket_raw_receive(msg: Union[bytes, str]):
+    wh = decompressWebhook(msg)
+    if wh["op"] == 0 and wh["t"] == "INTERACTION_CREATE":
+        # This means it's an interaction.
+        # https://discord.com/developers/docs/interactions/slash-commands#interaction
+        interaction: Dict[str, Any] = wh["d"]
+        # Verify this is for us
+        if int(interaction["application_id"]) != (await client.application_info()).id or interaction["type"] != 2:
+            # Not sure if this'll ever happen, but we're recieving an interaction not for us.
+            return
+        commandname: str = interaction["data"]["name"]
+        responseurl = f"https://discord.com/api/v8/interactions/{interaction['id']}/{interaction['token']}/callback"
+        authorid: int = int(interaction["member"]["user"]["id"]
+                            if "member" in interaction else interaction["user"]["id"])
+        responsejson: Dict[str, Any] = {}
+
+        if commandname.lower() == "help":
+            stringHelp = f"__**Command help:**__"
+            stringHelp += f"\n**/HELP**\nGets you this information!"
+            stringHelp += f"\n**/RESERVE [nation1], [nation2], [nation3]**\nReserves your picks or overwrites your previous reservation.\nThese are in the order of first pick to third. Don't include the brackets."
+            stringHelp += f"\n**/DELRESERVE**\nCancels your reservation."
+            # Here we send info about commands only for admins
+            if checkResAdmin(interaction["guild_id"], authorid):
+                stringHelp += f"\n**/END**\nStops allowing reservations and stops the bot's channel management.\nThen runs and displays the draft. Draft may need to be rearranged manually to ensure game balance."
+                stringHelp += f"\n**/ADMRES [nation1], [nation2], [nation3] [@user]**\nReserves picks on behalf of a player on the server.\nMake sure to actually @ the player."
+                stringHelp += f"\n**/EXECRES [nation] [optional @user]**\nReserves a pick on behalf of yourself or another player on the server.\nEnsures that this player gets the reservation first."
+                stringHelp += f"\n**/ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
+                stringHelp += f"\n**/UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": stringHelp,
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+        elif commandname.lower() == "reservations":
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "Loading Reservation Channel..."
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+            c = ReserveChannel(None, client.get_channel(
+                int(interaction["channel_id"])))
+            await c.updateText()
+            await c.updateImg()
+            interactions.append(c)
+            await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
+        elif commandname.lower() == "asireservations":
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "Loading ASI Reservation Channel..."
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+            c = asiresChannel(None, client.get_channel(
+                int(interaction["channel_id"])))
+            await c.updateText()
+            interactions.append(c)
+            await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
+        elif commandname.lower() == "stats":
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "Sent stats creation details to your DMs!",
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+            c = await statsChannel(await findUser(authorid), client.get_channel(int(interaction["channel_id"]))).asyncInit()
+            if "options" in interaction["data"]:
+                for option in interaction["data"]["options"]:
+                    if option["name"] == "skanderbeg":
+                        c.skanderbeg = option["value"]
+            else:
+                # Default if not specified
+                c.skanderbeg = False
+            interactions.append(c)
+        else:
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "The bot was unable to process this command. Please report with details to the developer.",
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+
 
 client.run(token)
