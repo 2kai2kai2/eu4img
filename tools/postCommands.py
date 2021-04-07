@@ -71,3 +71,15 @@ uploadCommand({
         }, 
     ]
 })
+uploadCommand({
+    "name": "adminrank",
+    "description": "Sets the role required to have bot admin permissions. All higher roles will have permission.",
+    "options": [
+        {
+            "type": 8, # ROLE
+            "name": "role",
+            "description": "The new minimum admin role.",
+            "required": True
+        }
+    ]
+})

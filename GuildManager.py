@@ -9,7 +9,7 @@ Data Structure - Json
 {
 	"<GuildID>": {
 		"prefix": "<$>",
-		"adminRank": "<@Rank>",
+		"adminRank": <rankID>,
 		"announcements": "<ChannelID>",
 		"defaultBan": [
 			"<TAG>",
