@@ -1,11 +1,14 @@
 import asyncio
+import json
 import os
 import traceback
+import zlib
 from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+import aiohttp
 import cppimport
 import discord
 import psycopg2
@@ -34,6 +37,7 @@ else:
 load_dotenv()
 token: str = os.getenv("DISCORD_TOKEN")
 client = discord.Client()
+session: aiohttp.ClientSession = None
 # Load database if it exists; if not then conn = None and methods will open a json file.
 try:
     DATABASEURL = os.getenv("DATABASE_URL")
@@ -114,33 +118,83 @@ def getRoleFromStr(server: Union[str, int, discord.Guild], roleName: str) -> Opt
     return None
 
 
-def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str, int, DiscUser]) -> bool:
+async def findUser(id: Union[int, str]) -> discord.User:
+    id = int(id)
+    author = client.get_user(id)
+    if author is None:
+        try:
+            author = await client.fetch_user(id)
+        except discord.NotFound:
+            raise ValueError(f"Could not find discord user with ID {id}")
+    return author
+
+
+async def findMember(id: Union[int, str], guild: discord.Guild) -> Optional[discord.Member]:
+    id = int(id)
+    member = guild.get_member(id)
+    if member is None:
+        try:
+            member = await guild.fetch_member(id)
+        except discord.Forbidden:
+            raise ValueError(
+                f"Could not access the guild to find member with user ID {id}")
+        except discord.HTTPException:
+            return None
+    return member
+
+
+async def findChannel(id: Union[int, str]) -> DiscTextChannels:
+    id = int(id)
+    textc = client.get_channel(id)
+    if textc is None:
+        try:
+            textc = await client.fetch_channel(id)
+        except discord.NotFound:
+            raise ValueError(f"Could not find discord channel with ID {id}")
+        except discord.Forbidden:
+            raise ValueError(
+                f"Permission was denied when fetching discord channel with ID {id}")
+    return textc
+
+
+async def findGuild(id: Union[int, str]) -> discord.Guild:
+    id = int(id)
+    guild = client.get_guild(id)
+    if guild is None:
+        try:
+            guild = await client.fetch_guild(id)
+        except discord.Forbidden:
+            raise ValueError(f"Could not access discord guild with ID {id}")
+    return guild
+
+
+async def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str, int, DiscUser]) -> bool:
     """
-    Returns whether or not a user has bot admin control roles as set in .env on a server.
+    Returns whether or not a user has bot admin control roles on a server.
     """
     # Get server object
     s: discord.Guild = None
     if isinstance(server, str) or isinstance(server, int):
-        s: discord.Guild = client.get_guild(int(server))
+        s: discord.Guild = await findGuild(server)
     elif isinstance(server, discord.Guild):
         s: discord.Guild = server
     else:
         raise TypeError(
             f"Invalid type for Discord server. Invalid object: {server}")
     # Get member object
-    u: DiscUser = None
+    u: discord.Member = None
     if isinstance(user, str) or isinstance(user, int):  # id
-        u: DiscUser = s.get_member(int(user))
+        u: DiscUser = await findMember(user, s)
     elif isinstance(user, discord.User):
-        u: DiscUser = s.get_member(user.id)
+        u: DiscUser = await findMember(user.id, s)
     elif isinstance(user, discord.Member):
         u: DiscUser = user
     else:
         raise TypeError(
             f"Invalid type for Discord member. Invalid object: {user}")
     # OK now check
-    role = getRoleFromStr(
-        s, GuildManager.getGuildSave(s, conn=checkConn()).admin)
+    role = s.get_role(
+        int(GuildManager.getGuildSave(s, conn=checkConn()).admin))
     return (role is not None and role <= u.top_role) or u.top_role.id == s.roles[-1].id or u._user.id == 249680375280959489
 
 
@@ -181,12 +235,6 @@ class ReserveChannel(AbstractChannel):
             res.bans = GuildManager.getGuildSave(
                 self.interactChannel.guild, conn=checkConn()).defaultBan
             EU4Reserve.addReserve(res, conn=checkConn())
-
-    def prefix(self) -> str:
-        """
-        Returns the prefix for this server.
-        """
-        return GuildManager.getGuildSave(self.interactChannel.guild, conn=checkConn()).prefix
 
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
@@ -229,26 +277,26 @@ class ReserveChannel(AbstractChannel):
 
     async def process(self, message: discord.Message):
         text: str = message.content.strip()
-        if text.upper() == f"{self.prefix()}HELP":  # HELP
+        if text.upper() == "HELP":  # HELP
             stringHelp = f"__**Command help for {message.channel.mention}:**__"
-            stringHelp += f"\n**{self.prefix()}HELP**\nGets you this information!"
-            stringHelp += f"\n**{self.prefix()}RESERVE [nation]**\nReserves a nation or overwrites your previous reservation. Don't include the brackets."
-            stringHelp += f"\n**{self.prefix()}DELRESERVE**\nCancels your reservation."
+            stringHelp += "\n**HELP**\nGets you this information!"
+            stringHelp += "\n**RESERVE [nation]**\nReserves a nation or overwrites your previous reservation. Don't include the brackets."
+            stringHelp += "\n**DELRESERVE**\nCancels your reservation."
             # Here we send info about commands only for admins
-            if checkResAdmin(message.guild, message.author):
-                stringHelp += f"\n**{self.prefix()}END**\nStops allowing reservations and stops the bot's channel management.\nThis should be done by the time the game starts."
-                stringHelp += f"\n**{self.prefix()}ADMRES [nation] [@user]**\nReserves a nation on behalf of a player on the server.\nMake sure to actually @ the player. This ignores the ban list."
-                stringHelp += f"\n**{self.prefix()}ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
-                stringHelp += f"\n**{self.prefix()}UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
-                stringHelp += f"\n**{self.prefix()}ADDBAN [nation], [nation], ... **\nAdds countries to the ban list. Add commas between each entry if there are more than one."
-                stringHelp += f"\n**{self.prefix()}DELBAN [nation], [nation], ... **\nRemoves countries from the ban list. Add commas between each entry if there are more than one."
+            if await checkResAdmin(message.guild, message.author):
+                stringHelp += "\n**END**\nStops allowing reservations and stops the bot's channel management.\nThis should be done by the time the game starts."
+                stringHelp += "\n**ADMRES [nation] [@user]**\nReserves a nation on behalf of a player on the server.\nMake sure to actually @ the player. This ignores the ban list."
+                stringHelp += "\n**ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
+                stringHelp += "\n**UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
+                stringHelp += "\n**ADDBAN [nation], [nation], ... **\nAdds countries to the ban list. Add commas between each entry if there are more than one."
+                stringHelp += "\n**DELBAN [nation], [nation], ... **\nRemoves countries from the ban list. Add commas between each entry if there are more than one."
             await message.delete()
             await sendUserMessage(message.author, stringHelp)
-        elif text.upper() == f"{self.prefix()}UPDATE" and checkResAdmin(message.guild, message.author):  # UPDATE
+        elif text.upper() == "UPDATE" and await checkResAdmin(message.guild, message.author):  # UPDATE
             await message.delete()
             await self.updateText()
             await self.updateImg()
-        elif text.upper() == f"{self.prefix()}END" and checkResAdmin(message.guild, message.author):  # END
+        elif text.upper() == "END" and await checkResAdmin(message.guild, message.author):  # END
             await message.delete()
             # Load the reserve
             reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(
@@ -269,10 +317,10 @@ class ReserveChannel(AbstractChannel):
             await self.displayChannel.send("*Reservations are now ended. Good Luck.*")
             EU4Reserve.deleteReserve(
                 str(self.displayChannel.id), conn=checkConn())
-            interactions.remove(self)
+            controlledChannels.remove(self)
             del(self)
         # RESERVE [nation]
-        elif text.upper().startswith(f"{self.prefix()}RESERVE "):
+        elif text.upper().startswith("RESERVE "):
             res = text.split(maxsplit=1)[1].strip()
             tag = EU4Lib.country(res)
             if tag is not None:
@@ -284,7 +332,7 @@ class ReserveChannel(AbstractChannel):
                 await sendUserMessage(message.author, f"Your country reservation in {self.displayChannel.mention} was not recorded, as \"{res}\" was not recognized.")
             await message.delete()
         # ADMRES [nation] @[player]
-        elif text.upper().startswith(f"{self.prefix()}ADMRES") and checkResAdmin(message.guild, message.author):
+        elif text.upper().startswith("ADMRES") and await checkResAdmin(message.guild, message.author):
             if len(message.mentions) == 1:
                 res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
                 tag = EU4Lib.country(res)
@@ -295,18 +343,19 @@ class ReserveChannel(AbstractChannel):
             else:
                 await sendUserMessage(message.author, f"Your reservation in {self.displayChannel.mention} needs to @ a player.")
             await message.delete()
-        elif text.upper() == f"{self.prefix()}DELRESERVE" or text.upper() == f"{self.prefix()}DELETERESERVE":  # DELRESERVE
+        # DELRESERVE
+        elif text.upper() == "DELRESERVE" or text.upper() == "DELETERESERVE":
             await self.removePlayer(message.author.mention)
             await message.delete()
         # ADMDELRES @[player]
-        elif text.upper().startswith(f"{self.prefix()}ADMDELRES") and checkResAdmin(message.guild, message.author):
+        elif text.upper().startswith("ADMDELRES") and await checkResAdmin(message.guild, message.author):
             if len(message.mentions) == 1:
                 await self.removePlayer(message.mentions[0].mention)
             else:
                 await sendUserMessage(message.author, f"Your deletion of a reservation in {self.displayChannel.mention} needs to @ a player.")
             await message.delete()
         # ADDBAN [nation], [nation], ...
-        elif text.upper().startswith(f"{self.prefix()}ADDBAN") and checkResAdmin(message.guild, message.author):
+        elif text.upper().startswith("ADDBAN") and await checkResAdmin(message.guild, message.author):
             # This is implemented by having lists of recognized and unrecognized bans, doing the recognized ones, and informing about the result.
             bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
             bantags: List[str] = []
@@ -336,7 +385,7 @@ class ReserveChannel(AbstractChannel):
             await message.delete()
             await self.updateText()
         # DELBAN [nation], [nation], ...
-        elif text.upper().startswith(f"{self.prefix()}DELBAN") and checkResAdmin(message.guild, message.author):
+        elif text.upper().startswith("DELBAN") and await checkResAdmin(message.guild, message.author):
             # This is implemented by having lists of recognized and unrecognized bans, doing the recognized ones, and informing about the result.
             bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
             bantags: List[str] = []
@@ -373,7 +422,7 @@ class ReserveChannel(AbstractChannel):
         reserve: EU4Reserve.Reserve = EU4Reserve.getReserve(
             str(self.interactChannel.id), conn=checkConn())
         # Text String - Header
-        string = f"How to reserve: {self.prefix()}reserve [nation]\nTo unreserve: {self.prefix()}delreserve\n"
+        string = f"How to reserve: `reserve [nation]`\nTo unreserve: `delreserve`\n"
         # Text String - Banned Nations
         string += "Banned nations: "
         if len(reserve.bans) == 0:
@@ -578,11 +627,13 @@ class saveGame():
         self.china: str = None
         self.crusade: str = None
         self.playerWars: List[war] = []
+
     def allPlayerTags(self) -> List[str]:
         if hasattr(self, "allplayertags"):
             return self.allplayertags
         else:
-            self.allplayertags: List[str] = [] # Player tags plus all previous tags those countries have had
+            # Player tags plus all previous tags those countries have had
+            self.allplayertags: List[str] = []
             for tag in self.playertags:
                 if tag not in self.allplayertags:
                     self.allplayertags.append(tag)
@@ -729,7 +780,8 @@ class statsChannel(AbstractChannel):
                             self.game.allNations[brackets[1]] = Nation(
                                 brackets[1])
                         elif linekey == "previous_country_tags":
-                            bracketNation.othertags.append(line[line.index('"')+1:line.rindex('"')])
+                            bracketNation.othertags.append(
+                                line[line.index('"')+1:line.rindex('"')])
                         elif linekey == "raw_development":
                             bracketNation.development = round(
                                 float(lineval))
@@ -854,7 +906,7 @@ class statsChannel(AbstractChannel):
         """
         Returns a stats Image based off the self.game data.
 
-        If sendUpdates is True, a message will be sent and edited in the interactChannel for this interaction.
+        If sendUpdates is True, a message will be sent and edited in the interactChannel for this control channel.
         """
         progressMessage: discord.Message = None
         if sendUpdates and self.interactChannel is not None:
@@ -877,7 +929,7 @@ class statsChannel(AbstractChannel):
                 if armydisplay.endswith(".0") or ("." in armydisplay and len(armydisplay) > 4):
                     armydisplay = armydisplay[:-2]
                 return f"{armydisplay}k"
-            else: #army >= 1M
+            else:  # army >= 1M
                 armydisplay = str(round(army/1000000, 2))
                 if armydisplay.endswith(".0"):
                     armydisplay = armydisplay[:-2]
@@ -976,11 +1028,13 @@ class statsChannel(AbstractChannel):
                         playerName = playerName[:-1]
                     imgDraw.text((x+128, y), playerName, (255, 255, 255), font)
                     # x+760: Army size
-                    imgFinal.paste(Image.open("resources/army.png"), (x+760, y))
+                    imgFinal.paste(Image.open(
+                        "resources/army.png"), (x+760, y))
                     imgDraw.text((x+760+128, y),
                                  armyDisplay(nat.army), (255, 255, 255), font)
                     # x+1100: Navy size
-                    imgFinal.paste(Image.open("resources/navy.png"), (x+1100, y))
+                    imgFinal.paste(Image.open(
+                        "resources/navy.png"), (x+1100, y))
                     imgDraw.text((x+1100+128, y), str(nat.navy),
                                  (255, 255, 255), font)
                     # x+1440: Development
@@ -1030,7 +1084,8 @@ class statsChannel(AbstractChannel):
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
                                         self.game.allNations[nat].capitalID))
                                 except:
-                                    raise RuntimeWarning(f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
+                                    raise RuntimeWarning(
+                                        f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
                             else:
                                 flag = EU4Lib.flag(nat)
                             imgFinal.paste(flag.resize((64, 64)), (round(x + 3 * (12 + 64) - (
@@ -1054,7 +1109,8 @@ class statsChannel(AbstractChannel):
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
                                         self.game.allNations[nat].capitalID))
                                 except:
-                                    raise RuntimeWarning(f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
+                                    raise RuntimeWarning(
+                                        f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
                             else:
                                 flag = EU4Lib.flag(nat)
                             imgFinal.paste(flag.resize((64, 64)), (round(
@@ -1116,9 +1172,9 @@ class statsChannel(AbstractChannel):
         return message.channel == self.interactChannel and not message.author.bot
 
     async def process(self, message: discord.Message):
-        if message.content.upper() == GuildManager.getGuildSave(self.displayChannel.guild, conn=checkConn()).prefix + "CANCEL":
+        if message.content.upper() == "CANCEL":
             await self.interactChannel.send("**Cancelling the stats operation.**")
-            interactions.remove(self)
+            controlledChannels.remove(self)
             if self.skanderbegURL is not None:
                 self.skanderbegURL.cancel()
             del(self)
@@ -1203,7 +1259,7 @@ class statsChannel(AbstractChannel):
                     await self.interactChannel.send(f"**Unable to send the image to {self.displayChannel.mention} due to lack of permissions. Posting image here:**\nYou can right-click and copy link then post that.", file=imageToFile(img))
                 else:
                     await self.interactChannel.send(f"**Done! Check {self.displayChannel.mention}**")
-                interactions.remove(self)
+                controlledChannels.remove(self)
                 del(self)
             # add [player], [nation]
             elif message.content.strip().lower().startswith("add "):
@@ -1243,7 +1299,7 @@ class statsChannel(AbstractChannel):
             try:  # If this fails, it probably means the account was deleted. We still should delete.
                 await self.interactChannel.send(f"You left the {self.displayChannel.guild.name} discord server, so this stats interaction has been cancelled.")
             finally:
-                interactions.remove(self)
+                controlledChannels.remove(self)
                 del(self)
 
 
@@ -1290,12 +1346,6 @@ class asiresChannel(AbstractChannel):
             EU4Reserve.addReserve(EU4Reserve.ASIReserve(
                 str(self.displayChannel.id)), conn=checkConn())
 
-    def prefix(self) -> str:
-        """
-        Gets the server's prefix.
-        """
-        return GuildManager.getGuildSave(self.interactChannel.guild, conn=checkConn()).prefix
-
     def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
         """
         Returns the faction that owns a given province.
@@ -1312,24 +1362,24 @@ class asiresChannel(AbstractChannel):
 
     async def process(self, message: discord.Message):
         text = message.content.strip()
-        if text.upper() == f"{self.prefix()}HELP":  # HELP
+        if text.upper() == "HELP":  # HELP
             stringHelp = f"__**Command help for {message.channel.mention}:**__"
-            stringHelp += f"\n**{self.prefix()}HELP**\nGets you this information!"
-            stringHelp += f"\n**{self.prefix()}RESERVE [nation1], [nation2], [nation3]**\nReserves your picks or overwrites your previous reservation.\nThese are in the order of first pick to third. Don't include the brackets."
-            stringHelp += f"\n**{self.prefix()}DELRESERVE**\nCancels your reservation."
+            stringHelp += "\n**HELP**\nGets you this information!"
+            stringHelp += "\n**RESERVE [nation1], [nation2], [nation3]**\nReserves your picks or overwrites your previous reservation.\nThese are in the order of first pick to third. Don't include the brackets."
+            stringHelp += "\n**DELRESERVE**\nCancels your reservation."
             # Here we send info about commands only for admins
-            if checkResAdmin(message.guild, message.author):
-                stringHelp += f"\n**{self.prefix()}END**\nStops allowing reservations and stops the bot's channel management.\nThen runs and displays the draft. Draft may need to be rearranged manually to ensure game balance."
-                stringHelp += f"\n**{self.prefix()}ADMRES [nation1], [nation2], [nation3] [@user]**\nReserves picks on behalf of a player on the server.\nMake sure to actually @ the player."
-                stringHelp += f"\n**{self.prefix()}EXECRES [nation] [optional @user]**\nReserves a pick on behalf of yourself or another player on the server.\nEnsures that this player gets the reservation first."
-                stringHelp += f"\n**{self.prefix()}ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
-                stringHelp += f"\n**{self.prefix()}UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
+            if await checkResAdmin(message.guild, message.author):
+                stringHelp += "\n**END**\nStops allowing reservations and stops the bot's channel management.\nThen runs and displays the draft. Draft may need to be rearranged manually to ensure game balance."
+                stringHelp += "\n**ADMRES [nation1], [nation2], [nation3] [@user]**\nReserves picks on behalf of a player on the server.\nMake sure to actually @ the player."
+                stringHelp += "\n**EXECRES [nation] [optional @user]**\nReserves a pick on behalf of yourself or another player on the server.\nEnsures that this player gets the reservation first."
+                stringHelp += "\n**ADMDELRES [@user]**\nDeletes a player's reservation.\nMake sure to actually @ the player."
+                stringHelp += "\n**UPDATE**\nUpdates the reservations list. Should usually not be necessary unless in debug or something went wrong."
             await message.delete()
             await sendUserMessage(message.author, stringHelp)
-        elif text.upper() == f"{self.prefix()}UPDATE" and checkResAdmin(message.guild, message.author):  # UPDATE
+        elif text.upper() == "UPDATE" and await checkResAdmin(message.guild, message.author):  # UPDATE
             await message.delete()
             await self.updateText()
-        elif text.upper() == f"{self.prefix()}END" and checkResAdmin(message.guild, message.author):  # END
+        elif text.upper() == "END" and await checkResAdmin(message.guild, message.author):  # END
             await message.delete()
             reserves: List[EU4Reserve.asiPick] = EU4Reserve.getReserve(
                 str(self.displayChannel.id), conn=checkConn()).players
@@ -1412,15 +1462,15 @@ class asiresChannel(AbstractChannel):
             # aaand we're done!
             EU4Reserve.deleteReserve(
                 str(self.displayChannel.id), conn=checkConn())
-            interactions.remove(self)
+            controlledChannels.remove(self)
             del(self)
         # RESERVE [nation1], [nation2], [nation3]
-        elif text.upper().startswith(f"{self.prefix()}RESERVE "):
+        elif text.upper().startswith("RESERVE "):
             await self.add(message.author, text.split(maxsplit=1)[1].strip())
             await message.delete()
             await self.updateText()
         # ADMRES [nation1], [nation2], [nation3] @[player]
-        elif text.upper().startswith(f"{self.prefix()}ADMRES") and checkResAdmin(message.guild, message.author):
+        elif text.upper().startswith("ADMRES") and await checkResAdmin(message.guild, message.author):
             if len(message.mentions) == 1:
                 # Get the part "[nation1], [nation2], [nation3]" by stripping the rest
                 res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
@@ -1443,7 +1493,7 @@ class asiresChannel(AbstractChannel):
                 await sendUserMessage(message.author, f"Your reservation in {self.displayChannel.mention} needs to @ a player.")
             await message.delete()
         # ADMRES [nation] @[optional_player]
-        elif text.upper().startswith(f"{self.prefix()}EXECRES") and checkResAdmin(message.guild, message.author):
+        elif text.upper().startswith("EXECRES") and await checkResAdmin(message.guild, message.author):
             # Get the part "[nation]" by stripping the rest
             res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
             # Get the user to target
@@ -1469,12 +1519,12 @@ class asiresChannel(AbstractChannel):
                 await sendUserMessage(message.author, f"{EU4Lib.tagToName(pick)} is already executive-reserved in {message.channel.mention}")
             elif addInt == 1 or addInt == 2:
                 await self.updateText()
-        elif text.upper() == f"{self.prefix()}DELRESERVE" or text.upper() == f"{self.prefix()}DELETERESERVE":  # DELRESERVE
+        elif text.upper() == "DELRESERVE" or text.upper() == "DELETERESERVE":  # DELRESERVE
             await self.remove(message.author)
             await message.delete()
             await self.updateText()
         # ADMDELRES @[player]
-        elif text.upper().startswith(f"{self.prefix()}ADMDELRES") and checkResAdmin(message.guild, message.author):
+        elif text.upper().startswith("ADMDELRES") and await checkResAdmin(message.guild, message.author):
             if len(message.mentions) == 1:
                 await self.remove(message.mentions[0].mention)
                 await self.updateText()
@@ -1490,8 +1540,7 @@ class asiresChannel(AbstractChannel):
         """
         # Constructing the text string
         # Text String - Header
-        string = f"How to reserve: {self.prefix()}reserve [nation1], [nation2], [nation3]\n" + \
-            f"To unreserve: {self.prefix()}delreserve\n**Current players list:**"
+        string = "How to reserve: `reserve [nation1], [nation2], [nation3]`\nTo unreserve: `delreserve`\n**Current players list:**"
         # Load player list
         picks = EU4Reserve.getReserve(
             str(self.displayChannel.id), conn=checkConn()).players
@@ -1555,12 +1604,15 @@ class asiresChannel(AbstractChannel):
 
 
 # DISCORD CODE
-interactions: List[AbstractChannel] = []
+controlledChannels: List[AbstractChannel] = []
 
 
 @client.event
 async def on_ready():
     print("EU4 Reserve Bot!")
+    # Create http session
+    global session
+    session = aiohttp.ClientSession()
     # Register guilds
     print("Registering connected Guilds not yet registered...")
     newGuildCount = 0
@@ -1595,15 +1647,15 @@ async def on_ready():
                     imgmsg = None
                 else:  # The message is accessable.
                     imgmsg = res.imgmsg
-                # Create the ReserveChannel object and add to interactions list
-                interactions.append(ReserveChannel(
+                # Create the ReserveChannel object and add to control channels list
+                controlledChannels.append(ReserveChannel(
                     None, reschannel, Load=True, textID=textmsg, imgID=imgmsg))
                 # Update if anything was deleted
                 if textmsg is None:
-                    await interactions[-1].updateText()
-                    await interactions[-1].updateImg()
+                    await controlledChannels[-1].updateText()
+                    await controlledChannels[-1].updateImg()
                 elif imgmsg is None:
-                    await interactions[-1].updateImg()
+                    await controlledChannels[-1].updateImg()
             elif isinstance(res, EU4Reserve.ASIReserve):
                 # Check that the textmsg still exists
                 try:
@@ -1612,12 +1664,12 @@ async def on_ready():
                     textmsg = None
                 else:  # The message is accessable.
                     textmsg = res.textmsg
-                # Create asiresChannel object and add to interactions list
-                interactions.append(asiresChannel(
+                # Create asiresChannel object and add to control channels list
+                controlledChannels.append(asiresChannel(
                     None, reschannel, Load=True, textID=textmsg))
                 # Update if anything was deleted
                 if textmsg is None:
-                    await interactions[-1].updateText()
+                    await controlledChannels[-1].updateText()
             rescount += 1
     print(
         f"Loaded {rescount} channels and removed {closedcount} no longer existing channels.")
@@ -1628,184 +1680,42 @@ async def on_ready():
 @client.event
 async def on_message(message: discord.Message):
     if not message.author.bot:
-        text: str = message.content.strip()
-        for interaction in interactions:
-            if await interaction.responsive(message):
-                await interaction.process(message)
+        for channel in controlledChannels:
+            if await channel.responsive(message):
+                await channel.process(message)
                 return
-        if (message.guild is not None and text.startswith(GuildManager.getGuildSave(message.guild, conn=checkConn()).prefix)):
-            prefix = GuildManager.getGuildSave(
-                message.guild, conn=checkConn()).prefix
-            if text.upper() == f"{prefix}HELP":
-                stringHelp = "__**Command help:**__"
-                stringHelp += f"\n**{prefix}HELP**\nGets you this information!"
-                # Here we send info about commands only for admins
-                if checkResAdmin(message.guild, message.author):
-                    stringHelp += f"\n**{prefix}NEW**\nTurns the text channel into a reservation channel\n(more commands within that; use this command in it for info)"
-                    stringHelp += f"\n**{prefix}STATS**\nCreates a eu4 stats image in the channel.\nUses DMs to gather the necessary files for creation."
-                    stringHelp += f"\n**{prefix}NEWASI**\nTurns the text channel into a ASI reservation channel\nThis is specific to my discord."
-                    stringHelp += f"\n**{prefix}PREFIX [prefix]**\nChanges the bot prefix on this server."
-                    stringHelp += f"\n**{prefix}ADMINRANK [@rank]**\nChanges the minimum rank necessary for admin control of the bot.\nPlease be sure before changing this. The highest rank can always control the bot.\nThe @ is optional in specifying the rank."
-                    stringHelp += f"\n**{prefix}ADDDEFAULTBAN [nation], [nation], ...**\nAdds nations to the default ban list for the server. When a new reserve channel is created, this list will be copied into that channel's ban list. The channel ban list may be changed separately thereafter."
-                    stringHelp += f"\n**{prefix}DELDEFAULTBAN [nation], [nation], ...**\nRemoves nations from the default ban list for the server. As many nations as needed may be changed in one command, with commas between them."
-                await message.delete()
-                await sendUserMessage(message.author, stringHelp)
-            elif (text.upper() == f"{prefix}NEW") and checkResAdmin(message.guild, message.author):
-                c = ReserveChannel(message.author, message.channel)
-                await message.delete()
-                await c.updateText()
-                await c.updateImg()
-                interactions.append(c)
-            elif text.upper().startswith(f"{prefix}STATS") and checkResAdmin(message.guild, message.author):
-                c = await statsChannel(message.author, message.channel).asyncInit()
-                await message.delete()
-                c.skanderbeg = "false" not in text.lower()
-                interactions.append(c)
-            elif text.upper() == f"{prefix}NEWASI" and checkResAdmin(message.guild, message.author):
-                c = asiresChannel(message.guild, message.channel)
-                await message.delete()
-                await c.updateText()
-                interactions.append(c)
-            elif text.upper() == f"{prefix}LOAD" and checkResAdmin(message.guild, message.author):
-                res = EU4Reserve.getReserve(
-                    str(message.channel.id), conn=checkConn())
-                if res is None:
-                    await sendUserMessage(message.author, f"You tried to load a save in {message.channel.mention} but no save was found. Please try {prefix}NEW to create new reserves.")
-                elif isinstance(res, EU4Reserve.Reserve):
-                    c = ReserveChannel(
-                        message.author, message.channel, Load=True)
-                    await message.delete()
-                    await c.updateText()
-                    await c.updateImg()
-                    interactions.append(c)
-                elif isinstance(res, EU4Reserve.ASIReserve):
-                    c = asiresChannel(
-                        message.guild, message.channel, Load=True)
-                    await message.delete()
-                    await c.updateText()
-                    interactions.append(c)
-            elif text.upper().startswith(f"{prefix}PREFIX") and checkResAdmin(message.guild, message.author):
-                newPrefix = text.partition(" ")[2].strip()
-                if len(newPrefix) < 1:
-                    await sendUserMessage(message.author, "The prefix must be at least 1 character.")
-                elif any(char.isalpha() for char in newPrefix):
-                    await sendUserMessage(message.author, "The prefix cannot contain letters.")
-                else:
-                    GuildManager.setPrefix(
-                        message.guild, newPrefix, conn=checkConn())
-                    await sendUserMessage(message.author, f"Prefix on {message.guild.name} set to {newPrefix}")
-                await message.delete()
-            elif text.upper().startswith(f"{prefix}ADMINRANK") and checkResAdmin(message.guild, message.author):
-                if len(message.role_mentions) > 0:
-                    newRank = message.role_mentions[0]
-                else:
-                    newRank = getRoleFromStr(
-                        message.guild, text.partition(" ")[2].strip())
-                if newRank is None:
-                    await sendUserMessage(message.author, f"The rank {text.partition(' ')[2].strip()} is not a valid rank on {message.guild.name}")
-                else:
-                    GuildManager.setAdmin(
-                        message.guild, newRank.name, conn=checkConn())
-                    await sendUserMessage(message.author, f"Admin rank set to {newRank.name} on {message.guild.name}")
-                await message.delete()
-            # ADDDEFAULTBAN [nation], [nation], ...
-            elif text.upper().startswith(f"{prefix}ADDDEFAULTBAN") and checkResAdmin(message.guild, message.author):
-                bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
-                bantags = []
-                fails = []
-                for bannat in bannations:
-                    tag = EU4Lib.country(bannat.strip("\n\t ,"))
-                    if tag is not None:
-                        bantags.append(tag)
-                    else:
-                        fails.append(bannat)
-                string = ""
-                if len(bantags) > 0:
-                    string += f"Added the following nations to the default ban list in {message.guild.name}: "
-                    for tag in bantags:
-                        GuildManager.addBan(
-                            message.guild, tag, conn=checkConn())
-                        string += EU4Lib.tagToName(tag) + \
-                            ("" if tag is bantags[-1] else ", ")
-                if len(fails) > 0:
-                    string += "\nDid not recognize the following nations: "
-                    for tag in fails:
-                        string += tag + ("" if tag is fails[-1] else ", ")
-                    string += "\nThe unrecognized nations were not added to the default ban list."
-                if string != "":
-                    string += "\nThe new default ban list: "
-                    newbanlist = GuildManager.getGuildSave(
-                        message.guild, conn=checkConn()).defaultBan
-                    for tag in newbanlist:
-                        string += EU4Lib.tagToName(tag) + \
-                            ("" if tag is newbanlist[-1] else ", ")
-                    await sendUserMessage(message.author, string)
-                await message.delete()
-            # DELDEFAULTBAN [nation], [nation], ...
-            elif text.upper().startswith(f"{prefix}DELDEFAULTBAN") and checkResAdmin(message.guild, message.author):
-                bannations = text.partition(" ")[2].strip("\n\t ,").split(",")
-                bantags = []
-                fails = []
-                for bannat in bannations:
-                    tag = EU4Lib.country(bannat.strip("\n\t ,"))
-                    if tag is not None:
-                        bantags.append(tag)
-                    else:
-                        fails.append(bannat)
-                string = ""
-                if len(bantags) > 0:
-                    string += f"Removed the following nations from the default ban list in {message.guild.name}: "
-                    for tag in bantags:
-                        GuildManager.removeBan(
-                            message.guild, tag, conn=checkConn())
-                        string += EU4Lib.tagToName(tag) + \
-                            ("" if tag is bantags[-1] else ", ")
-                if len(fails) > 0:
-                    string += "\nDid not recognize the following nations: "
-                    for tag in fails:
-                        string += tag + ("" if tag is fails[-1] else ", ")
-                    string += "\nThe unrecognized nations were not successfully removed from the default ban list."
-                if string != "":
-                    string += "\nThe new default ban list: "
-                    newbanlist = GuildManager.getGuildSave(
-                        message.guild, conn=checkConn()).defaultBan
-                    for tag in newbanlist:
-                        string += EU4Lib.tagToName(tag) + \
-                            ("" if tag is newbanlist[-1] else ", ")
-                    await sendUserMessage(message.author, string)
-                await message.delete()
 
 
 @client.event
 async def on_guild_channel_delete(channel: DiscTextChannels):
-    for c in interactions:
-        # Delete any interactions related to the deleted channel.
+    for c in controlledChannels:
+        # Delete any control channels related to the deleted channel.
         if c.displayChannel == channel or c.interactChannel == channel:
             if isinstance(c, ReserveChannel) or isinstance(c, asiresChannel):
                 EU4Reserve.deleteReserve(
                     str(c.displayChannel.id), conn=checkConn())
-            interactions.remove(c)
+            controlledChannels.remove(c)
             del(c)
 
 
 @client.event
 async def on_private_channel_delete(channel: DiscTextChannels):
-    for c in interactions:
-        # Delete any interactions related to the deleted DM channel.
+    for c in controlledChannels:
+        # Delete any control channels related to the deleted DM channel.
         if c.displayChannel == channel or c.interactChannel == channel:
-            interactions.remove(c)
+            controlledChannels.remove(c)
             del(c)
 
 
 @client.event
 async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
-    for c in interactions:
+    for c in controlledChannels:
         await c.msgdel(payload.message_id)
 
 
 @client.event
 async def on_member_remove(member: DiscUser):
-    for c in interactions:
+    for c in controlledChannels:
         await c.userdel(member)
 
 
@@ -1818,13 +1728,248 @@ async def on_guild_join(guild: discord.Guild):
 @client.event
 async def on_guild_remove(guild: discord.Guild):
     GuildManager.removeGuild(guild, conn=checkConn())
-    for c in interactions:
-        # Delete any interactions related to the guild that was left.
+    for c in controlledChannels:
+        # Delete any control channels related to the guild that was left.
         if (hasattr(c.displayChannel, "guild") and c.displayChannel.guild == guild) or (hasattr(c.interactChannel, "guild") and c.interactChannel.guild == guild):
             if isinstance(c, ReserveChannel) or isinstance(c, asiresChannel):
                 EU4Reserve.deleteReserve(
                     str(c.displayChannel.id), conn=checkConn())
-            interactions.remove(c)
+            controlledChannels.remove(c)
             del(c)
+
+
+ZLIB_SUFFIX = b'\x00\x00\xff\xff'
+inflator = zlib.decompressobj()
+zlibbuffer = bytearray()
+
+
+def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
+    global zlibbuffer
+    if isinstance(msg, str):
+        return json.loads(msg)
+    else:
+        zlibbuffer.extend(msg)
+        if len(msg) < 4 or msg[-4:] != ZLIB_SUFFIX:
+            # idk what happens here???
+            raise ValueError("Bytes without zlib suffix")
+        else:
+            jsontext = inflator.decompress(zlibbuffer)
+            zlibbuffer = bytearray()
+            return json.loads(jsontext)
+
+
+@client.event
+async def on_socket_raw_receive(msg: Union[bytes, str]):
+    hook = decompressWebhook(msg)
+    if hook["op"] == 0 and hook["t"] == "INTERACTION_CREATE":
+        # This means it's an interaction.
+        # https://discord.com/developers/docs/interactions/slash-commands#interaction
+        interaction: Dict[str, Any] = hook["d"]
+        # Verify this is for us
+        if int(interaction["application_id"]) != (await client.application_info()).id or interaction["type"] != 2:
+            # Not sure if this'll ever happen, but we're recieving an interaction not for us.
+            return
+        commandname: str = interaction["data"]["name"]
+        responseurl = f"https://discord.com/api/v8/interactions/{interaction['id']}/{interaction['token']}/callback"
+
+        async def permissionDenied():
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "You do not have permission to use this command.",
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+        authorid: int = int(interaction["member"]["user"]["id"]
+                            if "member" in interaction else interaction["user"]["id"])
+        guild: discord.Guild = await findGuild(interaction["guild_id"])
+        responsejson: Dict[str, Any] = {}
+
+        if commandname.lower() == "help":  # ~~NOT REGISTERED~~
+            stringHelp = "__**Command help:**__"
+            stringHelp += f"\n**/help**\nGets you this information!"
+            stringHelp += f"\n**/defaultban <add|del|list>**\nModifies or displays the default reservation ban list. Only admins can modify."
+            # Here we send info about commands only for admins
+            if await checkResAdmin(guild, authorid):
+                stringHelp += f"\n**/reservations**\nTurns the text channel into a reservation channel\n(more commands within that; use `help` in it for info)"
+                stringHelp += f"\n**/stats**\nCreates a eu4 stats image in the channel.\nUses DMs to gather the necessary files for creation."
+                stringHelp += f"\n**/asireservations**\nTurns the text channel into a ASI reservation channel\nThis is specific to my discord."
+                stringHelp += f"\n**/adminrank**\nChanges the minimum rank necessary for admin control of the bot.\nPlease be sure before changing this. The highest rank can always control the bot.\nThe @ is optional in specifying the rank."
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": stringHelp,
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+        elif commandname.lower() == "reservations":
+            if not await checkResAdmin(guild, authorid):
+                await permissionDenied()
+                return
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "Loading Reservation Channel..."
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+            c = ReserveChannel(None, await findChannel(interaction["channel_id"]))
+            await c.updateText()
+            await c.updateImg()
+            controlledChannels.append(c)
+            await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
+        elif commandname.lower() == "asireservations":
+            if not await checkResAdmin(guild, authorid):
+                await permissionDenied()
+                return
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "Loading ASI Reservation Channel..."
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+            c = asiresChannel(None, await findChannel(interaction["channel_id"]))
+            await c.updateText()
+            controlledChannels.append(c)
+            await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
+        elif commandname.lower() == "stats":
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "Sent stats creation details to your DMs!",
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+            c = await statsChannel(await findUser(authorid), await findChannel(interaction["channel_id"])).asyncInit()
+            if "options" in interaction["data"]:
+                for option in interaction["data"]["options"]:
+                    if option["name"] == "skanderbeg":
+                        c.skanderbeg = option["value"]
+            else:
+                # Default if not specified
+                c.skanderbeg = False
+            controlledChannels.append(c)
+        elif commandname.lower() == "defaultban":
+            if guild is None:
+                responsejson = {
+                    "type": 4,
+                    "data": {
+                        "content": "Either this command was not sent in a server or something went very wrong.",
+                        "flags": 64
+                    }
+                }
+                await session.post(responseurl, json=responsejson)
+                return
+            subcommand: Dict[str, Any] = interaction["data"]["options"]
+            string = "Something went wrong."
+            if subcommand[0]["name"] == "add":
+                if not await checkResAdmin(guild, authorid):
+                    await permissionDenied()
+                    return
+                tag: str = subcommand[0]["options"][0]["value"]
+                if tag is not None:
+                    GuildManager.addBan(guild, tag, conn=checkConn())
+                string = f"Could not find country named {subcommand[0]['options'][0]['value']}." if tag is None else f"Adding {EU4Lib.tagToName(tag)} to default ban list."
+                string += "\nNew default ban list: "
+                banlist = GuildManager.getGuildSave(
+                    guild, conn=checkConn()).defaultBan
+                for tag in banlist:
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is banlist[-1] else ", ")
+            elif subcommand[0]["name"] == "del":
+                if not await checkResAdmin(guild, authorid):
+                    await permissionDenied()
+                    return
+                tag: str = subcommand[0]["options"][0]["value"]
+                if tag is not None:
+                    GuildManager.removeBan(guild, tag, conn=checkConn())
+                string = f"Could not find country named {subcommand[0]['options'][0]['value']}." if tag is None else f"Removing {EU4Lib.tagToName(tag)} from default ban list."
+                string += "\nNew default ban list: "
+                banlist = GuildManager.getGuildSave(
+                    guild, conn=checkConn()).defaultBan
+                for tag in banlist:
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is banlist[-1] else ", ")
+            elif subcommand[0]["name"] == "list":
+                string = "Default ban list: "
+                banlist = GuildManager.getGuildSave(
+                    guild, conn=checkConn()).defaultBan
+                for tag in banlist:
+                    string += EU4Lib.tagToName(tag) + \
+                        ("" if tag is banlist[-1] else ", ")
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": string,
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+        elif commandname.lower() == "load":  # ~~NOT REGISTERED~~
+            if not await checkResAdmin(guild, authorid):
+                await permissionDenied()
+                return
+            res = EU4Reserve.getReserve(
+                str(interaction["channel_id"]), conn=checkConn())
+            if res is None:
+                responsejson = {
+                    "type": 4,
+                    "data": {
+                        "content": "No saved reservations were found for this channel. Please try /reservations to create a new reservations channel.",
+                        "flags": 64
+                    }
+                }
+            elif isinstance(res, EU4Reserve.Reserve):
+                c = ReserveChannel(await findUser(authorid), await findChannel(interaction["channel_id"]), Load=True)
+                await c.updateText()
+                await c.updateImg()
+                controlledChannels.append(c)
+                responsejson = {
+                    "type": 4,
+                    "data": {
+                        "content": "Loaded.",
+                        "flags": 64
+                    }
+                }
+            elif isinstance(res, EU4Reserve.ASIReserve):
+                c = asiresChannel(await findUser(authorid), await findChannel(interaction["channel_id"]), Load=True)
+                await c.updateText()
+                controlledChannels.append(c)
+                responsejson = {
+                    "type": 4,
+                    "data": {
+                        "content": "Loaded.",
+                        "flags": 64
+                    }
+                }
+            await session.post(responseurl, json=responsejson)
+        elif commandname.lower() == "adminrank":
+            if not await checkResAdmin(guild, authorid):
+                await permissionDenied()
+                return
+            newRankID: str = interaction["data"]["options"][0]["value"]
+            GuildManager.setAdmin(guild, newRankID, conn=checkConn())
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": f"Admin rank set to <@&{newRankID}>.",
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+        else:
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "The bot was unable to process this command. Please report with details to the developer.",
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+
 
 client.run(token)
