@@ -193,8 +193,10 @@ async def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str,
         raise TypeError(
             f"Invalid type for Discord member. Invalid object: {user}")
     # OK now check
-    role = s.get_role(
-        int(GuildManager.getGuildSave(s, conn=checkConn()).admin))
+    try:
+        role = s.get_role(int(GuildManager.getGuildSave(s, conn=checkConn()).admin))
+    except TypeError:
+        role = None
     return (role is not None and role <= u.top_role) or u.top_role.id == s.roles[-1].id or u._user.id == 249680375280959489
 
 
