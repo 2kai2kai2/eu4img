@@ -1,7 +1,7 @@
-from typing import List, Optional, Union, Tuple
+from os import getenv
+
 import psycopg2
 from dotenv import load_dotenv
-from os import getenv
 
 load_dotenv("database.env")
 

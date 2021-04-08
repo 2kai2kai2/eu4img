@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import psycopg2
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 """
 Data Structure - Python side
@@ -208,8 +208,8 @@ class Reserve(AbstractReserve):
     """
 
     def __init__(self, name: str):
-        self.players: List[reservePick] = []  # list of reservePick objects
-        self.name = name
+        self.players: List[reservePick] = []
+        self.name = name  # Should be channelID
         self.bans: List[str] = []
         self.textmsg: Optional[int] = None
         self.imgmsg: Optional[int] = None
@@ -357,7 +357,7 @@ def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[Abstract
                     r.add(asirespick)
                 resList.append(r)
         return resList
-    else:  # With the new SQL format, this should only be called if there is a connection when everything is being loaded initially.
+    else:  # With the SQL format, this should only be called if there is a connection when everything is being loaded initially.
         resList: List[AbstractReserve] = []
         cur: psycopg2.extensions.cursor = conn.cursor()
         try:

@@ -1,10 +1,11 @@
-from aiohttp_requests import requests
+import aiohttp
 
 
 async def upload(file: bytes, name: str, key: str) -> str:
     files = {name: file}
     try:
-        r = await requests.post(f"https://skanderbeg.pm/api.php?key={key}&scope=uploadSaveFile", data=files)
+        session = aiohttp.ClientSession()
+        r = await session.post(f"https://skanderbeg.pm/api.php?key={key}&scope=uploadSaveFile", data=files)
     except Exception as e:
         print("Upload to Skanderbeg failed.")
         print(repr(e))
