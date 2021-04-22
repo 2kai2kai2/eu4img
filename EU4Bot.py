@@ -226,7 +226,7 @@ class AbstractChannel(ABC):
 
 
 class ReserveChannel(AbstractChannel):
-    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, Load=False, textID: Optional[int] = None, imgID: Optional[int] = None):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, textID: Optional[int] = None, imgID: Optional[int] = None):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
@@ -419,7 +419,7 @@ class ReserveChannel(AbstractChannel):
             players = self.reserve.getPlayers()
             players.sort(key=lambda x: x.time)
             for x in players:
-                string += f"\n{x.userID}: {EU4Lib.tagToName(x.tag)} | {x.timeStr()}"
+                string += f"\n<@{x.userID}>: {EU4Lib.tagToName(x.tag)} | {x.timeStr()}"
         # Update the message or send a new one if nonexistant
         try:
             await (await self.displayChannel.fetch_message(self.textID)).edit(content=string)
@@ -1296,7 +1296,7 @@ class asiFaction:
 
 # This is custom for my discord group. Anybody else can ignore it or do what you will.
 class asiresChannel(AbstractChannel):
-    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, Load=False, textID: int = None):
+    def __init__(self, user: DiscUser, initChannel: DiscTextChannels, textID: int = None):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
@@ -1312,9 +1312,9 @@ class asiresChannel(AbstractChannel):
         #    "India", ["india_superregion", "burma_region"]))
         self.factions.append(asiFaction("Asia", ["china_superregion", "tartary_superregion", "far_east_superregion",
                                                  "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion", "india_superregion", "burma_region"], 4))
-        if not Load:
-            EU4Reserve.addReserve(EU4Reserve.ASIReserve(
-                str(self.displayChannel.id)), conn=checkConn())
+        #if not Load:
+        #    EU4Reserve.addReserve(EU4Reserve.ASIReserve(
+        #        str(self.displayChannel.id)), conn=checkConn())
 
     def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
         """
@@ -1593,33 +1593,32 @@ async def on_ready():
     print(f"Registered {newGuildCount} new Guilds.")
     # Load reserves
     print("Loading previous Reserves...")
-    reserves = EU4Reserve.load(conn=checkConn())
+    reserves = EU4Reserve.load()
     rescount = 0
     closedcount = 0
     for res in reserves:
-        reschannel: DiscTextChannels = client.get_channel(int(res.name))
+        reschannel = await findChannel(res.channelID)
         if reschannel is None:
-            EU4Reserve.deleteReserve(res, conn=checkConn())
+            res.delete()
             closedcount += 1
         else:
             if isinstance(res, EU4Reserve.Reserve):
                 # Check that the textmsg still exists
                 try:
-                    await reschannel.fetch_message(res.textmsg)
+                    await reschannel.fetch_message(res.textID)
                 except:  # The message either doesn't exist or can't be reached by the bot
                     textmsg = None
                 else:  # The message is accessable.
-                    textmsg = res.textmsg
+                    textmsg = res.textID
                 # Check that the imgmsg still exists
                 try:
-                    await reschannel.fetch_message(res.imgmsg)
+                    await reschannel.fetch_message(res.imgID)
                 except:  # The message either doesn't exist or can't be reached by the bot
                     imgmsg = None
                 else:  # The message is accessable.
-                    imgmsg = res.imgmsg
+                    imgmsg = res.imgID
                 # Create the ReserveChannel object and add to control channels list
-                controlledChannels.append(ReserveChannel(
-                    None, reschannel, Load=True, textID=textmsg, imgID=imgmsg))
+                controlledChannels.append(ReserveChannel(None, reschannel, textID=textmsg, imgID=imgmsg))
                 # Update if anything was deleted
                 if textmsg is None:
                     await controlledChannels[-1].updateText()
@@ -1629,14 +1628,13 @@ async def on_ready():
             elif isinstance(res, EU4Reserve.ASIReserve):
                 # Check that the textmsg still exists
                 try:
-                    await reschannel.fetch_message(res.textmsg)
+                    await reschannel.fetch_message(res.textID)
                 except:  # The message either doesn't exist or can't be reached by the bot
                     textmsg = None
                 else:  # The message is accessable.
-                    textmsg = res.textmsg
+                    textmsg = res.textID
                 # Create asiresChannel object and add to control channels list
-                controlledChannels.append(asiresChannel(
-                    None, reschannel, Load=True, textID=textmsg))
+                controlledChannels.append(asiresChannel(None, reschannel, textID=textmsg))
                 # Update if anything was deleted
                 if textmsg is None:
                     await controlledChannels[-1].updateText()
@@ -1710,11 +1708,9 @@ async def on_guild_remove(guild: discord.Guild):
 
 ZLIB_SUFFIX = b'\x00\x00\xff\xff'
 inflator = zlib.decompressobj()
-zlibbuffer = bytearray()
-
 
 def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
-    global zlibbuffer
+    zlibbuffer = bytearray()
     if isinstance(msg, str):
         return json.loads(msg)
     else:
@@ -1724,7 +1720,6 @@ def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
             raise ValueError("Bytes without zlib suffix")
         else:
             jsontext = inflator.decompress(zlibbuffer)
-            zlibbuffer = bytearray()
             return json.loads(jsontext)
 
 
