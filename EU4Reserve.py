@@ -210,9 +210,9 @@ class asiPick(AbstractPick):
     A user's reservation for an ASI game.
     """
 
-    def __init__(self, userID: int, priority: bool = False, time: int = time.time()):
+    def __init__(self, userID: int, priority: bool = False, time: int = time.time(), picks: List[str] = None):
         self.userID = userID
-        self.picks: List[str] = None
+        self.picks: List[str] = picks
         self.priority = priority
         self.time: int = time
 
@@ -231,6 +231,17 @@ class AbstractReserve(ABC):
     def __init__(self, channelID: int):
         self.channelID = channelID
 
+    def _document(self) -> Dict["str", Any]:
+        out = database.index.find_one(self._docfilter)
+        if out is None:
+            raise LookupError(f"Could not find document for reserve channel {self.channelID} in database reservations>index.")
+        else:
+            return out
+
+    def _collection(self) -> Collection:
+        database.validate_collection(str(self.channelID))
+        return database[str(self.channelID)]
+
     @abstractmethod
     def add(self, pick: AbstractPick) -> int:
         """
@@ -246,9 +257,14 @@ class AbstractReserve(ABC):
     def removePlayer(self, name: str) -> bool:
         pass
 
-    @abstractmethod
     def delete(self):
-        pass
+        """
+        Delete this ASI Reservations controlled channel from the database.
+        """
+        database.index.delete_many(self._docfilter)
+        database.drop_collection(str(self.channelID))
+        del(self.channelID)
+        # Now there will be errors whenever anything is called because channelID does not exist
 
 
 class Reserve(AbstractReserve):
@@ -274,18 +290,6 @@ class Reserve(AbstractReserve):
                 "ban": []
             })
             database.create_collection(str(channelID))
-
-    def _document(self) -> Dict["str", Any]:
-        out = database.index.find_one(self._docfilter)
-        if out is None:
-            raise LookupError(
-                f"Could not find document for reserve channel {self.channelID} in database reservations>index.")
-        else:
-            return out
-
-    def _collection(self) -> Collection:
-        database.validate_collection(str(self.channelID))
-        return database[str(self.channelID)]
 
     def add(self, nation: reservePick) -> int:
         """
@@ -376,11 +380,32 @@ class Reserve(AbstractReserve):
 
 
 class ASIReserve(AbstractReserve):
-    def __init__(self, name: str):
-        self.players: List[asiPick] = []
-        self.name = name  # Should be channelID
-        self.textmsg: Optional[int] = None
-        self.bans: List[str] = []
+    def __init__(self, channelID: int):
+        self.channelID = channelID
+        self._docfilter = {"channelID": channelID}
+        # Check to see if we should create a new database entry
+        count = database.index.count_documents({"channelID": self.channelID})
+        if count == 0:
+            # The entry is not present in the database. Create new.
+            database.index.insert_one({
+                "reserveType": "asi",
+                "channelID": channelID,
+                "guildID": None,  # TODO: Make this work
+                "messages": {
+                    "textID": None,
+                    "imgID": None
+                },
+                "ban": []
+            })
+            database.create_collection(str(channelID))
+    
+    @property
+    def textID(self) -> int:
+        return self._document()["messages"]["textID"]
+
+    @textID.setter
+    def textID(self, value: int):
+        database.index.update_one(self._docfilter, {"$set": {"messages.textID": value}})
 
     def add(self, pick: asiPick) -> int:
         """
@@ -390,30 +415,53 @@ class ASIReserve(AbstractReserve):
         3 = Failed; Nation taken by other (ONLY for priority)
         4 = Failed; Nation taken by self (ONLY for priority)
         """
-        addInt = 1
-        for player in self.players:
-            if pick.priority and player.priority and pick.picks[0] == player.picks[0]:
-                if pick.userID == player.userID:
+        reserves = self._collection()
+        if pick.priority:
+            # Only search for other priority picks with this tag
+            tagTaken = reserves.find_one({"tag1": pick.tag.upper(), "tag2": None, "tag3": None})
+            if tagTaken is not None:
+                # Check whether it's taken by this user or by another
+                if tagTaken["userID"] == pick.userID:
                     return 4
                 else:
                     return 3
-            elif pick.userID == player.userID:
-                addInt = 2
-                self.players.remove(pick)
-        if pick.time is None:
-            pick.time = int(time.time())
-        self.players.append(pick)
-        return addInt
+        # Replace the user's old pick and return it if it existed
+        playerpick = reserves.find_one_and_replace({"userID": pick.userID}, pick.toDict(), upsert=True)
+        if playerpick is not None:
+            return 2
+        else:
+            return 1
 
-    def removePlayer(self, name: str) -> bool:
-        for pick in self.players:
-            if pick.userID == name:
-                self.players.remove(pick)
-                return True
-        return False
+    def removePlayer(self, userID: int) -> bool:
+        reserves = self._collection()
+        result = reserves.delete_many({"userID": userID})
+        return result.deleted_count > 0
 
-    def delete(self):
-        pass
+    def getPlayers(self) -> List[asiPick]:
+        reserves = self._collection()
+        players: List[asiPick] = []
+        for pick in reserves.find():
+            players.append(asiPick(pick["userID"], pick["tag2"] is None, pick["time"], [pick["tag1"], pick["tag2"], pick["tag3"]]))
+        return players
+
+    def countPlayers(self) -> int:
+        return self._collection().count_documents({})
+    
+    def isBan(self, tag: str) -> bool:
+        return database.index.count_documents({"channelID": self.channelID, "ban": tag.upper()}) != 0
+
+    def allBans(self) -> List[str]:
+        return self._document()["ban"]
+
+    def addBan(self, tag: str):
+        database.index.update_one(self._docfilter, {
+            "$addToSet": {"ban": tag.upper()}
+        })
+
+    def delBan(self, tag: str):
+        database.index.update_one(self._docfilter, {
+            "$pull": {"ban": tag.upper()}
+        })
 
 
 def load() -> List[Union[Reserve, ASIReserve]]:

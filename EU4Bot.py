@@ -1300,7 +1300,8 @@ class asiresChannel(AbstractChannel):
         self.user = None
         self.interactChannel = initChannel
         self.displayChannel = initChannel
-        self.textID: Optional[int] = textID
+        self.reserve = EU4Reserve.ASIReserve(initChannel.id)
+        self.textID = textID
         self.factions: List[asiFaction] = []
         self.factions.append(asiFaction("West", ["france_region", "british_isles_region", "iberia_region", "corsica_sardinia_area",
                                                  "piedmont_area", "liguria_area", "tuscany_area", "naples_area", "calabria_area", "sicily_area"], 4))
@@ -1320,7 +1321,7 @@ class asiresChannel(AbstractChannel):
         """
         Returns the faction that owns a given province.
 
-        This should only be one faction, but if more than one have the province in their territory list,, only the first faction with the territory on its list will be returned.
+        This should only be one faction, but if more than one have the province in their territory list, only the first faction with the territory on its list will be returned.
         """
         for faction in self.factions:
             if faction.isInTerritory(provinceID):
@@ -1329,6 +1330,17 @@ class asiresChannel(AbstractChannel):
 
     async def responsive(self, message: discord.Message) -> bool:
         return message.channel == self.interactChannel
+
+    @property
+    def textID(self) -> Optional[int]:
+        if hasattr(self, "_textID"):
+            return self._textID
+        return self.reserve.textID
+
+    @textID.setter
+    def textID(self, id: int):
+        self._textID = id
+        self.reserve.textID = id
 
     async def process(self, message: discord.Message):
         text = message.content.strip()
@@ -1351,12 +1363,11 @@ class asiresChannel(AbstractChannel):
             await self.updateText()
         elif text.upper() == "END" and await checkResAdmin(message.guild, message.author):  # END
             await message.delete()
-            reserves: List[EU4Reserve.asiPick] = EU4Reserve.getReserve(
-                str(self.displayChannel.id), conn=checkConn()).players
             finalReserves: List[EU4Reserve.reservePick] = []
             # This stores the capitals of all possible tags, so that their factions can be determined.
             tagCapitals: Dict[str, int] = {}
             # Add all possibly reserved nations to the tagCapitals dictionary with a capital of -1
+            reserves = self.reserve.getPlayers()
             for res in reserves:
                 for tag in res.picks:
                     if tagCapitals.get(tag.upper()) is None:
@@ -1406,44 +1417,39 @@ class asiresChannel(AbstractChannel):
                 for tag in res.picks:
                     resFaction = self.getFaction(tagCapitals[tag.upper()])
                     # if faction is full, skip to next one
-                    if (resFaction is None) or (resFaction.taken >= resFaction.maxPlayers):
+                    if resFaction is None or resFaction.taken >= resFaction.maxPlayers:
                         continue
                     # If already taken, don't add (skip)
-                    for x in finalReserves:
-                        if (x.tag.upper() == tag.upper()):
-                            break
-                    else:  # This means they get this tag
-                        finaltag = tag
+                    if tag.upper() not in finalReserves:
+                        finaltag = tag.upper()
                         resFaction.taken += 1
                         break
-                finalReserves.append(
-                    EU4Reserve.reservePick(res.userID, finaltag))
+                finalReserves.append(EU4Reserve.reservePick(res.userID, finaltag))
             # At this point the finalReserves list is complete with all finished reserves. If a player had no reserves they could take, their tag is None
             string = "**Reserves are finished. The following is the draft order:**"
             count = 1
             for res in finalReserves:
                 if res.tag is None:
-                    string += f"\n{count} {res.userID}: *[all taken]*"
+                    string += f"\n{count} <@{res.userID}>: *[all taken]*"
                 else:
                     natname = EU4Lib.tagToName(res.tag)
-                    string += f"\n{count} {res.userID}: {res.tag if natname is None else natname}"
+                    string += f"\n{count} <@{res.userID}>: {res.tag if natname is None else natname}"
                 count += 1
             await self.displayChannel.send(string)
             # aaand we're done!
-            EU4Reserve.deleteReserve(
-                str(self.displayChannel.id), conn=checkConn())
+            self.reserve.delete()
             controlledChannels.remove(self)
             del(self)
         # RESERVE [nation1], [nation2], [nation3]
         elif text.upper().startswith("RESERVE "):
-            await self.add(message.author, text.split(maxsplit=1)[1].strip())
+            await self.add(message.author, text[text.index(" ")+1:].strip())
             await message.delete()
             await self.updateText()
         # ADMRES [nation1], [nation2], [nation3] @[player]
         elif text.upper().startswith("ADMRES") and await checkResAdmin(message.guild, message.author):
             if len(message.mentions) == 1:
                 # Get the part "[nation1], [nation2], [nation3]" by stripping the rest
-                res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
+                res = text[text.index(" ")+1:].strip("\n\t <@!1234567890>")
                 # Split that into the individual picks
                 picks = res.split(",")
                 # Check for problems
@@ -1462,11 +1468,11 @@ class asiresChannel(AbstractChannel):
             else:
                 await sendUserMessage(message.author, f"Your reservation in {self.displayChannel.mention} needs to @ a player.")
             await message.delete()
-        # ADMRES [nation] @[optional_player]
+        # EXECRES [nation] @[optional_player]
         elif text.upper().startswith("EXECRES") and await checkResAdmin(message.guild, message.author):
             # Get the part "[nation]" by stripping the rest
-            res = text.split(maxsplit=1)[1].strip("\n\t <@!1234567890>")
-            # Get the user to target
+            res = text[text.index(" ")+1:].strip("\n\t <@!1234567890>")
+            # Find the targeted user
             user: Optional[DiscUser] = None
             if len(message.mentions) == 0:
                 user = message.author
@@ -1480,11 +1486,9 @@ class asiresChannel(AbstractChannel):
                 return
             # Now reserve
             await message.delete()
-            reserve = EU4Reserve.asiPick(user.mention, priority=True)
-            reserve.picks = [pick]
-            await self.remove(user)
-            addInt = EU4Reserve.addPick(
-                str(self.displayChannel.id), reserve, conn=checkConn())
+            asipick = EU4Reserve.asiPick(user.id, priority=True)
+            asipick.picks = [pick, None, None]
+            addInt = self.reserve.add(asipick)
             if addInt == 3:
                 await sendUserMessage(message.author, f"{EU4Lib.tagToName(pick)} is already executive-reserved in {message.channel.mention}")
             elif addInt == 1 or addInt == 2:
@@ -1496,10 +1500,10 @@ class asiresChannel(AbstractChannel):
         # ADMDELRES @[player]
         elif text.upper().startswith("ADMDELRES") and await checkResAdmin(message.guild, message.author):
             if len(message.mentions) == 1:
-                await self.remove(message.mentions[0].mention)
+                await self.remove(message.mentions[0].id)
                 await self.updateText()
             else:
-                await sendUserMessage(message.author, f"Your deletion of a reservation in {self.displayChannel.mention} needs to @ a player.")
+                await sendUserMessage(message.author, f"Your deletion of a reservation in {self.displayChannel.mention} needs to @ one player.")
             await message.delete()
         else:
             await message.delete()
@@ -1512,8 +1516,7 @@ class asiresChannel(AbstractChannel):
         # Text String - Header
         string = "How to reserve: `reserve [nation1], [nation2], [nation3]`\nTo unreserve: `delreserve`\n**Current players list:**"
         # Load player list
-        picks = EU4Reserve.getReserve(
-            str(self.displayChannel.id), conn=checkConn()).players
+        picks = self.reserve.getPlayers()
         # Text String - Players
         if len(picks) == 0:
             string += "\n*It's so empty here...*"
@@ -1521,23 +1524,14 @@ class asiresChannel(AbstractChannel):
             picks.sort(key=lambda x: x.time)
             for x in picks:
                 if x.priority:
-                    string += f"\n{x.player}: **{EU4Lib.tagToName(x.picks[0])}** | {x.timeStr()}"
+                    string += f"\n<@{x.userID}>: **{EU4Lib.tagToName(x.picks[0])}** | {x.timeStr()}"
                 else:
-                    string += f"\n{x.player}: {EU4Lib.tagToName(x.picks[0])}, {EU4Lib.tagToName(x.picks[1])}, {EU4Lib.tagToName(x.picks[2])} | {x.timeStr()}"
+                    string += f"\n<@{x.userID}>: {EU4Lib.tagToName(x.picks[0])}, {EU4Lib.tagToName(x.picks[1])}, {EU4Lib.tagToName(x.picks[2])} | {x.timeStr()}"
         # Update the previous text or post new
         if self.textID is None:
             self.textID = (await self.displayChannel.send(content=string)).id
-            EU4Reserve.updateMessageIDs(
-                str(self.displayChannel.id), textmsg=self.textID, conn=checkConn())
         else:
-            await (await (self.displayChannel).fetch_message(self.textID)).edit(content=string)
-
-    async def remove(self, user: DiscUser):
-        """
-        Deletes a user's reservation.
-        """
-        EU4Reserve.deletePick(str(self.displayChannel.id),
-                              user.mention, conn=checkConn())
+            await (await self.displayChannel.fetch_message(self.textID)).edit(content=string)
 
     async def add(self, user: DiscUser, text: str):
         """
@@ -1558,10 +1552,15 @@ class asiresChannel(AbstractChannel):
                 await sendUserMessage(user, f"Your reservation of {pick.strip()} in {self.interactChannel.mention} was not a recognized nation.")
                 return
         # Create and add player's reservation to the reserve.
-        res = EU4Reserve.asiPick(user.mention)
-        res.picks = tags
-        await self.remove(user)
-        EU4Reserve.addPick(str(self.displayChannel.id), res, conn=checkConn())
+        res = EU4Reserve.asiPick(user.id, picks=tags)
+        self.reserve.add(res)
+
+    async def remove(self, user: DiscUser):
+        """
+        Deletes a user's reservation.
+        """
+        self.reserve.removePlayer(user.id)
+
 
     async def msgdel(self, msgID: Union[str, int]):
         if msgID == self.textID:
