@@ -9,10 +9,11 @@ from random import shuffle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import aiohttp
+from aiohttp.streams import StreamReader
 import cppimport
 import discord
+from discord.errors import DiscordException
 import psycopg2
-import requests
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 
@@ -647,13 +648,11 @@ class statsChannel(AbstractChannel):
         prompt += "```\n**Do you want to make any changes?\nType `done` to finish. Commands:\n`remove [nation]`\n`add [player], [nation]`**"
         return prompt
 
-    async def readFile(self, file):
+    async def readFile(self, file: StringIO):
         """
         Gets all data from file and saves it to the self.game.
         """
-        lines: List[str] = file.readlines()
-        file.close()
-        del(file)
+
         brackets: List[str] = []
         currentReadWar: war = None
         currentReadWarParticTag: str = None
@@ -662,7 +661,7 @@ class statsChannel(AbstractChannel):
 
         # Reading save file...
         linenum = 0
-        for line in lines:
+        for line in file:
             linenum += 1
             if "{" in line:
                 if line.count("}") == 0 and line.count("{") == 1:
@@ -1151,37 +1150,33 @@ class statsChannel(AbstractChannel):
         elif not self.hasReadFile:  # First step - get .eu4 file
             saveFile: Optional[bytes] = None
             if len(message.attachments) > 0 and message.attachments[0].filename.endswith(".eu4"):
-                try:
-                    saveFile = await message.attachments[0].read()
-                except:
-                    await self.interactChannel.send("**Something went wrong in decoding your `.eu4` file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**")
-                    return
+                saveFile = await message.attachments[0].read()
             else:  # str
                 saveURL: str = message.content.strip()
                 try:
-                    response = requests.get(saveURL)
-                except:
-                    await self.interactChannel.send("Something went wrong. This may not be a valid link.")
+                    response = await session.get(saveURL)
+                except Exception as e:
+                    await self.interactChannel.send(f"Something went wrong. This may not be a valid link.\n```{repr(e)}```")
                     return
-                if response.status_code == 200:  # 200 == requests.codes.ok
-                    try:
-                        saveFile = response.content
-                    except Exception as e:
-                        await self.interactChannel.send(f"**Something went wrong in decoding your `.eu4` file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**\n```{repr(e)}```")
-                        return
+                if response.status == 200:  # 200 == ok
+                    saveFile = await response.content.read()
                 else:
                     await self.interactChannel.send("Something went wrong. Please try a different link.")
                     return
             await self.interactChannel.send("**Recieved save file. Processing...**")
             try:
                 await self.readFile(StringIO(saveFile.decode("cp1252")))
-            except Exception as e:
+            except DiscordException as e:
                 await self.interactChannel.send(f"**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```{repr(e)}```")
+                return
+            except:
+                await self.interactChannel.send(f"**Something went wrong in decoding your `.eu4` file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**\n```{repr(e)}```")
                 return
             else:
                 await self.interactChannel.send("**Send the `.png` Political Mapmode screenshot in this channel:**")
                 self.hasReadFile = True
                 if self.skanderbeg and SKANDERBEGKEY is not None:
+                    await self.interactChannel.send("Started upload to Skanderbeg. This may take much longer than the stats image generation.")
                     self.skanderbegURL = asyncio.create_task(Skanderbeg.upload(
                         saveFile, f"{self.game.date.fancyStr()} - Cartographer Upload", SKANDERBEGKEY))
                     # We don't manually delete saveFile here, but that's probably fine since once the upload is done there shouldn't be any other references
@@ -1220,7 +1215,7 @@ class statsChannel(AbstractChannel):
                             await self.displayChannel.send(self.skanderbegURL.result(), file=img)
                         else:
                             imgmsg: discord.Message = await self.displayChannel.send("*Uploading to Skanderbeg.pm...*", file=img)
-                            await self.interactChannel.send(f"Sent image to {self.displayChannel.mention}; waiting on upload to Skanderbeg.")
+                            await self.interactChannel.send(f"Sent image to {self.displayChannel.mention}... Waiting for upload to Skanderbeg.")
                             await imgmsg.edit(content=await self.skanderbegURL)
                     else:
                         await self.displayChannel.send(file=img)
@@ -1313,9 +1308,6 @@ class asiresChannel(AbstractChannel):
         #    "India", ["india_superregion", "burma_region"]))
         self.factions.append(asiFaction("Asia", ["china_superregion", "tartary_superregion", "far_east_superregion",
                                                  "malaya_region", "moluccas_region", "indonesia_region", "indo_china_region", "oceania_superregion", "india_superregion", "burma_region"], 4))
-        #if not Load:
-        #    EU4Reserve.addReserve(EU4Reserve.ASIReserve(
-        #        str(self.displayChannel.id)), conn=checkConn())
 
     def getFaction(self, provinceID: Union[str, int]) -> Optional[asiFaction]:
         """
@@ -1658,9 +1650,8 @@ async def on_guild_channel_delete(channel: DiscTextChannels):
     for c in controlledChannels:
         # Delete any control channels related to the deleted channel.
         if c.displayChannel == channel or c.interactChannel == channel:
-            if isinstance(c, ReserveChannel) or isinstance(c, asiresChannel):
-                EU4Reserve.deleteReserve(
-                    str(c.displayChannel.id), conn=checkConn())
+            if isinstance(c, (ReserveChannel, asiresChannel)):
+                c.reserve.delete()
             controlledChannels.remove(c)
             del(c)
 
@@ -1698,9 +1689,8 @@ async def on_guild_remove(guild: discord.Guild):
     for c in controlledChannels:
         # Delete any control channels related to the guild that was left.
         if (hasattr(c.displayChannel, "guild") and c.displayChannel.guild == guild) or (hasattr(c.interactChannel, "guild") and c.interactChannel.guild == guild):
-            if isinstance(c, ReserveChannel) or isinstance(c, asiresChannel):
-                EU4Reserve.deleteReserve(
-                    str(c.displayChannel.id), conn=checkConn())
+            if isinstance(c, (ReserveChannel, asiresChannel)):
+                c.reserve.delete()
             controlledChannels.remove(c)
             del(c)
 
@@ -1872,44 +1862,6 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
                     "flags": 64
                 }
             }
-            await session.post(responseurl, json=responsejson)
-        elif commandname.lower() == "load":  # ~~NOT REGISTERED~~
-            if not await checkResAdmin(guild, authorid):
-                await permissionDenied()
-                return
-            res = EU4Reserve.getReserve(
-                str(interaction["channel_id"]), conn=checkConn())
-            if res is None:
-                responsejson = {
-                    "type": 4,
-                    "data": {
-                        "content": "No saved reservations were found for this channel. Please try /reservations to create a new reservations channel.",
-                        "flags": 64
-                    }
-                }
-            elif isinstance(res, EU4Reserve.Reserve):
-                c = ReserveChannel(await findUser(authorid), await findChannel(interaction["channel_id"]), Load=True)
-                await c.updateText()
-                await c.updateImg()
-                controlledChannels.append(c)
-                responsejson = {
-                    "type": 4,
-                    "data": {
-                        "content": "Loaded.",
-                        "flags": 64
-                    }
-                }
-            elif isinstance(res, EU4Reserve.ASIReserve):
-                c = asiresChannel(await findUser(authorid), await findChannel(interaction["channel_id"]), Load=True)
-                await c.updateText()
-                controlledChannels.append(c)
-                responsejson = {
-                    "type": 4,
-                    "data": {
-                        "content": "Loaded.",
-                        "flags": 64
-                    }
-                }
             await session.post(responseurl, json=responsejson)
         elif commandname.lower() == "adminrank":
             if not await checkResAdmin(guild, authorid):

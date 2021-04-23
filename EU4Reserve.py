@@ -1,14 +1,12 @@
 import datetime
-import json
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, Union
-import dotenv
+from typing import Any, Dict, List, Tuple, Union
 
-import psycopg2
-from PIL import Image
+import dotenv
 import pymongo
+from PIL import Image
 from pymongo.collection import Collection
 from pymongo.database import Database
 
@@ -16,94 +14,6 @@ dotenv.load_dotenv()
 client = pymongo.MongoClient(
     f"mongodb+srv://{os.environ['MONGODB_USERNAME']}:{os.environ['MONGODB_PASSWORD']}@{os.environ['MONGODB_CLUSTERURL']}/reservations?retryWrites=true&w=majority")
 database: Database = client.reservations
-
-"""
-Data Structure - Python side
-AbstractReserve ("Reserve")
-    players: List[AbstractPick ("Pick")]
-        player: str; user mention
-    name: str; Channel ID as a str
-    textmsg: int; the msg ID in the channel
-"""
-
-"""
-Data Structure - JSON Formatting
-In Python, this becomes a dict.
-
-{
-    "<ChannelID>": {
-        "kind": "reserve",
-        "textmsg": 1234567890,
-        "imgmsg": 1234567890,
-        "reserves": [
-        {
-            "player": "<PlayerMention>",
-            "tag": "<TAG>",
-            "time": 1234567
-        },
-        {...}
-        ],
-        "bans": [
-            "<TAG>",
-            "<TAG>",
-            "<TAG>"
-        ]
-    },
-    "<ChannelID>": {
-        "kind": "asi",
-        "textmsg": 1234567890,
-        "reserves": [
-            {
-                "player": "<PlayerMention>",
-                "priority": false,
-                "picks": [
-                    "<TAG>",
-                    "<TAG>",
-                    "<TAG>"
-                ]
-            },
-            {
-                "player": "<PlayerMention>",
-                "priority": true,
-                "picks": [
-                    "<TAG>"
-                ],
-                "time": 1234567
-            }
-        ]
-    }
-}
-"""
-
-"""
-Data Structure - SQL Database
-Reserves
-+------+------+-------+----------+
-| name | kind | ban   | specdata |
-| str  | str  | str[] | str[]    |
-+------+------+-------+----------+
-kind:
-    Reserve - 'reserve'
-    ASIReserve - 'asi'
-specdata:
-    Reserve - [<textmsgID>, <imgmsgID>]
-    ASIReserve - [<textmsgID>]
-
-ReservePicks
-+---------+--------+-----+--------+
-| reserve | player | tag | time   |
-| str     | str    | str | bigint |
-+---------+--------+-----+--------+
-reserve refers to the name of the Reserve in the Reserves table this pick is for.
-
-ASIPicks
-+---------+--------+------+------+------+--------+
-| reserve | player | tag1 | tag2 | tag3 | time   |
-| str     | str    | str  | str  | str  | bigint |
-+---------+--------+------+------+------+--------+
-reserve refers to the name of the ASIReserve in the Reserves table this pick is for.
-If the pick is priority, tag2 and tag3 are 'NULL' (a str).
-"""
 
 """
 Data Structure
@@ -234,7 +144,8 @@ class AbstractReserve(ABC):
     def _document(self) -> Dict["str", Any]:
         out = database.index.find_one(self._docfilter)
         if out is None:
-            raise LookupError(f"Could not find document for reserve channel {self.channelID} in database reservations>index.")
+            raise LookupError(
+                f"Could not find document for reserve channel {self.channelID} in database reservations>index.")
         else:
             return out
 
@@ -331,7 +242,8 @@ class Reserve(AbstractReserve):
         reserves = self._collection()
         players: List[reservePick] = []
         for pick in reserves.find():
-            players.append(reservePick(pick["userID"], pick["tag"], pick["time"]))
+            players.append(reservePick(
+                pick["userID"], pick["tag"], pick["time"]))
         return players
 
     def countPlayers(self) -> int:
@@ -343,7 +255,8 @@ class Reserve(AbstractReserve):
 
     @textID.setter
     def textID(self, value: int):
-        database.index.update_one(self._docfilter, {"$set": {"messages.textID": value}})
+        database.index.update_one(
+            self._docfilter, {"$set": {"messages.textID": value}})
 
     @property
     def imgID(self) -> int:
@@ -351,7 +264,8 @@ class Reserve(AbstractReserve):
 
     @imgID.setter
     def imgID(self, value: int):
-        database.index.update_one(self._docfilter, {"$set": {"messages.imgID": value}})
+        database.index.update_one(
+            self._docfilter, {"$set": {"messages.imgID": value}})
 
     def isBan(self, tag: str) -> bool:
         return database.index.count_documents({"channelID": self.channelID, "ban": tag.upper()}) != 0
@@ -398,14 +312,15 @@ class ASIReserve(AbstractReserve):
                 "ban": []
             })
             database.create_collection(str(channelID))
-    
+
     @property
     def textID(self) -> int:
         return self._document()["messages"]["textID"]
 
     @textID.setter
     def textID(self, value: int):
-        database.index.update_one(self._docfilter, {"$set": {"messages.textID": value}})
+        database.index.update_one(
+            self._docfilter, {"$set": {"messages.textID": value}})
 
     def add(self, pick: asiPick) -> int:
         """
@@ -418,7 +333,8 @@ class ASIReserve(AbstractReserve):
         reserves = self._collection()
         if pick.priority:
             # Only search for other priority picks with this tag
-            tagTaken = reserves.find_one({"tag1": pick.tag.upper(), "tag2": None, "tag3": None})
+            tagTaken = reserves.find_one(
+                {"tag1": pick.tag.upper(), "tag2": None, "tag3": None})
             if tagTaken is not None:
                 # Check whether it's taken by this user or by another
                 if tagTaken["userID"] == pick.userID:
@@ -426,7 +342,8 @@ class ASIReserve(AbstractReserve):
                 else:
                     return 3
         # Replace the user's old pick and return it if it existed
-        playerpick = reserves.find_one_and_replace({"userID": pick.userID}, pick.toDict(), upsert=True)
+        playerpick = reserves.find_one_and_replace(
+            {"userID": pick.userID}, pick.toDict(), upsert=True)
         if playerpick is not None:
             return 2
         else:
@@ -441,12 +358,13 @@ class ASIReserve(AbstractReserve):
         reserves = self._collection()
         players: List[asiPick] = []
         for pick in reserves.find():
-            players.append(asiPick(pick["userID"], pick["tag2"] is None, pick["time"], [pick["tag1"], pick["tag2"], pick["tag3"]]))
+            players.append(asiPick(pick["userID"], pick["tag2"] is None, pick["time"], [
+                           pick["tag1"], pick["tag2"], pick["tag3"]]))
         return players
 
     def countPlayers(self) -> int:
         return self._collection().count_documents({})
-    
+
     def isBan(self, tag: str) -> bool:
         return database.index.count_documents({"channelID": self.channelID, "ban": tag.upper()}) != 0
 
@@ -487,9 +405,8 @@ def createMap(reserve: Reserve) -> Image.Image:
     capitalLocs: Dict[str, Tuple[float, float]] = {}
 
     srcFile = open("resources/tagCapitals.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
-    for line in lines:
+
+    for line in srcFile:
         for natnum in range(len(countries)):
             if line.startswith(countries[natnum].tag):
                 capitalLocs[countries[natnum].tag] = (
@@ -498,7 +415,7 @@ def createMap(reserve: Reserve) -> Image.Image:
                 break
         if len(countries) == 0:
             break
-    del(lines)
+    srcFile.close()
 
     mapFinal: Image.Image = Image.open("resources/map_1444.png")
     imgX: Image.Image = Image.open("resources/xIcon.png")
