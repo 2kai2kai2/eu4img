@@ -3,8 +3,7 @@ from os import getenv
 import psycopg2
 from dotenv import load_dotenv
 
-load_dotenv("database.env")
-
+load_dotenv()
 conn: psycopg2.extensions.connection = psycopg2.connect(database=getenv("database"), user=getenv(
     "user"), password=getenv("password"), host=getenv("host"), port=getenv("port"))
 conn.autocommit = True

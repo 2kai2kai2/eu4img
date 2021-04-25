@@ -37,7 +37,9 @@ else:
 # Load Discord Client
 load_dotenv()
 token: str = os.getenv("DISCORD_TOKEN")
-client = discord.Client()
+intents: discord.Intents = discord.Intents.default()
+intents.members = True
+client = discord.Client(intents=intents)
 session: aiohttp.ClientSession = None
 # Load database if it exists; if not then conn = None and methods will open a json file.
 try:
