@@ -3,7 +3,8 @@ import aiohttp
 
 async def upload(file: bytes, name: str, key: str) -> str:
     files = aiohttp.FormData()
-    files.add_field("file", file, filename=name, content_type="multipart/form-data")
+    files.add_field("file", file, filename=name,
+                    content_type="multipart/form-data")
     try:
         session = aiohttp.ClientSession()
         r = await session.post(f"https://skanderbeg.pm/api.php?key={key}&scope=uploadSaveFile", data=files)

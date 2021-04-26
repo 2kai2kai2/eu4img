@@ -9,11 +9,9 @@ from random import shuffle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import aiohttp
-from aiohttp.streams import StreamReader
 import cppimport
 import discord
 from discord.errors import DiscordException
-import psycopg2
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 
@@ -41,14 +39,7 @@ intents: discord.Intents = discord.Intents.default()
 intents.members = True
 client = discord.Client(intents=intents)
 session: aiohttp.ClientSession = None
-# Load database if it exists; if not then conn = None and methods will open a json file.
-try:
-    DATABASEURL = os.getenv("DATABASE_URL")
-    conn: psycopg2.extensions.connection = psycopg2.connect(
-        DATABASEURL, sslmode='require')
-    conn.autocommit = True
-except:
-    conn = None
+
 # Load Skanderbeg key if it exists
 SKANDERBEGKEY = os.getenv("SKANDERBEG_KEY")
 if SKANDERBEGKEY == "" or SKANDERBEGKEY.isspace():
@@ -58,17 +49,6 @@ if SKANDERBEGKEY == "" or SKANDERBEGKEY.isspace():
 DiscUser = Union[discord.User, discord.Member]
 DiscTextChannels = Union[discord.TextChannel,
                          discord.DMChannel, discord.GroupChannel]
-
-
-def checkConn() -> psycopg2.extensions.connection:
-    """
-    Returns an open connection to the SQL server. This is the preferable method of getting it than directly calling on conn.
-    """
-    global conn
-    if conn is not None and conn.closed:
-        conn = psycopg2.connect(DATABASEURL, sslmode='require')
-        conn.autocommit = True
-    return conn
 
 
 def imageToFile(img: Image.Image) -> discord.File:
@@ -197,8 +177,7 @@ async def checkResAdmin(server: Union[str, int, discord.Guild], user: Union[str,
             f"Invalid type for Discord member. Invalid object: {user}")
     # OK now check
     try:
-        role = s.get_role(
-            int(GuildManager.getGuildSave(s, conn=checkConn()).admin))
+        role = s.get_role(GuildManager.getAdmin(s))
     except TypeError:
         role = None
     return (role is not None and role <= u.top_role) or u.top_role.id == s.roles[-1].id or u._user.id == 249680375280959489
@@ -1418,7 +1397,8 @@ class asiresChannel(AbstractChannel):
                         finaltag = tag.upper()
                         resFaction.taken += 1
                         break
-                finalReserves.append(EU4Reserve.reservePick(res.userID, finaltag))
+                finalReserves.append(
+                    EU4Reserve.reservePick(res.userID, finaltag))
             # At this point the finalReserves list is complete with all finished reserves. If a player had no reserves they could take, their tag is None
             string = "**Reserves are finished. The following is the draft order:**"
             count = 1
@@ -1555,7 +1535,6 @@ class asiresChannel(AbstractChannel):
         """
         self.reserve.removePlayer(user.id)
 
-
     async def msgdel(self, msgID: Union[str, int]):
         if msgID == self.textID:
             self.textID = None
@@ -1580,8 +1559,8 @@ async def on_ready():
     print("Registering connected Guilds not yet registered...")
     newGuildCount = 0
     async for guild in client.fetch_guilds():
-        if GuildManager.getGuildSave(guild, conn=checkConn()) is None:
-            GuildManager.addGuild(guild, conn=checkConn())
+        if GuildManager.getGuildSave(guild) is None:
+            GuildManager.addGuild(guild)
             newGuildCount += 1
     print(f"Registered {newGuildCount} new Guilds.")
     # Load reserves
@@ -1611,7 +1590,8 @@ async def on_ready():
                 else:  # The message is accessable.
                     imgmsg = res.imgID
                 # Create the ReserveChannel object and add to control channels list
-                controlledChannels.append(ReserveChannel(None, reschannel, textID=textmsg, imgID=imgmsg))
+                controlledChannels.append(ReserveChannel(
+                    None, reschannel, textID=textmsg, imgID=imgmsg))
                 # Update if anything was deleted
                 if textmsg is None:
                     await controlledChannels[-1].updateText()
@@ -1627,7 +1607,8 @@ async def on_ready():
                 else:  # The message is accessable.
                     textmsg = res.textID
                 # Create asiresChannel object and add to control channels list
-                controlledChannels.append(asiresChannel(None, reschannel, textID=textmsg))
+                controlledChannels.append(asiresChannel(
+                    None, reschannel, textID=textmsg))
                 # Update if anything was deleted
                 if textmsg is None:
                     await controlledChannels[-1].updateText()
@@ -1682,12 +1663,12 @@ async def on_member_remove(member: DiscUser):
 @client.event
 async def on_guild_join(guild: discord.Guild):
     # Setup the joined guild with the GuildManager
-    GuildManager.addGuild(guild, conn=checkConn())
+    GuildManager.addGuild(guild)
 
 
 @client.event
 async def on_guild_remove(guild: discord.Guild):
-    GuildManager.removeGuild(guild, conn=checkConn())
+    GuildManager.removeGuild(guild)
     for c in controlledChannels:
         # Delete any control channels related to the guild that was left.
         if (hasattr(c.displayChannel, "guild") and c.displayChannel.guild == guild) or (hasattr(c.interactChannel, "guild") and c.interactChannel.guild == guild):
@@ -1699,6 +1680,7 @@ async def on_guild_remove(guild: discord.Guild):
 
 ZLIB_SUFFIX = b'\x00\x00\xff\xff'
 inflator = zlib.decompressobj()
+
 
 def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
     zlibbuffer = bytearray()
@@ -1826,34 +1808,33 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
                 if not await checkResAdmin(guild, authorid):
                     await permissionDenied()
                     return
-                tag: str = subcommand[0]["options"][0]["value"]
-                if tag is not None:
-                    GuildManager.addBan(guild, tag, conn=checkConn())
-                string = f"Could not find country named {subcommand[0]['options'][0]['value']}." if tag is None else f"Adding {EU4Lib.tagToName(tag)} to default ban list."
-                string += "\nNew default ban list: "
-                banlist = GuildManager.getGuildSave(
-                    guild, conn=checkConn()).defaultBan
-                for tag in banlist:
-                    string += EU4Lib.tagToName(tag) + \
-                        ("" if tag is banlist[-1] else ", ")
+                tag: str = EU4Lib.country(subcommand[0]["options"][0]["value"])
+                if tag is None:
+                    string = f"Could not find country named {subcommand[0]['options'][0]['value']}."
+                else:
+                    GuildManager.addBan(guild, tag)
+                    string = f"Adding {EU4Lib.tagToName(tag)} to default ban list."
+                    string += "\nNew default ban list: "
+                    banlist = GuildManager.getBan(guild)
+                    for listtag in banlist:
+                        string += f"{EU4Lib.tagToName(listtag)}{'' if listtag is banlist[-1] else ', '}"
             elif subcommand[0]["name"] == "del":
                 if not await checkResAdmin(guild, authorid):
                     await permissionDenied()
                     return
-                tag: str = subcommand[0]["options"][0]["value"]
+                tag: str = EU4Lib.country(subcommand[0]["options"][0]["value"])
+                if tag is None:
+                    string = f"Could not find country named {subcommand[0]['options'][0]['value']}."
                 if tag is not None:
-                    GuildManager.removeBan(guild, tag, conn=checkConn())
-                string = f"Could not find country named {subcommand[0]['options'][0]['value']}." if tag is None else f"Removing {EU4Lib.tagToName(tag)} from default ban list."
-                string += "\nNew default ban list: "
-                banlist = GuildManager.getGuildSave(
-                    guild, conn=checkConn()).defaultBan
-                for tag in banlist:
-                    string += EU4Lib.tagToName(tag) + \
-                        ("" if tag is banlist[-1] else ", ")
+                    GuildManager.removeBan(guild, tag)
+                    string = f"Removing {EU4Lib.tagToName(tag)} from default ban list."
+                    string += "\nNew default ban list: "
+                    banlist = GuildManager.getBan(guild)
+                    for listtag in banlist:
+                        string += f"{EU4Lib.tagToName(listtag)}{'' if listtag is banlist[-1] else ', '}"
             elif subcommand[0]["name"] == "list":
                 string = "Default ban list: "
-                banlist = GuildManager.getGuildSave(
-                    guild, conn=checkConn()).defaultBan
+                banlist = GuildManager.getBan(guild)
                 for tag in banlist:
                     string += EU4Lib.tagToName(tag) + \
                         ("" if tag is banlist[-1] else ", ")
@@ -1869,8 +1850,8 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
             if not await checkResAdmin(guild, authorid):
                 await permissionDenied()
                 return
-            newRankID: str = interaction["data"]["options"][0]["value"]
-            GuildManager.setAdmin(guild, newRankID, conn=checkConn())
+            newRankID: int = int(interaction["data"]["options"][0]["value"])
+            GuildManager.setAdmin(guild, newRankID)
             responsejson = {
                 "type": 4,
                 "data": {

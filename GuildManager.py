@@ -1,378 +1,156 @@
-import json
-from typing import List, Optional, Union
+import os
+from typing import Any, Dict, List, Optional, Union
 
 import discord
-import psycopg2
+import dotenv
+import pymongo
+from pymongo.database import Database
 
 """
-Data Structure - Json
+Data Structure
+Database: guilds
+Collection: index
 {
-	"<GuildID>": {
-		"prefix": "<$>",
-		"adminRank": <rankID>,
-		"announcements": "<ChannelID>",
-		"defaultBan": [
-			"<TAG>",
-			"<TAG>",
-			"<TAG>"
-		]
-	}
+	"guildID": int,
+    "adminRank": int|None,
+    "announcements": int|None,
+    "defaultBan": [
+        "TAG",
+        "TAG",
+        "TAG"
+    ]
 }
 """
 
-"""
-Data Structure - SQL Database
-+------+--------+-------+---------------+------------+
-| name | prefix | admin | announcements | defaultBan |
-| str  | str    | str   | str           | str[]      |
-+------+--------+-------+---------------+------------+
-"""
+dotenv.load_dotenv()
+client = pymongo.MongoClient(
+    f"mongodb+srv://{os.environ['MONGODB_USERNAME']}:{os.environ['MONGODB_PASSWORD']}@{os.environ['MONGODB_CLUSTERURL']}/guilds?retryWrites=true&w=majority")
+database: Database = client.guilds
+
+
+def _guildIDType(guild: Union[discord.Guild, int]) -> int:
+    """
+    Gets a guild id from either the guild or the id.
+    """
+    if isinstance(guild, discord.Guild):
+        return guild.id
+    elif isinstance(guild, int):
+        return guild
+    else:
+        raise TypeError(f"{type(guild)} is not a valid type for a guild.")
 
 
 class GuildSave:
-    def __init__(self, name: Union[str, int], prefix: str = None, admin: str = None, announcements: str = None, defaultBan: List[str] = []):
-        self.name = str(name)
-        self.prefix = prefix
+    def __init__(self, guildID: Union[str, int], admin: int = None, announcements: int = None, defaultBan: List[str] = []):
+        self.guildID = int(guildID)
         self.admin = admin
         self.announcements = announcements
         self.defaultBan = defaultBan
 
     def toDict(self) -> dict:
-        return {"prefix": self.prefix, "adminRank": self.admin, "announcements": self.announcements, "defaultBan": self.defaultBan}
+        return {"guildID": self.guildID, "adminRank": self.admin, "announcements": self.announcements, "defaultBan": self.defaultBan}
 
 
-def fileLoadGuilds() -> List[GuildSave]:
+def addGuild(guild: Union[discord.Guild, int], admin: Optional[int] = None):
     """
-    Loads all guild as GuildSave objects from file. Does not work with SQL connection.
+    Add a new guild to the database.
     """
-    guilds: List[GuildSave] = []
-    try:
-        with open("guildsave.json", "r") as x:
-            jsonLoad: dict = json.load(x)
-            x.close()
-    except FileNotFoundError:  # There are no reserves.
-        return []
-    except json.decoder.JSONDecodeError:
-        print("Something is wrong with the guilds json formatting. You can try to delete the file to reset.")
-        return []
-    else:
-        if len(jsonLoad) == 0:
-            return []
-    for gld in jsonLoad:
-        guilds.append(GuildSave(gld, jsonLoad[gld]["prefix"], jsonLoad[gld]
-                                ["adminRank"], jsonLoad[gld]["announcements"], jsonLoad[gld]["defaultBan"]))
-    return guilds
+    guildID = _guildIDType(guild)
+    if admin is not None and not isinstance(admin, int):
+        raise TypeError("Admin rank must be an int (role ID).")
+
+    # Check if the guild is already registered
+    if database.index.count_documents({"guildID": guildID}) != 0:
+        return
+    # Add to database
+    database.index.insert_one({
+        "guildID": guildID,
+        "adminRank": admin,
+        "announcements": None,
+        "defaultBan": []
+    })
 
 
-def fileSaveGuilds(guilds: List[GuildSave]):
-    """
-    Saves full GuildSave list to file. Does not work with SQL connection.
-    """
-    jsonSave = {}
-    for gld in guilds:
-        jsonSave[gld.name] = gld.toDict()
-    with open("guildsave.json", "w") as x:
-        json.dump(jsonSave, x)
-        x.close()
-
-
-def addGuild(guild: Union[discord.Guild, int], prefix: Optional[str] = "$", admin: Optional[str] = None, conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Add a new guild to the list.
-    """
-    if isinstance(guild, discord.Guild):
-        guildName: str = str(guild.id)
-    elif isinstance(guild, int):
-        guildName: str = str(guild)
-    else:
-        raise TypeError
-    # File
-    if conn is None:
-        guilds = fileLoadGuilds()
-        guilds.append(GuildSave(guildName, prefix, admin))
-        fileSaveGuilds(guilds)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Guilds WHERE name=%s", [guildName])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Guilds (name varchar, prefix varchar, admin varchar, announcements varchar, defaultBan varchar[])")
-        else:
-            # Somehow we ended up joining a guild we already have saved.
-            if cur.fetchone() is not None:
-                return  # Do nothing.
-            else:
-                cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
-                            guildName, prefix, admin, None, []])
-        finally:
-            cur.close()
-
-
-def setPrefix(guild: Union[discord.Guild, int], prefix: str, conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Sets the prefix for a specified guild.
-    """
-    if isinstance(guild, discord.Guild):
-        guildName: str = str(guild.id)
-    elif isinstance(guild, int):
-        guildName: str = str(guild)
-    else:
-        raise TypeError
-    # File
-    if conn is None:
-        guilds = fileLoadGuilds()
-        for gld in guilds:
-            if gld.name == guildName:
-                gld.prefix = prefix
-        fileSaveGuilds(guilds)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Guilds WHERE name=%s", [guildName])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Guilds (name varchar, prefix varchar, admin varchar, announcements varchar, defaultBan varchar[])")
-        else:
-            current = cur.fetchone()
-            if current is None:
-                raise ValueError  # This guild is not joined.
-            else:
-                cur.execute("DELETE FROM Guilds WHERE name=%s", [guildName])
-                cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
-                            guildName, prefix, current[2], current[3], current[4]])
-        finally:
-            cur.close()
-
-
-def setAdmin(guild: Union[discord.Guild, int], admin: str, conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Sets the minimum admin role for a specified guild.
-    """
-    if isinstance(guild, discord.Guild):
-        guildName: str = str(guild.id)
-    elif isinstance(guild, int):
-        guildName: str = str(guild)
-    else:
-        raise TypeError
-    # File
-    if conn is None:
-        guilds = fileLoadGuilds()
-        for gld in guilds:
-            if gld.name == guildName:
-                gld.admin = admin
-        fileSaveGuilds(guilds)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Guilds WHERE name=%s", [guildName])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Guilds (name varchar, prefix varchar, admin varchar, announcements varchar, defaultBan varchar[])")
-        else:
-            current = cur.fetchone()
-            if current is None:
-                raise ValueError  # This guild is not joined.
-            else:
-                cur.execute("DELETE FROM Guilds WHERE name=%s", [guildName])
-                cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
-                            guildName, current[1], admin, current[3], current[4]])
-        finally:
-            cur.close()
-
-
-def setAnnouncements(guild: Union[discord.Guild, int], announcements: str, conn: Optional[psycopg2.extensions.connection] = None):
-    if isinstance(guild, discord.Guild):
-        guildName: str = str(guild.id)
-    elif isinstance(guild, int):
-        guildName: str = str(guild)
-    else:
-        raise TypeError
-    # File
-    if conn is None:
-        guilds = fileLoadGuilds()
-        for gld in guilds:
-            if gld.name == guildName:
-                gld.announcements = announcements
-        fileSaveGuilds(guilds)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Guilds WHERE name=%s", [guildName])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Guilds (name varchar, prefix varchar, admin varchar, announcements varchar, defaultBan varchar[])")
-        else:
-            current = cur.fetchone()
-            if current is None:
-                raise ValueError  # This guild is not joined.
-            else:
-                cur.execute("DELETE FROM Guilds WHERE name=%s", [guildName])
-                cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
-                            guildName, current[1], current[2], announcements, current[4]])
-        finally:
-            cur.close()
-
-
-def addBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Adds a tag to the default nation ban list for a specified guild.
-    """
-    if isinstance(guild, discord.Guild):
-        guildName: str = str(guild.id)
-    elif isinstance(guild, int):
-        guildName: str = str(guild)
-    else:
-        raise TypeError
-    ban = ban.upper()
-    # File
-    if conn is None:
-        guilds = fileLoadGuilds()
-        for gld in guilds:
-            if gld.name == guildName and ban not in gld.defaultBan:
-                gld.defaultBan.append(ban)
-        fileSaveGuilds(guilds)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Guilds WHERE name=%s", [guildName])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Guilds (name varchar, prefix varchar, admin varchar, announcements varchar, defaultBan varchar[])")
-        else:
-            current = cur.fetchone()
-            if current is None:
-                raise ValueError  # This guild is not joined.
-            else:
-                newBanList: List[str] = current[4]
-                if ban not in newBanList:
-                    newBanList.append(ban)
-                    cur.execute(
-                        "DELETE FROM Guilds WHERE name=%s", [guildName])
-                    cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
-                                guildName, current[1], current[2], current[3], newBanList])
-        finally:
-            cur.close()
-
-
-def removeBan(guild: Union[discord.Guild, int], ban: str, conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Removes a tag from the default ban list for a specified guild.
-    """
-    if isinstance(guild, discord.Guild):
-        guildName: str = str(guild.id)
-    elif isinstance(guild, int):
-        guildName: str = str(guild)
-    else:
-        raise TypeError
-    ban = ban.upper()
-    # File
-    if conn is None:
-        guilds = fileLoadGuilds()
-        for gld in guilds:
-            if gld.name == guildName and ban in gld.defaultBan:
-                try:
-                    gld.defaultBan.remove(ban)
-                except:
-                    pass
-        fileSaveGuilds(guilds)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Guilds WHERE name=%s", [guildName])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Guilds (name varchar, prefix varchar, admin varchar, announcements varchar, defaultBan varchar[])")
-        else:
-            current = cur.fetchone()
-            if current is None:
-                raise ValueError  # This guild is not joined.
-            else:
-                newBanList: List[str] = current[4]
-                if ban in newBanList:
-                    newBanList.remove(ban)
-                    cur.execute(
-                        "DELETE FROM Guilds WHERE name=%s", [guildName])
-                    cur.execute("INSERT INTO Guilds (name, prefix, admin, announcements, defaultBan) VALUES (%s, %s, %s, %s, %s)", [
-                                guildName, current[1], current[2], current[3], newBanList])
-        finally:
-            cur.close()
-
-
-def getGuildSave(guild: Union[discord.Guild, int], conn: Optional[psycopg2.extensions.connection] = None) -> GuildSave:
-    """
-    Gets the GuildSave data for a specified guild.
-    """
-    if isinstance(guild, discord.Guild):
-        guildName: str = str(guild.id)
-    elif isinstance(guild, int):
-        guildName: str = str(guild)
-    else:
-        raise TypeError
-    # File
-    if conn is None:
-        guilds = fileLoadGuilds()
-        for gld in guilds:
-            if gld.name == guildName:
-                return gld
-        return None
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Guilds WHERE name=%s", [guildName])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Guilds (name varchar, prefix varchar, admin varchar, announcements varchar, defaultBan varchar[])")
-        else:
-            current = cur.fetchone()
-            cur.close()
-            if current is None:
-                return None  # This guild is not joined.
-            else:
-                return GuildSave(current[0], prefix=current[1], admin=current[2], announcements=current[3], defaultBan=current[4])
-
-
-def removeGuild(guild: Union[discord.Guild, int], conn: Optional[psycopg2.extensions.connection] = None) -> bool:
+def removeGuild(guild: Union[discord.Guild, int]) -> bool:
     """
     Removes a specified guild from the list and storage data.
     """
-    if isinstance(guild, discord.Guild):
-        guildName: str = str(guild.id)
-    elif isinstance(guild, int):
-        guildName: str = str(guild)
-    else:
-        raise TypeError
-    # File
-    if conn is None:
-        removed = False
-        guilds = fileLoadGuilds()
-        for gld in guilds:
-            if gld.name == guildName:
-                guilds.remove(gld)
-                removed = True
-        fileSaveGuilds(guilds)
-        return removed
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Guilds WHERE name=%s", [guildName])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Guilds (name varchar, prefix varchar, admin varchar, announcements varchar, defaultBan varchar[])")
-            return False
-        else:
-            current = cur.fetchone()
-            cur.close()
-            if current is None:
-                return False  # This guild is not joined.
-            else:
-                cur.execute("DELETE FROM Guilds WHERE name=%s", [guildName])
-                return True
+    guildID = _guildIDType(guild)
+
+    return database.index.delete_many({"guildID": guildID}).deleted_count > 0
+
+
+def getAdmin(guild: Union[discord.Guild, int]) -> int:
+    """
+    Sets the minimum admin role for a specified guild.
+    """
+    guildID = _guildIDType(guild)
+
+    return database.index.find_one({"guildID": guildID}, {"adminRank": True})["adminRank"]
+
+
+def setAdmin(guild: Union[discord.Guild, int], admin: int):
+    """
+    Sets the minimum admin role for a specified guild.
+    """
+    guildID = _guildIDType(guild)
+    if admin is not None and not isinstance(admin, int):
+        raise TypeError("Admin rank must be an int (role ID).")
+
+    database.index.find_one_and_update(
+        {"guildID": guildID}, {"$set": {"adminRank": admin}})
+
+
+def setAnnouncements(guild: Union[discord.Guild, int], announcements: int):
+    """
+    Sets the announcements channel for a specified guild.
+    """
+    guildID = _guildIDType(guild)
+    if announcements is not None and not isinstance(announcements, int):
+        raise TypeError("Announcements channel must be an int (channel ID).")
+
+    database.index.find_one_and_update(
+        {"guildID": guildID}, {"$set": {"announcements": announcements}})
+
+
+def getBan(guild: Union[discord.Guild, int]) -> List[str]:
+    """
+    Gets the default nation ban list for a specified guild.
+    """
+    guildID = _guildIDType(guild)
+
+    return database.index.find_one({"guildID": guildID}, {"defaultBan": True})["defaultBan"]
+
+
+def addBan(guild: Union[discord.Guild, int], ban: str):
+    """
+    Adds a tag to the default nation ban list for a specified guild.
+    """
+    guildID = _guildIDType(guild)
+    ban = ban.upper()
+
+    database.index.find_one_and_update(
+        {"guildID": guildID}, {"$addToSet": {"defaultBan": ban}})
+
+
+def removeBan(guild: Union[discord.Guild, int], ban: str):
+    """
+    Removes a tag from the default ban list for a specified guild.
+    """
+    guildID = _guildIDType(guild)
+    ban = ban.upper()
+
+    database.index.find_one_and_update(
+        {"guildID": guildID}, {"$pull": {"defaultBan": ban}})
+
+
+def getGuildSave(guild: Union[discord.Guild, int]) -> GuildSave:
+    """
+    Gets the GuildSave data for a specified guild.
+    """
+    guildID = _guildIDType(guild)
+
+    guildDoc: Dict[str, Any] = database.index.find_one({"guildID": guildID})
+    if guildDoc is None:
+        return None
+    return GuildSave(guildDoc["guildID"], guildDoc["adminRank"], guildDoc["announcements"], guildDoc["defaultBan"])
