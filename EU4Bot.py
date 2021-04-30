@@ -393,9 +393,10 @@ class ReserveChannel(AbstractChannel):
             name = EU4Lib.tagToName(tag)
             string += (tag if name is None else name) + \
                 ("" if tag is banlist[-1] else ", ")
-        string += "\n**Current players list:**"
+        playerCount = self.reserve.countPlayers()
+        string += f"\n**Current players list: ** *({playerCount} players)*"
         # Text String - Players
-        if self.reserve.countPlayers() == 0:
+        if playerCount == 0:
             string += "\n*It's so empty here...*"
         else:
             players = self.reserve.getPlayers()
@@ -1746,6 +1747,16 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
             if not await checkResAdmin(guild, authorid):
                 await permissionDenied()
                 return
+            for channel in controlledChannels:
+                if channel.interactChannel.id == int(interaction["channel_id"]):
+                    await session.post(responseurl, json={
+                        "type": 4,
+                        "data": {
+                            "content": "This channel already contains a controlled channel.",
+                            "flags": 64
+                        }
+                    })
+                    return
             responsejson = {
                 "type": 4,
                 "data": {
@@ -1762,6 +1773,16 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
             if not await checkResAdmin(guild, authorid):
                 await permissionDenied()
                 return
+            for channel in controlledChannels:
+                if channel.interactChannel.id == int(interaction["channel_id"]):
+                    await session.post(responseurl, json={
+                        "type": 4,
+                        "data": {
+                            "content": "This channel already contains a controlled channel.",
+                            "flags": 64
+                        }
+                    })
+                    return
             responsejson = {
                 "type": 4,
                 "data": {
@@ -1774,6 +1795,16 @@ async def on_socket_raw_receive(msg: Union[bytes, str]):
             controlledChannels.append(c)
             await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
         elif commandname.lower() == "stats":
+            for channel in controlledChannels:
+                if channel.interactChannel.id == int(interaction["channel_id"]):
+                    await session.post(responseurl, json={
+                        "type": 4,
+                        "data": {
+                            "content": "This channel already contains a controlled channel.",
+                            "flags": 64
+                        }
+                    })
+                    return
             responsejson = {
                 "type": 4,
                 "data": {
