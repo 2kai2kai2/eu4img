@@ -29,7 +29,7 @@ uploadCommand({
     "description": "Creates a Cartographer stats display.",
     "options": [
         {
-            "type": 5, # BOOLEAN
+            "type": 5,  # BOOLEAN
             "name": "skanderbeg",
             "description": "Specify whether to upload to skanderbeg.pm (default: False)",
             "required": False
@@ -41,34 +41,34 @@ uploadCommand({
     "description": "Modifies the default ban list for nation reservations.",
     "options": [
         {
-            "type": 1, # SUB_COMMAND
+            "type": 1,  # SUB_COMMAND
             "name": "add",
             "description": "Add a tag to the default ban list.",
             "options": [
                 {
-                    "type": 3, # STRING
+                    "type": 3,  # STRING
                     "name": "tag",
                     "description": "The name of the country to add to the ban list.",
                     "required": True
                 }
             ]
         }, {
-            "type": 1, # SUB_COMMAND
+            "type": 1,  # SUB_COMMAND
             "name": "del",
             "description": "Remove a tag from the default ban list.",
             "options": [
                 {
-                    "type": 3, # STRING
+                    "type": 3,  # STRING
                     "name": "tag",
                     "description": "The name of the country to remove from the ban list.",
                     "required": True
                 }
             ]
         }, {
-            "type": 1, # SUB_COMMAND
+            "type": 1,  # SUB_COMMAND
             "name": "list",
             "description": "Returns all nations currently on the default ban list."
-        }, 
+        }
     ]
 })
 uploadCommand({
@@ -76,7 +76,7 @@ uploadCommand({
     "description": "Sets the role required to have bot admin permissions. All higher roles will have permission.",
     "options": [
         {
-            "type": 8, # ROLE
+            "type": 8,  # ROLE
             "name": "role",
             "description": "The new minimum admin role.",
             "required": True

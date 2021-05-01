@@ -1,98 +1,52 @@
 import datetime
-import json
+import os
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
-import psycopg2
-from PIL import Image, ImageDraw, ImageFont
+import dotenv
+import pymongo
+from PIL import Image
+from pymongo.collection import Collection
+from pymongo.database import Database
+
+dotenv.load_dotenv()
+client = pymongo.MongoClient(
+    f"mongodb+srv://{os.environ['MONGODB_USERNAME']}:{os.environ['MONGODB_PASSWORD']}@{os.environ['MONGODB_CLUSTERURL']}/reservations?retryWrites=true&w=majority")
+database: Database = client.reservations
 
 """
-Data Structure - Python side
-AbstractReserve ("Reserve")
-    players: List[AbstractPick ("Pick")]
-        player: str; user mention
-    name: str; Channel ID as a str
-    textmsg: int; the msg ID in the channel
-"""
-
-"""
-Data Structure - JSON Formatting
-In Python, this becomes a dict.
-
+Data Structure
+Database: reservations
+Collection: index
 {
-    "<ChannelID>": {
-        "kind": "reserve",
-        "textmsg": 1234567890,
-        "imgmsg": 1234567890,
-        "reserves": [
-        {
-            "player": "<PlayerMention>",
-            "tag": "<TAG>",
-            "time": 1234567
-        },
-        {...}
-        ],
-        "bans": [
-            "<TAG>",
-            "<TAG>",
-            "<TAG>"
-        ]
-    },
-    "<ChannelID>": {
-        "kind": "asi",
-        "textmsg": 1234567890,
-        "reserves": [
-            {
-                "player": "<PlayerMention>",
-                "priority": false,
-                "picks": [
-                    "<TAG>",
-                    "<TAG>",
-                    "<TAG>"
-                ]
-            },
-            {
-                "player": "<PlayerMention>",
-                "priority": true,
-                "picks": [
-                    "<TAG>"
-                ],
-                "time": 1234567
-            }
-        ]
+    reserveType: "<reserve|asi>",
+    channelID: int,
+    guildID: int,
+    messages: {
+        textID: int,
+        imgID: int # Reserve only
     }
+    ban: [
+        "TAG",
+        "TAG"
+    ]
 }
-"""
 
-"""
-Data Structure - SQL Database
-Reserves
-+------+------+-------+----------+
-| name | kind | ban   | specdata |
-| str  | str  | str[] | str[]    |
-+------+------+-------+----------+
-kind:
-    Reserve - 'reserve'
-    ASIReserve - 'asi'
-specdata:
-    Reserve - [<textmsgID>, <imgmsgID>]
-    ASIReserve - [<textmsgID>]
-
-ReservePicks
-+---------+--------+-----+--------+
-| reserve | player | tag | time   |
-| str     | str    | str | bigint |
-+---------+--------+-----+--------+
-reserve refers to the name of the Reserve in the Reserves table this pick is for.
-
-ASIPicks
-+---------+--------+------+------+------+--------+
-| reserve | player | tag1 | tag2 | tag3 | time   |
-| str     | str    | str  | str  | str  | bigint |
-+---------+--------+------+------+------+--------+
-reserve refers to the name of the ASIReserve in the Reserves table this pick is for.
-If the pick is priority, tag2 and tag3 are 'NULL' (a str).
+Collection: <channelID>
+{ # reserve
+    userID: int,
+    tag: "TAG",
+    time: timestamp
+}
+Or,
+{ # asi
+    userID: int,
+    tag1: "TAG",
+    tag2: <"TAG"|Null>,
+    tag3: <"TAG"|Null>,
+    time: timestamp
+}
 """
 
 
@@ -128,13 +82,14 @@ class Eastern(datetime.tzinfo):
 
 
 class AbstractPick(ABC):
-    def __init__(self, player: str):
-        self.player = player
-        self.time: int = None
+    """
+    An abstract class containing all the data for a player's pick in a reservations-type channel.
+    Immutable.
+    """
 
-    @abstractmethod
-    def toDict(self) -> Dict[str, Any]:
-        pass
+    def __init__(self, userID: int):
+        self.userID = userID
+        self.time: int = None
 
     def timeStr(self) -> str:
         date = datetime.datetime.fromtimestamp(self.time, Eastern())
@@ -146,14 +101,18 @@ class reservePick(AbstractPick):
     A Nation for the nation reserve channel interaction.
     """
 
-    def __init__(self, player: str, tag: str, time: int = None):
-        self.player: str = player
-        self.tag = tag
+    def __init__(self, userID: int, tag: str, time: int = time.time()):
+        self.userID = userID
+        self.tag = tag.upper()
         self.capitalID: int = 0
         self.time: int = time
 
     def toDict(self) -> Dict[str, Any]:
-        return {"player": self.player, "tag": self.tag, "time": self.time}
+        return {
+            "userID": self.userID,
+            "tag": self.tag,
+            "time": self.time
+        }
 
 
 class asiPick(AbstractPick):
@@ -161,22 +120,38 @@ class asiPick(AbstractPick):
     A user's reservation for an ASI game.
     """
 
-    def __init__(self, player: str, priority: bool = False, time: int = None):
-        self.player: str = player
-        self.picks: List[str] = None
+    def __init__(self, userID: int, priority: bool = False, time: int = time.time(), picks: List[str] = None):
+        self.userID = userID
+        self.picks: List[str] = picks
         self.priority = priority
         self.time: int = time
 
     def toDict(self) -> Dict[str, Any]:
-        return {"player": self.player, "priority": self.priority, "picks": self.picks, "time": self.time}
+        return {
+            "userID": self.userID,
+            "tag1": self.picks[0].upper(),
+            "tag2": self.picks[1].upper(),
+            "tag3": self.picks[2].upper(),
+            "time": self.time
+        }
 
 
 class AbstractReserve(ABC):
     @abstractmethod
-    def __init__(self, name: str):
-        self.players: List[AbstractPick] = []
-        self.name = name  # Should be channelID
-        self.textmsg: Optional[int] = None
+    def __init__(self, channelID: int):
+        self.channelID = channelID
+
+    def _document(self) -> Dict["str", Any]:
+        out = database.index.find_one(self._docfilter)
+        if out is None:
+            raise LookupError(
+                f"Could not find document for reserve channel {self.channelID} in database reservations>index.")
+        else:
+            return out
+
+    def _collection(self) -> Collection:
+        database.validate_collection(str(self.channelID))
+        return database[str(self.channelID)]
 
     @abstractmethod
     def add(self, pick: AbstractPick) -> int:
@@ -184,8 +159,8 @@ class AbstractReserve(ABC):
         Codes:
         1 = Success; New Reservation
         2 = Success; Replaced old reservation
-        3 = Failed; Nation taken by other (ONLY for priority)
-        4 = Failed; Nation taken by self (ONLY for priority)
+        3 = Failed; Nation taken by other
+        4 = Failed; Nation taken by self
         """
         pass
 
@@ -193,13 +168,14 @@ class AbstractReserve(ABC):
     def removePlayer(self, name: str) -> bool:
         pass
 
-    @abstractmethod
     def delete(self):
-        pass
-
-    @abstractmethod
-    def toDict(self) -> Dict[str, Any]:
-        pass
+        """
+        Delete this ASI Reservations controlled channel from the database.
+        """
+        database.index.delete_many(self._docfilter)
+        database.drop_collection(str(self.channelID))
+        del(self.channelID)
+        # Now there will be errors whenever anything is called because channelID does not exist
 
 
 class Reserve(AbstractReserve):
@@ -207,64 +183,144 @@ class Reserve(AbstractReserve):
     Represents a reservation list for a specific game. The name should be the id of the channel it represents.
     """
 
-    def __init__(self, name: str):
-        self.players: List[reservePick] = []  # list of reservePick objects
-        self.name = name
-        self.bans: List[str] = []
-        self.textmsg: Optional[int] = None
-        self.imgmsg: Optional[int] = None
+    def __init__(self, channelID: int):
+        self.channelID = channelID
+        self._docfilter = {"channelID": channelID}
+        # Check to see if we should create a new database entry
+        count = database.index.count_documents({"channelID": self.channelID})
+        if count == 0:
+            # The entry is not present in the database. Create new.
+            database.index.insert_one({
+                "reserveType": "reserve",
+                "channelID": channelID,
+                "guildID": None,  # TODO: Make this work
+                "messages": {
+                    "textID": None,
+                    "imgID": None
+                },
+                "ban": []
+            })
+            database.create_collection(str(channelID))
 
     def add(self, nation: reservePick) -> int:
         """
+        Does not check if the tag is banned.
         Codes:
         1 = Success; New Reservation
         2 = Success; Replaced old reservation
         3 = Failed; Nation taken by other
         4 = Failed; Nation taken by self
         """
-        addInt = 1
-        for pick in self.players:
-            if pick.tag.upper() == nation.tag.upper():
-                if pick.player == nation.player:
-                    return 4
-                else:
-                    return 3
-            elif pick.player == nation.player:
-                addInt = 2
-                self.players.remove(pick)
-        if nation.time is None:
-            nation.time = int(time.time())
-        self.players.append(nation)
-        return addInt
+        reserves = self._collection()
+        tagTaken = reserves.find_one({"tag": nation.tag.upper()})
+        # Check if it's taken
+        if tagTaken is not None:
+            # Check whether it's taken by this user or by another
+            if tagTaken["userID"] == nation.userID:
+                return 4
+            else:
+                return 3
+        # Replace the user's old pick and return it if it existed
+        playerpick = reserves.find_one_and_replace(
+            {"userID": nation.userID}, nation.toDict(), upsert=True)
+        if playerpick is not None:
+            return 2
+        else:
+            return 1
 
     def remove(self, tag: str) -> bool:
-        for i in self.players:
-            if i.tag == tag:
-                self.players.remove(i)
-                return True
-        return False
+        reserves = self._collection()
+        result = reserves.delete_many({"tag": tag.upper()})
+        return result.deleted_count > 0
 
-    def removePlayer(self, name: str) -> bool:
-        for i in self.players:
-            if i.player == name:
-                self.players.remove(i)
-                return True
-        return False
+    def removePlayer(self, userID: int) -> bool:
+        reserves = self._collection()
+        result = reserves.delete_many({"userID": userID})
+        return result.deleted_count > 0
+
+    def getPlayers(self) -> List[reservePick]:
+        reserves = self._collection()
+        players: List[reservePick] = []
+        for pick in reserves.find():
+            players.append(reservePick(
+                pick["userID"], pick["tag"], pick["time"]))
+        return players
+
+    def countPlayers(self) -> int:
+        return self._collection().count_documents({})
+
+    @property
+    def textID(self) -> int:
+        return self._document()["messages"]["textID"]
+
+    @textID.setter
+    def textID(self, value: int):
+        database.index.update_one(
+            self._docfilter, {"$set": {"messages.textID": value}})
+
+    @property
+    def imgID(self) -> int:
+        return self._document()["messages"]["imgID"]
+
+    @imgID.setter
+    def imgID(self, value: int):
+        database.index.update_one(
+            self._docfilter, {"$set": {"messages.imgID": value}})
+
+    def isBan(self, tag: str) -> bool:
+        return database.index.count_documents({"channelID": self.channelID, "ban": tag.upper()}) != 0
+
+    def allBans(self) -> List[str]:
+        return self._document()["ban"]
+
+    def addBan(self, tag: str):
+        database.index.update_one(self._docfilter, {
+            "$addToSet": {"ban": tag.upper()}
+        })
+
+    def delBan(self, tag: str):
+        database.index.update_one(self._docfilter, {
+            "$pull": {"ban": tag.upper()}
+        })
 
     def delete(self):
-        pass
-
-    def toDict(self) -> Dict[str, Any]:
-        pickDictList = [pick.toDict() for pick in self.players]
-        return {"kind": "reserve", "textmsg": self.textmsg, "imgmsg": self.imgmsg, "reserves": pickDictList, "bans": self.bans}
+        """
+        Delete this Reservations controlled channel from the database.
+        """
+        database.index.delete_many(self._docfilter)
+        database.drop_collection(str(self.channelID))
+        del(self.channelID)
+        # Now there will be errors whenever anything is called because channelID does not exist
 
 
 class ASIReserve(AbstractReserve):
-    def __init__(self, name: str):
-        self.players: List[asiPick] = []
-        self.name = name  # Should be channelID
-        self.textmsg: Optional[int] = None
-        self.bans: List[str] = []
+    def __init__(self, channelID: int):
+        self.channelID = channelID
+        self._docfilter = {"channelID": channelID}
+        # Check to see if we should create a new database entry
+        count = database.index.count_documents({"channelID": self.channelID})
+        if count == 0:
+            # The entry is not present in the database. Create new.
+            database.index.insert_one({
+                "reserveType": "asi",
+                "channelID": channelID,
+                "guildID": None,  # TODO: Make this work
+                "messages": {
+                    "textID": None,
+                    "imgID": None
+                },
+                "ban": []
+            })
+            database.create_collection(str(channelID))
+
+    @property
+    def textID(self) -> int:
+        return self._document()["messages"]["textID"]
+
+    @textID.setter
+    def textID(self, value: int):
+        database.index.update_one(
+            self._docfilter, {"$set": {"messages.textID": value}})
 
     def add(self, pick: asiPick) -> int:
         """
@@ -274,604 +330,70 @@ class ASIReserve(AbstractReserve):
         3 = Failed; Nation taken by other (ONLY for priority)
         4 = Failed; Nation taken by self (ONLY for priority)
         """
-        addInt = 1
-        for player in self.players:
-            if pick.priority and player.priority and pick.picks[0] == player.picks[0]:
-                if pick.player == player.player:
+        reserves = self._collection()
+        if pick.priority:
+            # Only search for other priority picks with this tag
+            tagTaken = reserves.find_one(
+                {"tag1": pick.tag.upper(), "tag2": None, "tag3": None})
+            if tagTaken is not None:
+                # Check whether it's taken by this user or by another
+                if tagTaken["userID"] == pick.userID:
                     return 4
                 else:
                     return 3
-            elif pick.player == player.player:
-                addInt = 2
-                self.players.remove(pick)
-        if pick.time is None:
-            pick.time = int(time.time())
-        self.players.append(pick)
-        return addInt
+        # Replace the user's old pick and return it if it existed
+        playerpick = reserves.find_one_and_replace(
+            {"userID": pick.userID}, pick.toDict(), upsert=True)
+        if playerpick is not None:
+            return 2
+        else:
+            return 1
 
-    def removePlayer(self, name: str) -> bool:
-        for pick in self.players:
-            if pick.player == name:
-                self.players.remove(pick)
-                return True
-        return False
+    def removePlayer(self, userID: int) -> bool:
+        reserves = self._collection()
+        result = reserves.delete_many({"userID": userID})
+        return result.deleted_count > 0
 
-    def delete(self):
-        pass
+    def getPlayers(self) -> List[asiPick]:
+        reserves = self._collection()
+        players: List[asiPick] = []
+        for pick in reserves.find():
+            players.append(asiPick(pick["userID"], pick["tag2"] is None, pick["time"], [
+                           pick["tag1"], pick["tag2"], pick["tag3"]]))
+        return players
 
-    def toDict(self) -> Dict[str, Any]:
-        pickDictList = [pick.toDict() for pick in self.players]
-        return {"kind": "asi", "textmsg": self.textmsg, "reserves": pickDictList}
+    def countPlayers(self) -> int:
+        return self._collection().count_documents({})
+
+    def isBan(self, tag: str) -> bool:
+        return database.index.count_documents({"channelID": self.channelID, "ban": tag.upper()}) != 0
+
+    def allBans(self) -> List[str]:
+        return self._document()["ban"]
+
+    def addBan(self, tag: str):
+        database.index.update_one(self._docfilter, {
+            "$addToSet": {"ban": tag.upper()}
+        })
+
+    def delBan(self, tag: str):
+        database.index.update_one(self._docfilter, {
+            "$pull": {"ban": tag.upper()}
+        })
 
 
-def load(conn: Optional[psycopg2.extensions.connection] = None) -> List[AbstractReserve]:
+def load() -> List[Union[Reserve, ASIReserve]]:
     """
     Loads the full list of reserves.
-
-    If conn is specified, it uses that database connection. Otherwise, it loads from the json.
-
-    Should only be used with a database connection if ALL reserves are needed. That is pretty much just on startup.
-    For json load, this is the only way of getting stuff from on file. Other methods such as getReserve() call this.
     """
-    # Note that for json save this is referenced by getReserve, whereas for SQL save it references getReserve. If this got messed up, things would be bad.
-    if conn is None:
-        try:
-            with open("ressave.json", "r") as x:
-                jsonLoad: dict = json.load(x)
-                x.close()
-            if len(jsonLoad) == 0:
-                return []
-        except FileNotFoundError:  # There are no reserves.
-            return []
-        except json.decoder.JSONDecodeError:
-            print(
-                "Something is wrong with the save json formatting. You can try to delete the file to reset.")
-            return []
-        resList: List[AbstractReserve] = []
-        for res in jsonLoad:
-            if jsonLoad[res]["kind"] == "reserve":
-                r = Reserve(res)
-                try:
-                    r.bans = jsonLoad[res]["bans"]
-                except:
-                    r.bans = []
-                r.textmsg = jsonLoad[res]["textmsg"]
-                r.imgmsg = jsonLoad[res]["imgmsg"]
-                for pick in jsonLoad[res]["reserves"]:
-                    try:
-                        r.add(reservePick(pick["player"],
-                                          pick["tag"], pick["time"]))
-                    except:
-                        r.add(reservePick(pick["player"], pick["tag"]))
-                resList.append(r)
-            elif jsonLoad[res]["kind"] == "asi":
-                r = ASIReserve(res)
-                r.textmsg = jsonLoad[res]["textmsg"]
-                for pick in jsonLoad[res]["reserves"]:
-                    asirespick = asiPick(pick["player"], pick["priority"])
-                    asirespick.picks = pick["picks"]
-                    try:
-                        asirespick.time = pick["time"]
-                    except:
-                        pass
-                    r.add(asirespick)
-                resList.append(r)
-        return resList
-    else:  # With the new SQL format, this should only be called if there is a connection when everything is being loaded initially.
-        resList: List[AbstractReserve] = []
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Reserves")
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-        else:
-            for res in cur.fetchall():
-                resList.append(getReserve(res[0], conn=conn))
-        cur.close()
-        return resList
-
-
-def save(reserves: List[AbstractReserve]):
-    """
-    Overwrites the json save file with the given reserve list.
-    """
-    jsonSave: Dict[str, Any] = {}
-    for res in reserves:
-        jsonSave[res.name] = res.toDict()
-    with open("ressave.json", "w") as x:
-        json.dump(jsonSave, x)
-        x.close()
-
-
-def getReserve(name: str, conn: Optional[psycopg2.extensions.connection] = None) -> AbstractReserve:
-    """
-    Gets an AbstractReserve saved based on the name given.
-
-    If conn is given, the psycopg2 connection will be used to access the database. Otherwise, the json file method will be used.
-
-    If no reserve can be found by the given name, None will be returned.
-    """
-    # File
-    if conn is None:
-        resList = load()
-        for res in resList:
-            if res.name == str(name):
-                return res
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-        else:
-            resTup = cur.fetchone()
-            if resTup is not None:  # There is a reserve on file
-                if resTup[1] == "reserve":
-                    res = Reserve(name)
-                    try:
-                        # Get the textmsg ID
-                        res.textmsg = int(resTup[3][0])
-                    except:  # Probably means the textmsg is not yet set
-                        res.textmsg = None
-                    try:
-                        # Get the imgmsg ID
-                        res.imgmsg = int(resTup[3][1])
-                    except:  # Probably means the imgmsg is not yet set
-                        res.imgmsg = None
-                    # Get banned nations
-                    res.bans = resTup[2]
-                    # Get picks
-                    try:
-                        cur.execute(
-                            "SELECT * FROM ReservePicks WHERE reserve=%s", [name])
-                    except psycopg2.Error:
-                        cur.execute(
-                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, time bigint)")
-                    else:
-                        for pick in cur.fetchall():
-                            res.add(reservePick(pick[1], pick[2], pick[3]))
-                        cur.close()
-                        return res
-                elif resTup[1] == "asi":
-                    res = ASIReserve(name)
-                    try:
-                        # Get the textmsg ID
-                        res.textmsg = int(resTup[3][0])
-                    except:  # Probably means the textmsg is not yet set
-                        res.textmsg = None
-                    try:
-                        cur.execute(
-                            "SELECT * FROM ASIPicks WHERE reserve=%s", [name])
-                    except psycopg2.Error:
-                        cur.execute(
-                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, time bigint)")
-                    else:
-                        for pick in cur.fetchall():
-                            pickObj = asiPick(
-                                pick[1], (pick[3] == "NULL" and pick[4] == "NULL"), pick[5])
-                            if pickObj.priority:
-                                pickObj.picks = [pick[2]]
-                            else:
-                                pickObj.picks = [pick[2], pick[3], pick[4]]
-                            res.add(pickObj)
-                        cur.close()
-                        return res
-        cur.close()
-    return None
-
-
-def updateMessageIDs(reserve: Union[str, AbstractReserve], textmsg: int = None, imgmsg: int = None, conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Updates the saved message IDs for the given reserve.
-
-    For normal Reserve, this is both textmsg and imgmsg. Either or both may be given as optional arguments, and only those given will be changed.
-
-    In ASIReserve, the same applies but ASIReserve does not have imgmsg, so entering this for an ASIReserve will be ignored.
-    """
-    # If they haven't given either to change, do nothing
-    if textmsg is None and imgmsg is None:
-        return
-    # Get the reserve name
-    name = ""
-    if isinstance(reserve, str):
-        name = reserve
-    elif isinstance(reserve, AbstractReserve):
-        name = reserve.name
-    # File
-    if conn is None:
-        resList = load()
-        for x in resList:
-            if x.name == name:
-                if textmsg is not None:
-                    x.textmsg = textmsg
-                if imgmsg is not None and isinstance(x, Reserve):
-                    x.imgmsg = imgmsg
-                break
-        save(resList)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-        else:
-            res = cur.fetchone()
-            if res is not None:
-                # Write the new specData list
-                newspecData = []
-                if textmsg is None:  # This call is not editing textmsg; get previous value
-                    newspecData.append(res[3][0])
-                else:  # This call is editing textmsg
-                    newspecData.append(str(textmsg))
-                if res[1] == "reserve":  # Only reserve has an imgmsg
-                    if imgmsg is None:
-                        newspecData.append(res[3][1])
-                    else:
-                        newspecData.append(str(imgmsg))
-                # Update on the database
-                cur.execute("DELETE FROM Reserves WHERE name=%s", [res[0]])
-                cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [
-                            res[0], res[1], res[2], newspecData])
-            else:
-                # Oh no! you're editing a nonexistant entry. Let's do nothing.
-                pass
-
-
-def deleteReserve(reserve: Union[str, AbstractReserve], conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Deletes a Reserve from on save.
-    """
-    name = ""
-    if isinstance(reserve, str):
-        name = reserve
-    elif isinstance(reserve, AbstractReserve):
-        name = reserve.name
-    # File
-    if conn is None:
-        resList = load()
-        for x in resList:
-            if x.name == name:
-                resList.remove(x)
-                break
-        save(resList)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-        try:
-            cur.execute("DELETE FROM ReservePicks WHERE reserve=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, time bigint)")
-        try:
-            cur.execute("DELETE FROM ASIPicks WHERE reserve=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, time bigint)")
-        cur.close()
-
-
-def deletePick(reserve: Union[str, AbstractReserve], player: str, conn: Optional[psycopg2.extensions.connection] = None) -> bool:
-    """
-    Deletes a player's pick from a specified reserve on save.
-
-    Returns a bool of whether or not a change occured. (False means that there was no pick to begin with)
-    """
-    name = ""
-    if isinstance(reserve, str):
-        name = reserve
-    elif isinstance(reserve, AbstractReserve):
-        name = reserve.name
-    # This value is returned at the end of whether changes were made.
-    didStuff = False
-    # File
-    if conn is None:
-        resList = load()
-        for x in resList:
-            if x.name == name:
-                didStuff = x.removePlayer(player)
-                break
-        save(resList)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        # Delete from ReservePicks
-        try:
-            # See if there are any that meet the requirements
-            cur.execute(
-                "SELECT FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
-            if len(cur.fetchall()) != 0:
-                # If so, delete them and didStuff is true. Otherwise didStuff continues to be False
-                cur.execute(
-                    "DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [name, player])
-                didStuff = True
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, time bigint)")
-        # Delete from ASIPicks
-        try:
-            # See if there are any that meet the requirements
-            cur.execute(
-                "SELECT FROM ASIPicks WHERE reserve=%s AND player=%s", [name, player])
-            if len(cur.fetchall()) != 0:
-                # If so, delete them and didStuff is true. Otherwise didStuff continues its previous value
-                cur.execute(
-                    "DELETE FROM ASIPicks WHERE reserve=%s AND player=%s", [name, player])
-                didStuff = True
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, time bigint)")
-        cur.close()
-    return didStuff
-
-
-def addReserve(reserve: AbstractReserve, conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Adds a new reserve on save.
-    """
-    # File
-    if conn is None:
-        resList = load()
-        resList.append(reserve)
-        save(resList)
-    # SQL
-    else:
-        # Setup the specData based on the given reserve
-        specData: List[str] = []
-        if isinstance(reserve, Reserve):
-            kind = "reserve"
-            specData.append(str(reserve.textmsg))
-            specData.append(str(reserve.imgmsg))
-        elif isinstance(reserve, ASIReserve):
-            kind = "asi"
-            specData.append(str(reserve.textmsg))
-        # Update on the database
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("DELETE FROM Reserves WHERE name=%s", [reserve.name])
-            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [
-                        reserve.name, kind, reserve.bans, specData])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-        cur.close()
-
-
-def addPick(reserve: Union[str, AbstractReserve], pick: AbstractPick, conn: Optional[psycopg2.extensions.connection] = None) -> int:
-    """
-    Adds a pick to a specified reserve and returns a code based on the result.
-
-    Codes:
-    0 = Failed; Reserve not found
-    1 = Success; New Reservation
-    2 = Success; Replaced old reservation
-    3 = Failed; Nation taken by other
-    4 = Failed; Nation taken by self
-    """
-    name = ""
-    if isinstance(reserve, str):
-        name = reserve
-    elif isinstance(reserve, AbstractReserve):
-        name = reserve.name
-    addInt = 0
-    # File
-    if conn is None:
-        resList = load()
-        for x in resList:
-            if x.name == name:
-                addInt = x.add(pick)
-                break
-        save(resList)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-            # addInt is 0
-        else:
-            res = cur.fetchone()
-            if res is None:
-                pass
-                # addInt is 0
-            else:
-                if res[1] == "reserve" and isinstance(pick, reservePick):
-                    try:
-                        cur.execute(
-                            "SELECT * FROM ReservePicks WHERE reserve=%s AND tag=%s", [res[0], pick.tag])
-                        tagres = cur.fetchone()
-                        cur.execute(
-                            "SELECT * FROM ReservePicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
-                        playerres = cur.fetchone()
-                        if tagres is None and playerres is None:  # Nobody else has reserved this; player has not reserved
-                            if pick.time is None:
-                                resTime = int(time.time())
-                            else:
-                                resTime = pick.time
-                            cur.execute("INSERT INTO ReservePicks (reserve, player, tag, time) VALUES (%s, %s, %s, %s)", [
-                                        res[0], pick.player, pick.tag, resTime])
-                            addInt = 1
-                        # Nobody else has reserved this, but player has another reservation
-                        elif tagres is None and playerres is not None:
-                            cur.execute("DELETE FROM ReservePicks WHERE reserve=%s AND player=%s", [
-                                        res[0], pick.player])
-                            if pick.time is None:
-                                resTime = int(time.time())
-                            else:
-                                resTime = pick.time
-                            cur.execute("INSERT INTO ReservePicks (reserve, player, tag, time) VALUES (%s, %s, %s, %s)", [
-                                        res[0], pick.player, pick.tag, resTime])
-                            addInt = 2
-                        elif tagres == playerres:  # This player has already reserved this
-                            addInt = 4
-                        else:  # Another player has reserved this. tagres is not None and tagres != playerres.
-                            addInt = 3
-                    except psycopg2.Error:
-                        cur.execute(
-                            "CREATE TABLE ReservePicks (reserve varchar, player varchar, tag varchar, time bigint)")
-                elif res[1] == "asi" and isinstance(pick, asiPick):
-                    try:
-                        cur.execute(
-                            "SELECT * FROM ASIPicks WHERE reserve=%s AND tag1=%s AND tag2='NULL'", [res[0], pick.picks[0]])
-                        tagres = cur.fetchone()  # Any priority reserve of the first res
-                        cur.execute(
-                            "SELECT * FROM ASIPicks WHERE reserve=%s AND player=%s", [res[0], pick.player])
-                        playerres = cur.fetchone()
-                        if tagres == playerres and tagres is not None:  # The player has priority reserved this already
-                            addInt = 4
-                        elif tagres is None and playerres is None:  # Nobody else has priority reserved this; player has not reserved
-                            if pick.time is None:
-                                resTime = int(time.time())
-                            else:
-                                resTime = pick.time
-                            if pick.priority:
-                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3, time) VALUES (%s, %s, %s, 'NULL', 'NULL', %s)", [
-                                            res[0], pick.player, pick.picks[0], resTime])
-                            else:
-                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3, time) VALUES (%s, %s, %s, %s, %s, %s)", [
-                                            res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2], resTime])
-                            addInt = 1
-                        # Nobody else has priority reserved this, but player has another reservation
-                        elif tagres is None and playerres is not None:
-                            cur.execute("DELETE FROM ASIPicks WHERE reserve=%s AND player=%s", [
-                                        res[0], pick.player])
-                            if pick.time is None:
-                                resTime = int(time.time())
-                            else:
-                                resTime = pick.time
-                            if pick.priority:
-                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3, time) VALUES (%s, %s, %s, 'NULL', 'NULL', %s)", [
-                                            res[0], pick.player, pick.picks[0], resTime])
-                            else:
-                                cur.execute("INSERT INTO ASIPicks (reserve, player, tag1, tag2, tag3, time) VALUES (%s, %s, %s, %s, %s, %s)", [
-                                            res[0], pick.player, pick.picks[0], pick.picks[1], pick.picks[2], resTime])
-                            addInt = 2
-                        # Another player has priority reserved this. (tagres is not None and tagres != playerres)
-                        else:
-                            addInt = 3
-                    except psycopg2.Error:
-                        cur.execute(
-                            "CREATE TABLE ASIPicks (reserve varchar, player varchar, tag1 varchar, tag2 varchar, tag3 varchar, time bigint)")
-    return addInt
-
-
-def addBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Adds a list of tags to the ban list for a specified reserve channel.
-    """
-    name = ""
-    if isinstance(reserve, str):
-        name = reserve
-    elif isinstance(reserve, AbstractReserve):
-        name = reserve.name
-    # File
-    if conn is None:
-        resList = load()
-        for x in resList:
-            if x.name == name:
-                for tag in bans:
-                    if hasattr(x, "bans") and tag not in x.bans:
-                        x.bans.append(tag)
-                break
-        save(resList)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-        else:
-            res = cur.fetchone()
-            banlist = res[2]
-            for tag in bans:
-                if tag not in banlist:
-                    banlist.append(tag)
-            cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
-            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [
-                        res[0], res[1], banlist, res[3]])
-        cur.close()
-
-
-def deleteBan(reserve: Union[str, AbstractReserve], bans: List[str], conn: Optional[psycopg2.extensions.connection] = None):
-    """
-    Removes a list of tags from the ban list for a specified reserve channel.
-    """
-    name = ""
-    if isinstance(reserve, str):
-        name = reserve
-    elif isinstance(reserve, AbstractReserve):
-        name = reserve.name
-    # File
-    if conn is None:
-        resList = load()
-        for x in resList:
-            if x.name == name:
-                for tag in bans:
-                    if hasattr(x, "bans") and tag in x.bans:
-                        x.bans.remove(tag)
-                break
-        save(resList)
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-        else:
-            res = cur.fetchone()
-            banlist = res[2]
-            for tag in bans:
-                if tag in banlist:
-                    banlist.remove(tag)
-            cur.execute("DELETE FROM Reserves WHERE name=%s", [name])
-            cur.execute("INSERT INTO Reserves (name, kind, ban, specData) VALUES (%s, %s, %s, %s)", [
-                        res[0], res[1], banlist, res[3]])
-        cur.close()
-
-
-def isBanned(reserve: Union[str, AbstractReserve], tag: str, conn: Optional[psycopg2.extensions.connection] = None) -> bool:
-    """
-    Returns whether a tag is banned on a specified reserve channel.
-    """
-    name = ""
-    if isinstance(reserve, str):
-        name = reserve
-    elif isinstance(reserve, AbstractReserve):
-        name = reserve.name
-    # File
-    if conn is None:
-        resList = load()
-        for x in resList:
-            if x.name == name:
-                return hasattr(x, "bans") and tag in x.bans
-    # SQL
-    else:
-        cur: psycopg2.extensions.cursor = conn.cursor()
-        try:
-            cur.execute("SELECT * FROM Reserves WHERE name=%s", [name])
-        except psycopg2.Error:
-            cur.execute(
-                "CREATE TABLE Reserves (name varchar, kind varchar, ban varchar[], specData varchar[])")
-        else:
-            res = cur.fetchone()
-            cur.close()
-            banlist = res[2]
-            return tag in banlist
+    data = database.index.find()
+    out = []
+    for res in data:
+        if res["reserveType"] == "reserve":
+            out.append(Reserve(res["channelID"]))
+        elif res["reserveType"] == "asi":
+            out.append(ASIReserve(res["channelID"]))
+    return out
 
 
 def createMap(reserve: Reserve) -> Image.Image:
@@ -879,13 +401,12 @@ def createMap(reserve: Reserve) -> Image.Image:
     Creates a map based on a Reserve object with x's on the capitals of all reserved reservePicks.
     Returns an Image object.
     """
-    countries: List[reservePick] = reserve.players
+    countries: List[reservePick] = reserve.getPlayers()
     capitalLocs: Dict[str, Tuple[float, float]] = {}
 
     srcFile = open("resources/tagCapitals.txt", "r", encoding="cp1252")
-    lines = srcFile.readlines()
-    srcFile.close()
-    for line in lines:
+
+    for line in srcFile:
         for natnum in range(len(countries)):
             if line.startswith(countries[natnum].tag):
                 capitalLocs[countries[natnum].tag] = (
@@ -894,7 +415,7 @@ def createMap(reserve: Reserve) -> Image.Image:
                 break
         if len(countries) == 0:
             break
-    del(lines)
+    srcFile.close()
 
     mapFinal: Image.Image = Image.open("resources/map_1444.png")
     imgX: Image.Image = Image.open("resources/xIcon.png")

@@ -11,21 +11,23 @@ def country(text: str) -> Optional[str]:
     Some nations may have multiple valid names.
     If the nation is not recognized, returns None.
     """
+    text = text.upper()
     # Read out the countries file
     srcFile = open("resources/countries_l_english.yml", encoding="cp1252")
     # If it could be a tag, check for that.
     if len(text) == 3:
+        # Check dynamic tags
         if text[1:].isdigit():
-            # This is either a dynamic tag or some random characters.
-            firstchar = text[0].upper()
+            firstchar = text[0]
             if firstchar == "C" or firstchar == "D" or firstchar == "E" or firstchar == "K" or firstchar == "T":
-                return text.upper()
+                return text
+        # Check raw tags
         for line in srcFile:
-            if line[1:4] == text.upper():
-                return text.upper()
+            if line[1:4] == text:
+                return text
     # text is not a recognized tag, search names
     for line in srcFile:
-        if ('"' + text.lower() + '"') in line.lower():
+        if f'"{text}"' in line.upper():
             return line[1:4]
     # text is unknown
     return None
@@ -37,6 +39,7 @@ def tagToName(tag: str) -> Optional[str]:
 
     If the tag is not recognized, returns None.
     """
+    tag = tag.upper()
     # If it could be a valid tag
     if len(tag) == 3:
         if tag[1:].isdigit():
@@ -60,8 +63,9 @@ def tagToName(tag: str) -> Optional[str]:
         # Read out the countries file
         srcFile = open("resources/countries_l_english.yml", encoding="cp1252")
         for line in srcFile:
-            if line[1:4] == tag.upper():
-                return line[8:].split("\"", 1)[0].strip("\" \t\n")
+            if line[1:4] == tag:
+                firstQuote = line.index('"')
+                return line[firstQuote+1:line.index('"', firstQuote+1)]
     # Tag was not found or is not valid 3-character str
     return None
 
@@ -93,45 +97,41 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     beyond = 0
     for line in srcFile:
         if beyond == 2:  # Two after the province, this is the line with the position.
-            vals = line.strip().split(" ")
-            # need to subtract the y value because the position starts from the bottom rather than the top like images
+            vals = line.split()
+            # Need to subtract the y value because the position starts from the bottom rather than the top like images
             return (float(vals[0]), 2048-float(vals[1]))
-        if beyond == 1:  # One after the province, wait one more line for the position
+        elif beyond == 1:  # One after the province, wait one more line for the position
             beyond = 2
-            continue
-        # So we have the province... Wait two lines for the position
-        if line.strip() == (str(id)+"={"):
+        elif line.strip() == str(id)+"={":
+            # So we have the province... Wait two lines for the position
             beyond = 1
-            continue
+    return None
 
 
 def provinces(ids: List[Union[str, int]]) -> Dict[int, Tuple[float, float]]:
     """
     Gets the location of multiple provinces on a screenshot map.
-    Similar to provinces() except that it will only go through the file once to find all provinces.
+    Similar to province() except that it will only go through the file once to find all provinces.
     """
     out: Dict[int, Optional[Tuple[float, float]]] = {}
     idsprocessed = [int(x) for x in ids]
     srcFile = open("resources/positions.txt", "r", encoding="cp1252")
-    currentID = None
+    currentID: int = None
     beyond = 0
     for line in srcFile:
         if beyond == 2:  # Two after the province, this is the line with the position.
-            vals = line.strip().split()
-            # need to subtract the y value because the position starts from the bottom rather than the top like images
+            vals = line.split()
+            # Need to subtract the y value because the position starts from the bottom rather than the top like images
             out[currentID] = (float(vals[0]), 2048-float(vals[1]))
             currentID = None
             beyond = 0
-        if beyond == 1:  # One after the province, wait one more line for the position
+        elif beyond == 1:  # One after the province, wait one more line for the position
             beyond = 2
-            continue
-        # So we have the province... Wait two lines for the position
-        if line.strip("\t ={\n").isdigit():
-            id = int(line.strip("\t ={\n"))
-            if id in ids:
+        elif line.strip("\t ={\n").isdigit():  # Province top-level bracket
+            id = int(line[:line.index("={")])
+            if id in idsprocessed:
                 currentID = id
                 beyond = 1
-        
     return out
 
 
@@ -146,8 +146,7 @@ def flag(tag: str) -> Image.Image:
     line = srcFile.read()
     srcFile.close()
     # Get the number for the order of the flag; starts at 0
-    a = line.partition(tag)  # Separate into a 3-tuple around tag
-    flagnum = a[0].count(".tga")  # Get image number starting at 0
+    flagnum = line[:line.index(tag)].count(".tga")
     # Get the file based on 256 flags per
     flagfile = Image.open(f"resources/flagfiles_{int(flagnum/256)}.tga")
     # Get the location of the flag within the file
@@ -165,17 +164,18 @@ def provinceArea(provinceID: Union[str, int]) -> str:
 
     Raises an error if the province is not found.
     """
+    provinceID = str(provinceID)
     # Read file
     srcFile = open("resources/area.txt", "r", encoding="cp1252")
     # Search file
     currentArea = None
     for line in srcFile:
         # Set the current area for when it goes again and has the provinces
-        if " = {" in line and not "\tcolor = {" in line:
-            currentArea = line.split(" ")[0].strip("\t ={\n")
+        if " = {" in line and not line[0].isspace():
+            currentArea = line[:line.index(" = {")]
         # If it's the right province, return the area
         else:
-            if str(provinceID) in line.split():
+            if provinceID in line.split():
                 return currentArea
     # Was not found
     raise ValueError(f"{provinceID} was not a valid province.")
@@ -194,12 +194,11 @@ def region(areaName: str) -> str:
     currentRegion = None
     for line in srcFile:
         # Get the region for the next lines
-        if " = {" in line and not line.startswith("\t"):
-            currentRegion = line.split(" ")[0].strip("\t ={\n")
+        if " = {" in line and not line[0].isspace():
+            currentRegion = line[:line.index(" = {")]
         # If it's the right area, return the region
-        else:
-            if line.strip() == areaName:
-                return currentRegion
+        elif line.strip() == areaName:
+            return currentRegion
     # Was not found
     raise ValueError(f"{areaName} was not a valid area.")
 
@@ -217,12 +216,11 @@ def superregion(regionName: str) -> str:
     currentSuperregion = None
     for line in srcFile:
         # Get the superregion for the next lines
-        if " = {" in line and not line.startswith("\t"):
-            currentSuperregion = line.split(" ")[0].strip("\t ={\n")
+        if " = {" in line and not line[0].isspace():
+            currentSuperregion = line[:line.index(" = {")]
         # If it's the right region, return the superregion
-        else:
-            if line.strip() == regionName:
-                return currentSuperregion
+        elif line.strip() == regionName:
+            return currentSuperregion
     # Was not found
     raise ValueError(f"{regionName} was not a valid region.")
 
@@ -233,6 +231,7 @@ def continent(provinceID: Union[str, int]) -> str:
 
     Raises an error if the province is not found.
     """
+    provinceID = str(provinceID)
     # Read file
     srcFile = open("resources/continent.txt", "r", encoding="cp1252")
     # Search file
@@ -240,11 +239,10 @@ def continent(provinceID: Union[str, int]) -> str:
     for line in srcFile:
         # Get the continent for the following lines
         if " = {" in line:
-            currentContinent = line.split(" ")[0].strip("\t ={\n")
+            currentContinent = line[:line.index(" = {")]
         # If it's the right province, return the continent
-        else:
-            if str(provinceID) in line.split():
-                return currentContinent
+        elif provinceID in line.split():
+            return currentContinent
     # Was not found
     raise ValueError(f"{provinceID} was not a valid province.")
 
@@ -275,6 +273,7 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
 
     Raises an error if the province is not found in a colonial region.
     """
+    provinceID = str(provinceID)
     # Read file
     srcFile = open("resources/00_colonial_regions.txt", "r", encoding="cp1252")
     # Search file
@@ -282,14 +281,14 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
     provsOpen = False
     for line in srcFile:
         # First get the colonial region. No indent.
-        if not line.startswith("\t") and " = {" in line:
-            currentColReg = line.strip("= {\n\t")
+        if " = {" in line and not line[0].isspace():
+            currentColReg = line[:line.index(" = {")]
         elif currentColReg is not None and "\tprovinces = {" in line:
             provsOpen = True
         elif provsOpen is True:
             if "}" in line:
                 provsOpen = False
-            elif str(provinceID) in line.split():
+            elif provinceID in line.split():
                 return currentColReg
     # Was not found
     raise ValueError(
@@ -308,10 +307,11 @@ def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
     currentColReg: Optional[str] = None
     for line in srcFile:
         # First get the colonial region. No indent.
-        if not line.startswith("\t") and " = {" in line:
-            currentColReg = line.strip("= {\n\t")
+        if " = {" in line and not line[0].isspace():
+            currentColReg = line[:line.index(" = {")]
         elif currentColReg == colReg and "\tcolor = {" in line:
-            colorR, colorG, colorB = line.strip("\tcolor ={}\n").split()
+            colorR, colorG, colorB = line[line.index(
+                "{")+1:line.rindex("}")].split()
             color = (int(colorR), int(colorG), int(colorB))
     # Raise error if the colonial region or color was invalid
     if currentColReg is None:
