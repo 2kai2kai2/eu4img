@@ -1680,11 +1680,11 @@ async def on_guild_remove(guild: discord.Guild):
 
 
 ZLIB_SUFFIX = b'\x00\x00\xff\xff'
-inflator = zlib.decompressobj()
-
+inflator = zlib.decompressobj(wbits=zlib.MAX_WBITS)
+zlibbuffer = bytearray()
 
 def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
-    zlibbuffer = bytearray()
+    global zlibbuffer
     if isinstance(msg, str):
         return json.loads(msg)
     else:
@@ -1694,6 +1694,7 @@ def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
             raise ValueError("Bytes without zlib suffix")
         else:
             jsontext = inflator.decompress(zlibbuffer)
+            zlibbuffer = bytearray()
             return json.loads(jsontext)
 
 
