@@ -1679,32 +1679,13 @@ async def on_guild_remove(guild: discord.Guild):
             del(c)
 
 
-ZLIB_SUFFIX = b'\x00\x00\xff\xff'
-inflator = zlib.decompressobj(wbits=zlib.MAX_WBITS)
-zlibbuffer = bytearray()
-
-def decompressWebhook(msg: Union[bytes, str]) -> Dict[str, Any]:
-    global zlibbuffer
-    if isinstance(msg, str):
-        return json.loads(msg)
-    else:
-        zlibbuffer.extend(msg)
-        if len(msg) < 4 or msg[-4:] != ZLIB_SUFFIX:
-            # idk what happens here???
-            raise ValueError("Bytes without zlib suffix")
-        else:
-            jsontext = inflator.decompress(zlibbuffer)
-            zlibbuffer = bytearray()
-            return json.loads(jsontext)
-
-
 @client.event
-async def on_socket_raw_receive(msg: Union[bytes, str]):
-    hook = decompressWebhook(msg)
-    if hook["op"] == 0 and hook["t"] == "INTERACTION_CREATE":
+async def on_socket_response(msg: Dict):
+    # This is not a publically listed event, but we can intercept it to catch interactions
+    if msg["op"] == 0 and msg["t"] == "INTERACTION_CREATE":
         # This means it's an interaction.
         # https://discord.com/developers/docs/interactions/slash-commands#interaction
-        interaction: Dict[str, Any] = hook["d"]
+        interaction: Dict[str, Any] = msg["d"]
         # Verify this is for us
         if int(interaction["application_id"]) != (await client.application_info()).id or interaction["type"] != 2:
             # Not sure if this'll ever happen, but we're recieving an interaction not for us.
