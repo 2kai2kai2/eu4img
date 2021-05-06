@@ -571,6 +571,7 @@ class saveGame():
     def __init__(self):
         self.allNations: Dict[str, Nation] = {}
         self.playertags: Dict[str, str] = {}
+        self.provinces: Dict[int, str] = {}
         self.dlc: List[str] = []
         self.GP: List[str] = []
         self.date: Optional[EU4cpplib.EU4Date] = None
@@ -718,6 +719,12 @@ class statsChannel(AbstractChannel):
                 # Get papal controller
                 elif linekey == "previous_controller" and brackets == ["religion_instance_data", "catholic", "papacy"]:
                     continue
+                
+                elif len(brackets) > 1 and brackets[0] == "provinces":
+                    provinceID = int(brackets[1][1:])
+                    if len(brackets) == 2:
+                        if linekey == "owner":
+                            self.game.provinces[provinceID] = line[line.index('"')+1:line.rindex('"')]
                 # Country-specific data (for players)
                 elif len(brackets) > 1 and brackets[0] == "countries":
                     try:
@@ -896,6 +903,11 @@ class statsChannel(AbstractChannel):
             return (255 - color[0], 255 - color[1], 255 - color[2])
 
         await updateProgress("Finding players to draw borders...", 1, 8)
+
+        tagColors: Dict[str, Tuple[int, int, int]] = {}
+        for natTag in self.game.allNations:
+            tagColors[natTag] = self.game.allNations[natTag].mapColor
+
         # Formatting: (map color) = (player contrast color)
         playerColors: Dict[Tuple[int, int, int], Tuple[int, int, int]] = {}
         for natTag in self.game.allNations:
@@ -917,6 +929,9 @@ class statsChannel(AbstractChannel):
                 pass
         # Modify the image
         await updateProgress("Calculating player borders...", 2, 8)
+        print("pre")
+        img: Image.Image = Image.frombytes("RGB", (5632, 2048), EU4cpplib.drawMap(tagColors, self.game.provinces))
+        img.show()
         # Formatting: (draw color) = [(x, y), (x, y), ...]
         drawColors: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = EU4cpplib.drawBorders(
             playerColors, self.politicalImage.tobytes(), self.politicalImage.width, self.politicalImage.height)
