@@ -11,11 +11,13 @@ cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <algorithm>
 #include <fstream>
 #include <list>
 #include <map>
 #include <string>
 #include <tuple>
+#include <set>
 
 #include "EU4Date.h"
 
@@ -197,6 +199,15 @@ py::bytes pyProvMap() {
 
 static const auto maxGet = std::numeric_limits<std::streamsize>::max();
 
+void skipToLineEnd(std::ifstream &file) {
+    char skip;
+    while (file.get(skip)) {
+        if (skip == '\n' || skip == file.eofbit) {
+            break;
+        }
+    }
+}
+
 std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> loadMapDef() {
     std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> out;
     std::ifstream file("resources/definition.csv");
@@ -224,47 +235,232 @@ std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> loadMapDef() {
         file.ignore(); // Skip the ';'
         out[provinceID] = std::make_tuple(red, green, blue);
 
-        // Go to end of line
-        char skip;
-        while (file.get(skip)) {
-            if (skip == '\n' || skip == file.eofbit) {
-                break;
-            }
-        }
+        skipToLineEnd(file);
     }
     
     return out;
+}
+
+std::vector<uint32_t> loadIntList(std::ifstream &file, const std::set<std::string> &keys) {
+    std::vector<uint32_t> out;
+    std::string key = "";
+    char temp;
+    while (!file.eof()) {
+        file.get(temp);
+        if (temp == '=' || (temp == ' ' && file.peek() == '=')) {
+            // Next we have the value.
+            // Go through, and if \n comes before { it is just a value, but if { comes first then we can start searching.
+            while (temp != '{' && temp != '\n' && temp != file.eofbit) {
+                file.get(temp);
+            }
+            // Now we have either reached the end of the line or an open bracket.
+            // If it is an { we get the data inside, otherwise we just let it go.
+            if (temp == '{') {
+                // Start off with the first item after the {
+                std::vector<std::string> items;
+                std::string current = "";
+                file.get(temp);
+                while (temp != '}' && temp != file.eofbit) {
+                    if (temp == '#') { // If it's a comment, save any current item and skip to next line
+                        if (current.size() != 0) {
+                            items.push_back(current);
+                            current = "";
+                        }
+                        skipToLineEnd(file);
+                    } else if (std::isspace(temp)) { // If it's a space, save any current item and prepare for the next one
+                        if (current.size() != 0) {
+                            items.push_back(current);
+                            current = "";
+                        }
+                    } else { // Otherwise, we are just adding to the current item
+                        current.push_back(temp);
+                    }
+                    // We do this at the end so we can start by checking whether the list has ended
+                    file.get(temp);
+                }
+                // Now we have a full list of items. Check that the key is correct and if so, convert to int and add.
+                if (keys.find(key) != keys.end()) {
+                    for (size_t i = 0; i < items.size(); ++i) {
+                        out.push_back(std::stoi(items[i]));
+                    }
+                }
+            }
+            key = "";
+        } else if (temp == '#') {
+            // We have a comment. Skip to next line.
+            skipToLineEnd(file);
+            key = "";
+        } else if (temp == '\n' || temp == file.eofbit) {
+            // New line without reaching an =. Ignore key.
+            key = "";
+        } else {
+            // Just another character.
+            key.push_back(temp);
+        }
+    }
+    return out;
+}
+
+/**
+ * Loads data from resources/default.map to get the IDs of all lake and sea provinces.
+ * @returns Sorted vector of all lake and sea province IDs.
+ */
+std::vector<uint32_t> loadWaterProvinces() {
+    std::ifstream file("resources/default.map");
+    std::vector<uint32_t> waterProvs = loadIntList(file, std::set<std::string>({"sea_starts", "lakes"}));
+
+    std::sort(waterProvs.begin(), waterProvs.end());
+    return waterProvs;
+}
+
+/**
+ * Loads data from resources/climate.txt to get the IDs of all wasteland provinces.
+ * @returns Sorted vector of all impassable province IDs.
+ */
+std::vector<uint32_t> loadWastelandProvinces() {
+    std::ifstream file("resources/climate.txt");
+    std::vector<uint32_t> wasteProvs = loadIntList(file, std::set<std::string>({"impassable"}));
+
+    std::sort(wasteProvs.begin(), wasteProvs.end());
+    return wasteProvs;
+}
+
+template<class K, class V>
+std::map<V, K> flipMap(const std::map<K, V> &original) {
+    std::map<V, K> flipped;
+    for (auto iter = original.begin(); iter != original.end(); ++iter) {
+        flipped[iter->second] = iter->first;
+    }
+    return flipped;
+}
+
+std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &mapimg = loadProvinceMap(), const std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> &provinceColors = loadMapDef(), const std::vector<uint32_t> &ignoreWater = loadWaterProvinces(), size_t width = 5632, size_t height = 2048) {
+    std::map<std::tuple<uint8_t, uint8_t, uint8_t>, uint32_t> colorProvs = flipMap(provinceColors);
+    std::map<uint32_t, std::set<uint32_t>> adjacencies;
+    // Iterate through pixels
+    for (size_t row = 0; row < height; ++row) {
+        for (size_t col = 0; col < width; ++col) {
+            size_t index = (row * width + col)*3;
+            std::tuple<uint8_t, uint8_t, uint8_t> pix = std::make_tuple((uint8_t)mapimg[index], (uint8_t)mapimg[index + 1], (uint8_t)mapimg[index + 2]);
+            uint32_t provinceID = colorProvs.at(pix);
+
+            // Check to skip water
+            if (std::binary_search(ignoreWater.begin(), ignoreWater.end(), provinceID)) {
+                continue;
+            }
+
+            // Now look at adjecent pixels. We only need to look at the next x and next y because the previous will have already been checked.
+            for (uint8_t offset = 0; offset <= 1; ++offset) {
+                // This is kinda like a mini sin/cos function, finding -1 and +1 for each
+                size_t orow = row + (offset==1);
+                size_t ocol = col + (offset==0);
+                if (orow >= height || orow >= width) {
+                    continue;
+                }
+                size_t oindex = (orow * width + ocol)*3;
+                std::tuple<uint8_t, uint8_t, uint8_t> opix = std::make_tuple((uint8_t)mapimg[oindex], (uint8_t)mapimg[oindex + 1], (uint8_t)mapimg[oindex + 2]);
+                
+                // If they are different colors, get the province
+                if (pix != opix) {
+                    uint32_t oprov = colorProvs.at(opix);
+                    // Check to skip water
+                    if (std::binary_search(ignoreWater.begin(), ignoreWater.end(), oprov)) {
+                        continue;
+                    }
+                    // So we have a different adjacent land province.
+                    adjacencies[provinceID].insert(oprov);
+                    adjacencies[oprov].insert(provinceID);
+                }
+            }
+        }
+    }
+    return adjacencies;
 }
 
 std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> &tagColors, const std::map<uint32_t, std::string> &provinceOwners) {
     // First, construct a more direct map of province color to tag color
 
     /*
-    [&provinceOwners]                    [     colorMap     ]
-    [  province id  ] -> loadMapDef() -> [province map color]
-    [      tag      ] -> &tagColors   -> [   country color  ]
-     */
+    [ loadMapDef() ]    [provinceOwners]    [  tagColors  ]    | [   colorMap   ]
+    [ province id  ] -> [     tag      ] -> [country color] -v | [prov map color]
+    [prov map color] ----------------------------------------^ | [ nation color ]
 
+    [ loadMapDef() ]    [  waterProvs  ]    [             ]    | [   colorMap   ]
+    [ province id  ] -> [     bool     ] -> [ water color ] -v | [prov map color]
+    [prov map color] ----------------------------------------^ | [ nation color ]
+    */
+
+    std::tuple<uint8_t, uint8_t, uint8_t> waterColor = std::make_tuple(68, 107, 163);
+
+    const std::string provinceMap = loadProvinceMap();
     std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::tuple<uint8_t, uint8_t, uint8_t>> colorMap;
 
     {
         // A scope so that the mapDef will get freed
         const std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> mapDef = loadMapDef();
-        for (auto iter = provinceOwners.begin(); iter != provinceOwners.end(); ++iter) {
-            // Check province ID and tag, if not found skip.
-            if (mapDef.count(iter->first) == 0 || tagColors.count(iter->second) == 0) {
-                py::print(iter->first);
-                continue;
+        const std::vector<uint32_t> waterProvs = loadWaterProvinces();
+        const std::vector<uint32_t> wasteProvs = loadWastelandProvinces();
+        const std::map<uint32_t, std::set<uint32_t>> landAdjacency = generateLandAdjacency(provinceMap, mapDef, waterProvs);
+        for (auto iter = mapDef.begin(); iter != mapDef.end(); ++iter) {
+            
+            if (std::binary_search(waterProvs.begin(), waterProvs.end(), iter->first)) {
+                colorMap[iter->second] = waterColor;
+            } else if (std::binary_search(wasteProvs.begin(), wasteProvs.end(), iter->first)) {
+                // It's a wasteland province.
+                // Check the neighbors to figure out if there is a tag with >50% to give them the wasteland on the map
+
+                auto neighbors = landAdjacency.find(iter->first);
+                if (neighbors == landAdjacency.end()) {
+                    // ??? not sure why this happens but let's not have it crash
+                    continue;
+                }
+                // Store the number of adjacent provinces each tag owns
+                std::map<std::string, size_t> tagAdjs;
+
+                for (auto adjit = neighbors->second.begin(); adjit != neighbors->second.end(); ++adjit) {
+                    // Get an iterator to the owner of the province so we can search only once while still being able to check if it is unclaimed before adding
+                    auto adjowner = provinceOwners.find(*adjit);
+                    // Check if it is unclaimed
+                    if (adjowner == provinceOwners.end()) {
+                        continue;
+                    }
+                    // Otherwise increment the owner's province count
+                    ++tagAdjs[adjowner->second];
+                }
+
+                // Go through and see if there is a tag with more than half
+                // default
+                colorMap[iter->second] = std::make_tuple(94, 94, 94);
+                
+                for (auto tagit = tagAdjs.begin(); tagit != tagAdjs.end(); ++tagit) {
+                    if (2*tagit->second > neighbors->second.size()) {
+                        colorMap[iter->second] = tagColors.at(tagit->first);
+                        break;
+                    }
+                }
+            } else {
+                auto owner = provinceOwners.find(iter->first);
+                if (owner != provinceOwners.end()) {
+                    auto color = tagColors.find(owner->second);
+                    if (color != tagColors.end()) {
+                        colorMap[iter->second] = color->second;
+                        continue;
+                    } else {
+                        // Something went wrong. Return black.
+                        colorMap[iter->second] = std::make_tuple(0, 0, 0);
+                    }
+                } else {
+                    // The province is probably uncolonized.
+                    colorMap[iter->second] = std::make_tuple(150, 150, 150);
+                }
             }
-            colorMap[mapDef.at(iter->first)] = tagColors.at(iter->second);
         }
     }
 
     static const size_t pixelCount = 5632*2048;
     std::string img;
     img.resize(pixelCount * 3); // Preset the size so we don't have to constantly resize
-    
-    const std::string provinceMap = loadProvinceMap();
+
 
     std::tuple<uint8_t, uint8_t, uint8_t> tempPixColor;
     std::tuple<uint8_t, uint8_t, uint8_t> tempMapColor;
@@ -346,4 +542,6 @@ PYBIND11_MODULE(EU4cpplib, m) {
     m.def("loadProvinceMap", &pyProvMap);
     m.def("loadMapDef", &loadMapDef);
     m.def("drawMap", &pyDrawMap, py::arg("tagColors"), py::arg("provinceOwners"));
+    m.def("loadWaterProvinces", &loadWaterProvinces);
+    m.def("generateLandAdjacency", &generateLandAdjacency);
 }
