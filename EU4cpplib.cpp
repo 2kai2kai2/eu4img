@@ -411,7 +411,8 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
 
                 auto neighbors = landAdjacency.find(iter->first);
                 if (neighbors == landAdjacency.end()) {
-                    // ??? not sure why this happens but let's not have it crash
+                    // This is if there are no neighbors
+                    colorMap[iter->second] = std::make_tuple(94, 94, 94);
                     continue;
                 }
                 // Store the number of adjacent provinces each tag owns
