@@ -1,8 +1,6 @@
 import asyncio
-import json
 import os
 import traceback
-import zlib
 from abc import ABC, abstractmethod
 from io import BytesIO, StringIO
 from random import shuffle
@@ -13,7 +11,7 @@ import cppimport
 import discord
 from discord.errors import DiscordException
 from dotenv import load_dotenv
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 import EU4Lib
 import EU4Reserve
@@ -603,7 +601,6 @@ class statsChannel(AbstractChannel):
         self.interactChannel: DiscTextChannels = None
         self.displayChannel: DiscTextChannels = initChannel
         self.hasReadFile = False
-        self.politicalImage: Image.Image = None
         self.game = saveGame()
         self.modMsg: discord.Message = None
         self.doneMod = False
@@ -719,12 +716,13 @@ class statsChannel(AbstractChannel):
                 # Get papal controller
                 elif linekey == "previous_controller" and brackets == ["religion_instance_data", "catholic", "papacy"]:
                     continue
-                
+
                 elif len(brackets) > 1 and brackets[0] == "provinces":
                     provinceID = int(brackets[1][1:])
                     if len(brackets) == 2:
                         if linekey == "owner":
-                            self.game.provinces[provinceID] = line[line.index('"')+1:line.rindex('"')]
+                            self.game.provinces[provinceID] = line[line.index(
+                                '"')+1:line.rindex('"')]
                 # Country-specific data (for players)
                 elif len(brackets) > 1 and brackets[0] == "countries":
                     try:
@@ -902,11 +900,7 @@ class statsChannel(AbstractChannel):
             """
             return (255 - color[0], 255 - color[1], 255 - color[2])
 
-        await updateProgress("Finding players to draw borders...", 1, 8)
-
-        tagColors: Dict[str, Tuple[int, int, int]] = {}
-        for natTag in self.game.allNations:
-            tagColors[natTag] = self.game.allNations[natTag].mapColor
+        await updateProgress("Finding colors...", 1, 9)
 
         # Formatting: (map color) = (player contrast color)
         playerColors: Dict[Tuple[int, int, int], Tuple[int, int, int]] = {}
@@ -927,31 +921,37 @@ class statsChannel(AbstractChannel):
                         self.game.allNations[playerNatTag].mapColor)
             except:
                 pass
+        # All tags' colors
+        tagColors: Dict[str, Tuple[int, int, int]] = {}
+        for natTag in self.game.allNations:
+            tagColors[natTag] = self.game.allNations[natTag].mapColor
+
         # Modify the image
-        await updateProgress("Calculating player borders...", 2, 8)
-        print("pre")
-        img: Image.Image = Image.frombytes("RGB", (5632, 2048), EU4cpplib.drawMap(tagColors, self.game.provinces))
-        img.show()
+        await updateProgress("Drawing map...", 2, 9)
+        img: Image.Image = Image.frombytes(
+            "RGB", (5632, 2048), EU4cpplib.drawMap(tagColors, self.game.provinces))
+        img = ImageOps.flip(img)
+
+        await updateProgress("Calculating player borders...", 3, 9)
         # Formatting: (draw color) = [(x, y), (x, y), ...]
         drawColors: Dict[Tuple[int, int, int], List[Tuple[int, int]]] = EU4cpplib.drawBorders(
-            playerColors, self.politicalImage.tobytes(), self.politicalImage.width, self.politicalImage.height)
+            playerColors, img.tobytes(), img.width, img.height)
         try:
             del(drawColors[(0, 0, 0)])
         except:
             pass
-        await updateProgress("Drawing player borders...", 3, 8)
-        mapDraw = ImageDraw.Draw(self.politicalImage)
+        await updateProgress("Drawing player borders...", 4, 9)
+        mapDraw = ImageDraw.Draw(img)
         for drawColor in drawColors:
             mapDraw.point(drawColors[drawColor], drawColor)
         del(drawColors)
         del(playerColors)
         # Start Final Img Creation
         # Copy map into bottom of final image
-        await updateProgress("Finalizing map section...", 4, 8)
+        await updateProgress("Finalizing map section...", 5, 9)
         imgFinal: Image.Image = Image.open("resources/finalTemplate.png")
-        imgFinal.paste(self.politicalImage,
-                       (0, imgFinal.size[1]-self.politicalImage.size[1]))
-        del(self.politicalImage)
+        imgFinal.paste(img, (0, imgFinal.size[1]-img.size[1]))
+        del(img)
         # The top has 5632x1119
         # Getting fonts
         fontmini = ImageFont.truetype("resources/GARA.TTF", 36)
@@ -965,7 +965,7 @@ class statsChannel(AbstractChannel):
 
             # Get the list of player Nations
             # TODO: make this more integrated with the new savefile data system rather than doing this conversion
-            await updateProgress("Drawing player list...", 5, 8)
+            await updateProgress("Drawing player list...", 6, 9)
             playerNationList: List[Nation] = []
             for x in self.game.playertags:
                 playerNationList.append(self.game.allNations[x])
@@ -1032,7 +1032,7 @@ class statsChannel(AbstractChannel):
                     # max_sailors
                 else:
                     pass
-            await updateProgress("Drawing player wars...", 6, 8)
+            await updateProgress("Drawing player wars...", 7, 9)
             for playerWar in self.game.playerWars:
                 warnum = self.game.playerWars.index(playerWar)
                 if warnum < 4:
@@ -1128,10 +1128,10 @@ class statsChannel(AbstractChannel):
             pass
         #================END  SECTION================#
         # Date
-        await updateProgress("Drawing date...", 7, 8)
+        await updateProgress("Drawing date...", 8, 9)
         imgDraw.text((round(5177 - imgDraw.textsize(self.game.date.fancyStr(),
                                                     font)[0] / 2), 60), self.game.date.fancyStr(), (255, 255, 255), font)
-        await updateProgress("**Image generation complete.** Uploading...", 8, 8)
+        await updateProgress("**Image generation complete.** Uploading...", 9, 9)
         return imgFinal
 
     async def responsive(self, message: discord.Message) -> bool:
@@ -1170,7 +1170,6 @@ class statsChannel(AbstractChannel):
                 await self.interactChannel.send(f"**Something went wrong in decoding your `.eu4` file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**\n```{repr(e)}```")
                 return
             else:
-                await self.interactChannel.send("**Send the `.png` Political Mapmode screenshot in this channel:**")
                 self.hasReadFile = True
                 if self.skanderbeg and SKANDERBEGKEY is not None:
                     await self.interactChannel.send("Started upload to Skanderbeg. This may take much longer than the stats image generation.")
@@ -1179,28 +1178,9 @@ class statsChannel(AbstractChannel):
                     # We don't manually delete saveFile here, but that's probably fine since once the upload is done there shouldn't be any other references
                 else:
                     del(saveFile)
-        # Second step - get .png file
-        elif self.hasReadFile and (self.politicalImage is None):
-            if len(message.attachments) == 0:  # Check there is a file
-                await self.interactChannel.send("File not received. Please send a file as a message attachment.")
-            # Needs to be a .png file
-            elif not message.attachments[0].filename.endswith(".png"):
-                await self.interactChannel.send("File type needs to be `.png`. Please send a `.png` EU4 player mapmode screenshot.")
-            else:  # This means that all the checks succeeded
-                politicalFile = BytesIO()
-                await message.attachments[0].save(politicalFile)
-                self.politicalImage: Image.Image = Image.open(politicalFile)
-                del(politicalFile)
-                if self.politicalImage.size != (5632, 2048):
-                    await self.interactChannel.send("**Your image was not the right size.** `(5632, 2048)`\nDid you submit a Political Mapmode screenshot? (f10)\n**Please try another image.**")
-                    self.politicalImage = None
-                else:
-                    if message.content.strip().lower() == "done":
-                        await self.process(message)
-                    else:
-                        self.modMsg = await self.interactChannel.send(self.modPromptStr())
-        # Third step - player list modification
-        elif self.hasReadFile and (self.politicalImage is not None) and (not self.doneMod):
+                self.modMsg = await self.interactChannel.send(self.modPromptStr())
+        # Second step - player list modification
+        elif self.hasReadFile and not self.doneMod:
             # done
             if message.content.strip().lower() == "done":
                 self.doneMod == True
@@ -1220,7 +1200,10 @@ class statsChannel(AbstractChannel):
                 except discord.Forbidden:
                     await self.interactChannel.send(f"**Unable to send the image to {self.displayChannel.mention} due to lack of permissions. Posting image here:**\nYou can right-click and copy link then post that.", file=imageToFile(img))
                 else:
-                    await self.interactChannel.send(f"**Done! Check {self.displayChannel.mention}**")
+                    if hasattr(self.displayChannel, "mention"):
+                        await self.interactChannel.send(f"**Done! Check {self.displayChannel.mention}**")
+                    else:
+                        await self.interactChannel.send(f"**Done!**")
                 controlledChannels.remove(self)
                 del(self)
             # add [player], [nation]
@@ -1708,6 +1691,16 @@ async def on_socket_response(msg: Dict):
         commandname: str = interaction["data"]["name"]
         responseurl = f"https://discord.com/api/v8/interactions/{interaction['id']}/{interaction['token']}/callback"
 
+        async def guildRequired():
+            responsejson = {
+                "type": 4,
+                "data": {
+                    "content": "You must be in a guild to use this command.",
+                    "flags": 64
+                }
+            }
+            await session.post(responseurl, json=responsejson)
+
         async def permissionDenied():
             responsejson = {
                 "type": 4,
@@ -1719,7 +1712,9 @@ async def on_socket_response(msg: Dict):
             await session.post(responseurl, json=responsejson)
         authorid: int = int(interaction["member"]["user"]["id"]
                             if "member" in interaction else interaction["user"]["id"])
-        guild: discord.Guild = await findGuild(interaction["guild_id"])
+        guild: discord.Guild = None
+        if "guild_id" in interaction:
+            guild = await findGuild(interaction["guild_id"])
         responsejson: Dict[str, Any] = {}
 
         if commandname.lower() == "help":  # ~~NOT REGISTERED~~
@@ -1741,7 +1736,10 @@ async def on_socket_response(msg: Dict):
             }
             await session.post(responseurl, json=responsejson)
         elif commandname.lower() == "reservations":
-            if not await checkResAdmin(guild, authorid):
+            if guild is None:
+                await guildRequired()
+                return
+            elif not await checkResAdmin(guild, authorid):
                 await permissionDenied()
                 return
             for channel in controlledChannels:
@@ -1767,7 +1765,10 @@ async def on_socket_response(msg: Dict):
             controlledChannels.append(c)
             await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
         elif commandname.lower() == "asireservations":
-            if not await checkResAdmin(guild, authorid):
+            if guild is None:
+                await guildRequired()
+                return
+            elif not await checkResAdmin(guild, authorid):
                 await permissionDenied()
                 return
             for channel in controlledChannels:
@@ -1821,14 +1822,7 @@ async def on_socket_response(msg: Dict):
             controlledChannels.append(c)
         elif commandname.lower() == "defaultban":
             if guild is None:
-                responsejson = {
-                    "type": 4,
-                    "data": {
-                        "content": "Either this command was not sent in a server or something went very wrong.",
-                        "flags": 64
-                    }
-                }
-                await session.post(responseurl, json=responsejson)
+                await guildRequired()
                 return
             subcommand: Dict[str, Any] = interaction["data"]["options"]
             string = "Something went wrong."
@@ -1875,7 +1869,10 @@ async def on_socket_response(msg: Dict):
             }
             await session.post(responseurl, json=responsejson)
         elif commandname.lower() == "adminrank":
-            if not await checkResAdmin(guild, authorid):
+            if guild is None:
+                await guildRequired()
+                return
+            elif not await checkResAdmin(guild, authorid):
                 await permissionDenied()
                 return
             newRankID: int = int(interaction["data"]["options"][0]["value"])

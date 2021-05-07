@@ -15,9 +15,9 @@ cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
 #include <fstream>
 #include <list>
 #include <map>
+#include <set>
 #include <string>
 #include <tuple>
-#include <set>
 
 #include "EU4Date.h"
 
@@ -237,7 +237,7 @@ std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> loadMapDef() {
 
         skipToLineEnd(file);
     }
-    
+
     return out;
 }
 
@@ -325,7 +325,7 @@ std::vector<uint32_t> loadWastelandProvinces() {
     return wasteProvs;
 }
 
-template<class K, class V>
+template <class K, class V>
 std::map<V, K> flipMap(const std::map<K, V> &original) {
     std::map<V, K> flipped;
     for (auto iter = original.begin(); iter != original.end(); ++iter) {
@@ -340,7 +340,7 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
     // Iterate through pixels
     for (size_t row = 0; row < height; ++row) {
         for (size_t col = 0; col < width; ++col) {
-            size_t index = (row * width + col)*3;
+            size_t index = (row * width + col) * 3;
             std::tuple<uint8_t, uint8_t, uint8_t> pix = std::make_tuple((uint8_t)mapimg[index], (uint8_t)mapimg[index + 1], (uint8_t)mapimg[index + 2]);
             uint32_t provinceID = colorProvs.at(pix);
 
@@ -352,14 +352,14 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
             // Now look at adjecent pixels. We only need to look at the next x and next y because the previous will have already been checked.
             for (uint8_t offset = 0; offset <= 1; ++offset) {
                 // This is kinda like a mini sin/cos function, finding -1 and +1 for each
-                size_t orow = row + (offset==1);
-                size_t ocol = col + (offset==0);
+                size_t orow = row + (offset == 1);
+                size_t ocol = col + (offset == 0);
                 if (orow >= height || orow >= width) {
                     continue;
                 }
-                size_t oindex = (orow * width + ocol)*3;
+                size_t oindex = (orow * width + ocol) * 3;
                 std::tuple<uint8_t, uint8_t, uint8_t> opix = std::make_tuple((uint8_t)mapimg[oindex], (uint8_t)mapimg[oindex + 1], (uint8_t)mapimg[oindex + 2]);
-                
+
                 // If they are different colors, get the province
                 if (pix != opix) {
                     uint32_t oprov = colorProvs.at(opix);
@@ -402,7 +402,7 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
         const std::vector<uint32_t> wasteProvs = loadWastelandProvinces();
         const std::map<uint32_t, std::set<uint32_t>> landAdjacency = generateLandAdjacency(provinceMap, mapDef, waterProvs);
         for (auto iter = mapDef.begin(); iter != mapDef.end(); ++iter) {
-            
+
             if (std::binary_search(waterProvs.begin(), waterProvs.end(), iter->first)) {
                 colorMap[iter->second] = waterColor;
             } else if (std::binary_search(wasteProvs.begin(), wasteProvs.end(), iter->first)) {
@@ -432,9 +432,9 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
                 // Go through and see if there is a tag with more than half
                 // default
                 colorMap[iter->second] = std::make_tuple(94, 94, 94);
-                
+
                 for (auto tagit = tagAdjs.begin(); tagit != tagAdjs.end(); ++tagit) {
-                    if (2*tagit->second > neighbors->second.size()) {
+                    if (2 * tagit->second > neighbors->second.size()) {
                         colorMap[iter->second] = tagColors.at(tagit->first);
                         break;
                     }
@@ -458,19 +458,18 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
         }
     }
 
-    static const size_t pixelCount = 5632*2048;
+    static const size_t pixelCount = 5632 * 2048;
     std::string img;
     img.resize(pixelCount * 3); // Preset the size so we don't have to constantly resize
-
 
     std::tuple<uint8_t, uint8_t, uint8_t> tempPixColor;
     std::tuple<uint8_t, uint8_t, uint8_t> tempMapColor;
     for (size_t i = 0; i < pixelCount; ++i) {
-        tempMapColor = std::make_tuple((uint8_t)provinceMap[3*i], (uint8_t)provinceMap[3*i+1], (uint8_t)provinceMap[3*i+2]);
+        tempMapColor = std::make_tuple((uint8_t)provinceMap[3 * i], (uint8_t)provinceMap[3 * i + 1], (uint8_t)provinceMap[3 * i + 2]);
         tempPixColor = colorMap[tempMapColor];
-        img[3*i] = std::get<0>(tempPixColor);
-        img[3*i+1] = std::get<1>(tempPixColor);
-        img[3*i+2] = std::get<2>(tempPixColor);
+        img[3 * i] = std::get<0>(tempPixColor);
+        img[3 * i + 1] = std::get<1>(tempPixColor);
+        img[3 * i + 2] = std::get<2>(tempPixColor);
     }
     return img;
 }
