@@ -177,19 +177,22 @@ std::string loadProvinceMap() {
         // idk??
         return "";
     }
-    int pixlength = width * height;
-    std::string imgdata = "";
 
-    while (!mapfile.eof()) {
-        char pdata[3];
-        mapfile.read(pdata, 3);
-        // Reverse the numbers to deal with endianness
-        char temp = pdata[0];
-        pdata[0] = pdata[2];
-        pdata[2] = temp;
-        imgdata.append(pdata, 3);
+    // Read data
+    const size_t pixlength = 5632 * 2048;
+    const size_t bytelength = pixlength * 3;
+    char *pdt = new char[bytelength];
+    mapfile.read(pdt, bytelength);
+    // Correct color from little endian
+    char temp;
+    for (size_t pixindex = 0; pixindex < bytelength; pixindex += 3) {
+        temp = pdt[pixindex];
+        pdt[pixindex] = pdt[pixindex + 2];
+        pdt[pixindex + 2] = temp;
     }
-
+    // Move to string and finalize
+    std::string imgdata(pdt, bytelength);
+    delete[] pdt;
     return imgdata;
 };
 
