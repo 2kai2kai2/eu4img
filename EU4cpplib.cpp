@@ -362,15 +362,20 @@ std::map<V, K> flipMap(const std::map<K, V> &original) {
 std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &mapimg, const std::map<uint32_t, intColor> &provinceColors, const std::vector<uint32_t> &ignoreWater, size_t width = 5632, size_t height = 2048) {
     std::map<intColor, uint32_t> colorProvs = flipMap(provinceColors);
     std::map<uint32_t, std::set<uint32_t>> adjacencies;
+
+    // Get the province colors so we can easily check that before getting the province ID.
+    std::vector<intColor> waterProvs(ignoreWater.size());
+    for (size_t i = 0; i < ignoreWater.size(); ++i) {
+        waterProvs[i] = provinceColors.at(ignoreWater[i]);
+    }
+    std::sort(waterProvs.begin(), waterProvs.end());
     // Iterate through pixels
     for (size_t row = 0; row < height; ++row) {
         for (size_t col = 0; col < width; ++col) {
             size_t index = (row * width + col) * 3;
             intColor pix = packColor(mapimg.data() + index);
-            uint32_t provinceID = colorProvs.at(pix);
-
             // Check to skip water
-            if (std::binary_search(ignoreWater.begin(), ignoreWater.end(), provinceID)) {
+            if (std::binary_search(waterProvs.begin(), waterProvs.end(), pix)) {
                 continue;
             }
             // Now look at adjecent pixels. We only need to look at the next x and next y because the previous will have already been checked.
@@ -385,11 +390,12 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
                 intColor opix = packColor(mapimg.data() + oindex);
                 // If they are different colors, get the province
                 if (pix != opix) {
-                    uint32_t oprov = colorProvs.at(opix);
                     // Check to skip water
-                    if (std::binary_search(ignoreWater.begin(), ignoreWater.end(), oprov)) {
+                    if (std::binary_search(waterProvs.begin(), waterProvs.end(), opix)) {
                         continue;
                     }
+                    uint32_t provinceID = colorProvs.at(pix);
+                    uint32_t oprov = colorProvs.at(opix);
                     // So we have a different adjacent land province, only reversing if the forward direction worked.
                     if (adjacencies[provinceID].insert(oprov).second)
                         adjacencies[oprov].insert(provinceID);
@@ -496,12 +502,9 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
     static const size_t pixelCount = 5632 * 2048;
     char *img = new char[pixelCount * 3];
 
-    intColor *tempPixColor;
-    size_t index;
     for (size_t i = 0; i < pixelCount; ++i) {
-        index = i * 3;
-        tempPixColor = &colorMap[packColor(provinceMap.data() + index)];
-        putColor(tempPixColor, img + index);
+        intColor *tempPixColor = &colorMap[packColor(provinceMap.data() + i * 3)];
+        putColor(tempPixColor, img + i * 3);
     }
     std::string imgStr(img, pixelCount * 3);
     delete[] img;

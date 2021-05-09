@@ -28,11 +28,10 @@ struct partTimer {
     std::string unit;
 
     partTimer() {
-        std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
-        for (size_t i = 0; i < N; ++i) {
-            starts[i] = start;
-            times[i] = T::zero();
-        }
+        this(std::string[N]);
+    }
+
+    partTimer(const std::string names[N]) {
         if (std::is_same<T, std::chrono::seconds>::value) {
             unit = "seconds";
         } else if (std::is_same<T, std::chrono::milliseconds>::value) {
@@ -44,14 +43,16 @@ struct partTimer {
         } else {
             unit = "unknown units";
         }
-
+        std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < N; ++i) {
+            starts[i] = start;
+            times[i] = T::zero();
+            timernames[i] = names[i];
+        }
     }
 
-    void start(const size_t &timernum, const std::string &name = "") {
+    void start(const size_t &timernum) {
         starts[timernum] = std::chrono::high_resolution_clock::now();
-        if (name.size() != 0) {
-            timernames[timernum] = name;
-        }
     }
 
     T getLatestTime(const size_t &timernum) {
