@@ -211,8 +211,30 @@ void skipToLineEnd(std::ifstream &file) {
     }
 }
 
-std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> loadMapDef() {
-    std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> out;
+typedef uint32_t intColor;
+
+inline intColor packColor(const uint8_t red, const uint8_t green, uint8_t blue) {
+    return (blue << 16) | (green << 8) | red;
+}
+inline intColor packColor(const char color[3]) {
+    return packColor(color[0], color[1], color[2]);
+}
+inline intColor packColor(const std::tuple<uint8_t, uint8_t, uint8_t> &color) {
+    return packColor(std::get<0>(color), std::get<1>(color), std::get<2>(color));
+}
+
+inline bool isColor(const intColor *color, const char check[3]) {
+    const unsigned char *pointer = reinterpret_cast<const unsigned char *>(color);
+    return !std::memcmp(pointer + 1, check, 3);
+}
+
+inline void putColor(const intColor *color, char *location) {
+    const unsigned char *pointer = reinterpret_cast<const unsigned char *>(color);
+    std::memcpy(location, pointer, 3);
+}
+
+std::map<uint32_t, intColor> loadMapDef() {
+    std::map<uint32_t, intColor> out;
     std::ifstream file("resources/definition.csv");
     // skip first line: province;red;green;blue;name;x
     file.ignore(maxGet, '\n');
@@ -236,7 +258,7 @@ std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> loadMapDef() {
         file.get(tempstr, maxGet, ';');
         uint8_t blue = std::stoi(tempstr);
         file.ignore(); // Skip the ';'
-        out[provinceID] = std::make_tuple(red, green, blue);
+        out[provinceID] = packColor(red, green, blue);
 
         skipToLineEnd(file);
     }
@@ -337,14 +359,14 @@ std::map<V, K> flipMap(const std::map<K, V> &original) {
     return flipped;
 }
 
-std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &mapimg, const std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> &provinceColors, const std::vector<uint32_t> &ignoreWater, size_t width = 5632, size_t height = 2048) {
-    std::map<std::tuple<uint8_t, uint8_t, uint8_t>, uint32_t> colorProvs = flipMap(provinceColors);
+std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &mapimg, const std::map<uint32_t, intColor> &provinceColors, const std::vector<uint32_t> &ignoreWater, size_t width = 5632, size_t height = 2048) {
+    std::map<intColor, uint32_t> colorProvs = flipMap(provinceColors);
     std::map<uint32_t, std::set<uint32_t>> adjacencies;
     // Iterate through pixels
     for (size_t row = 0; row < height; ++row) {
         for (size_t col = 0; col < width; ++col) {
             size_t index = (row * width + col) * 3;
-            auto pix = std::tie(mapimg[index], mapimg[index + 1], mapimg[index + 2]);
+            intColor pix = packColor(mapimg.data() + index);
             uint32_t provinceID = colorProvs.at(pix);
 
             // Check to skip water
@@ -356,11 +378,11 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
                 // This is kinda like a mini sin/cos function, finding -1 and +1 for each
                 size_t orow = row + (offset == 1);
                 size_t ocol = col + (offset == 0);
-                if (orow >= height || orow >= width) {
+                if (orow >= height || ocol >= width) {
                     continue;
                 }
                 size_t oindex = (orow * width + ocol) * 3;
-                auto opix = std::tie(mapimg[oindex], mapimg[oindex + 1], mapimg[oindex + 2]);
+                intColor opix = packColor(mapimg.data() + oindex);
                 // If they are different colors, get the province
                 if (pix != opix) {
                     uint32_t oprov = colorProvs.at(opix);
@@ -368,9 +390,9 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
                     if (std::binary_search(ignoreWater.begin(), ignoreWater.end(), oprov)) {
                         continue;
                     }
-                    // So we have a different adjacent land province.
-                    adjacencies[provinceID].insert(oprov);
-                    adjacencies[oprov].insert(provinceID);
+                    // So we have a different adjacent land province, only reversing if the forward direction worked.
+                    if (adjacencies[provinceID].insert(oprov).second)
+                        adjacencies[oprov].insert(provinceID);
                 }
             }
         }
@@ -395,14 +417,22 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
     [prov map color] ----------------------------------------^ | [ nation color ]
     */
 
-    std::tuple<uint8_t, uint8_t, uint8_t> waterColor = std::make_tuple(68, 107, 163);
+    // Store the intColor version of the tag colros here
+    std::map<std::string, intColor> pTagColors;
+    for (auto iter = tagColors.begin(); iter != tagColors.end(); ++iter) {
+        pTagColors[iter->first] = packColor(iter->second);
+    }
+
+    static const intColor waterColor = packColor(68, 107, 163);
+    static const intColor unclaimedColor = packColor(94, 94, 94);
+    static const intColor wastelandColor = packColor(150, 150, 150);
 
     const std::string provinceMap = loadProvinceMap();
-    std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::tuple<uint8_t, uint8_t, uint8_t>> colorMap;
+    std::map<intColor, intColor> colorMap;
 
     {
         // A scope so that the mapDef will get freed
-        const std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> mapDef = loadMapDef();
+        const std::map<uint32_t, intColor> mapDef = loadMapDef();
         const std::vector<uint32_t> waterProvs = loadWaterProvinces();
         const std::vector<uint32_t> wasteProvs = loadWastelandProvinces();
         const std::map<uint32_t, std::set<uint32_t>> landAdjacency = generateLandAdjacency(provinceMap, mapDef, waterProvs);
@@ -417,7 +447,7 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
                 auto neighbors = landAdjacency.find(iter->first);
                 if (neighbors == landAdjacency.end()) {
                     // This is if there are no neighbors
-                    colorMap[iter->second] = std::make_tuple(94, 94, 94);
+                    colorMap[iter->second] = unclaimedColor;
                     continue;
                 }
                 // Store the number of adjacent provinces each tag owns
@@ -436,45 +466,46 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
 
                 // Go through and see if there is a tag with more than half
                 // default
-                colorMap[iter->second] = std::make_tuple(94, 94, 94);
+                colorMap[iter->second] = unclaimedColor;
 
                 for (auto tagit = tagAdjs.begin(); tagit != tagAdjs.end(); ++tagit) {
                     if (2 * tagit->second > neighbors->second.size()) {
-                        colorMap[iter->second] = tagColors.at(tagit->first);
+                        colorMap[iter->second] = pTagColors.at(tagit->first);
                         break;
                     }
                 }
             } else {
                 auto owner = provinceOwners.find(iter->first);
                 if (owner != provinceOwners.end()) {
-                    auto color = tagColors.find(owner->second);
-                    if (color != tagColors.end()) {
+                    auto color = pTagColors.find(owner->second);
+                    if (color != pTagColors.end()) {
                         colorMap[iter->second] = color->second;
                         continue;
                     } else {
                         // Something went wrong. Return black.
-                        colorMap[iter->second] = std::make_tuple(0, 0, 0);
+                        colorMap[iter->second] = 0;
                     }
                 } else {
                     // The province is probably uncolonized.
-                    colorMap[iter->second] = std::make_tuple(150, 150, 150);
+                    colorMap[iter->second] = wastelandColor;
                 }
             }
         }
     }
 
     static const size_t pixelCount = 5632 * 2048;
-    std::string img;
-    img.resize(pixelCount * 3); // Preset the size so we don't have to constantly resize
+    char *img = new char[pixelCount * 3];
 
-    std::tuple<uint8_t, uint8_t, uint8_t> tempPixColor;
+    intColor *tempPixColor;
     size_t index;
     for (size_t i = 0; i < pixelCount; ++i) {
-        index = i*3;
-        tempPixColor = colorMap[std::tie(provinceMap[index], provinceMap[index + 1], provinceMap[index + 2])];
-        std::tie(img[index], img[index + 1], img[index + 2]) = tempPixColor;
+        index = i * 3;
+        tempPixColor = &colorMap[packColor(provinceMap.data() + index)];
+        putColor(tempPixColor, img + index);
     }
-    return img;
+    std::string imgStr(img, pixelCount * 3);
+    delete[] img;
+    return imgStr;
 }
 
 py::bytes pyDrawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> &tagColors, const std::map<uint32_t, std::string> &provinceOwners) {
