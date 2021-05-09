@@ -337,21 +337,20 @@ std::map<V, K> flipMap(const std::map<K, V> &original) {
     return flipped;
 }
 
-std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &mapimg = loadProvinceMap(), const std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> &provinceColors = loadMapDef(), const std::vector<uint32_t> &ignoreWater = loadWaterProvinces(), size_t width = 5632, size_t height = 2048) {
+std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &mapimg, const std::map<uint32_t, std::tuple<uint8_t, uint8_t, uint8_t>> &provinceColors, const std::vector<uint32_t> &ignoreWater, size_t width = 5632, size_t height = 2048) {
     std::map<std::tuple<uint8_t, uint8_t, uint8_t>, uint32_t> colorProvs = flipMap(provinceColors);
     std::map<uint32_t, std::set<uint32_t>> adjacencies;
     // Iterate through pixels
     for (size_t row = 0; row < height; ++row) {
         for (size_t col = 0; col < width; ++col) {
             size_t index = (row * width + col) * 3;
-            std::tuple<uint8_t, uint8_t, uint8_t> pix = std::make_tuple((uint8_t)mapimg[index], (uint8_t)mapimg[index + 1], (uint8_t)mapimg[index + 2]);
+            auto pix = std::tie(mapimg[index], mapimg[index + 1], mapimg[index + 2]);
             uint32_t provinceID = colorProvs.at(pix);
 
             // Check to skip water
             if (std::binary_search(ignoreWater.begin(), ignoreWater.end(), provinceID)) {
                 continue;
             }
-
             // Now look at adjecent pixels. We only need to look at the next x and next y because the previous will have already been checked.
             for (uint8_t offset = 0; offset <= 1; ++offset) {
                 // This is kinda like a mini sin/cos function, finding -1 and +1 for each
@@ -361,8 +360,7 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
                     continue;
                 }
                 size_t oindex = (orow * width + ocol) * 3;
-                std::tuple<uint8_t, uint8_t, uint8_t> opix = std::make_tuple((uint8_t)mapimg[oindex], (uint8_t)mapimg[oindex + 1], (uint8_t)mapimg[oindex + 2]);
-
+                auto opix = std::tie(mapimg[oindex], mapimg[oindex + 1], mapimg[oindex + 2]);
                 // If they are different colors, get the province
                 if (pix != opix) {
                     uint32_t oprov = colorProvs.at(opix);
@@ -378,6 +376,10 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
         }
     }
     return adjacencies;
+}
+
+std::map<uint32_t, std::set<uint32_t>> pyGenerateLandAdjacency() {
+    return generateLandAdjacency(loadProvinceMap(), loadMapDef(), loadWaterProvinces());
 }
 
 std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> &tagColors, const std::map<uint32_t, std::string> &provinceOwners) {
@@ -466,13 +468,11 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
     img.resize(pixelCount * 3); // Preset the size so we don't have to constantly resize
 
     std::tuple<uint8_t, uint8_t, uint8_t> tempPixColor;
-    std::tuple<uint8_t, uint8_t, uint8_t> tempMapColor;
+    size_t index;
     for (size_t i = 0; i < pixelCount; ++i) {
-        tempMapColor = std::make_tuple((uint8_t)provinceMap[3 * i], (uint8_t)provinceMap[3 * i + 1], (uint8_t)provinceMap[3 * i + 2]);
-        tempPixColor = colorMap[tempMapColor];
-        img[3 * i] = std::get<0>(tempPixColor);
-        img[3 * i + 1] = std::get<1>(tempPixColor);
-        img[3 * i + 2] = std::get<2>(tempPixColor);
+        index = i*3;
+        tempPixColor = colorMap[std::tie(provinceMap[index], provinceMap[index + 1], provinceMap[index + 2])];
+        std::tie(img[index], img[index + 1], img[index + 2]) = tempPixColor;
     }
     return img;
 }
@@ -546,5 +546,5 @@ PYBIND11_MODULE(EU4cpplib, m) {
     m.def("loadMapDef", &loadMapDef);
     m.def("drawMap", &pyDrawMap, py::arg("tagColors"), py::arg("provinceOwners"));
     m.def("loadWaterProvinces", &loadWaterProvinces);
-    m.def("generateLandAdjacency", &generateLandAdjacency);
+    m.def("generateLandAdjacency", &pyGenerateLandAdjacency);
 }
