@@ -114,6 +114,9 @@ std::string loadProvinceMap() {
         return "";
     }
 
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
+
     // width (signed int)
     // offset 18; length 4
     int width = readifstreamint(mapfile);
@@ -152,8 +155,15 @@ std::string loadProvinceMap() {
     // number of important colors (0 if all important; generally ignored)
     // offset 50; length 4
     int importantcolors = readifstreamint(mapfile);
+    
+    #pragma GCC diagnostic pop
 
     // Well most of this will be useless, but whatever.
+    // Verify data
+    assert(width == 5632 && height == 2048 /*Loaded image must be the correct size*/);
+    assert(colorplanes == 1 /*Apparently all valid bitmap files have 1 color plane*/);
+    assert(colordepth == 24 /*Provinces map must have 24 bit color depth (3 bytes)*/);
+    assert(compression == 0 /*Provinces map is uncompressed and I didn't write decompression code.*/);
 
     /* ===== Bit masks ===== */
     /* Only present with BITMAPINFOHEADER compression BI_BITFIELDS (3) or BI_ALPHABITFIELDS (6) */
@@ -172,11 +182,6 @@ std::string loadProvinceMap() {
     /*  header-defined offset  */
     // Jump to our array address, skipping any potential gaps an other stuff in between.
     mapfile.seekg(arrayaddress);
-    // And after all this we just return like a string of the rest or smth
-    if (compression != 0) {
-        // idk??
-        return "";
-    }
 
     // Read data
     const size_t pixlength = 5632 * 2048;
