@@ -5,6 +5,7 @@ EU4img.zip
 __pycache__/
 final.png
 *.pyd
+.rendered.*.cpp
 
 #Shortcuts
 save games.lnk

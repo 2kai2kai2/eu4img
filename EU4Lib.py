@@ -114,7 +114,7 @@ def provinces(ids: List[Union[str, int]]) -> Dict[int, Tuple[float, float]]:
     Similar to province() except that it will only go through the file once to find all provinces.
     """
     out: Dict[int, Optional[Tuple[float, float]]] = {}
-    idsprocessed = [int(x) for x in ids]
+    ids: List[int] = [int(x) for x in ids]
     srcFile = open("resources/positions.txt", "r", encoding="cp1252")
     currentID: int = None
     beyond = 0
@@ -129,7 +129,7 @@ def provinces(ids: List[Union[str, int]]) -> Dict[int, Tuple[float, float]]:
             beyond = 2
         elif line.strip("\t ={\n").isdigit():  # Province top-level bracket
             id = int(line[:line.index("={")])
-            if id in idsprocessed:
+            if id in ids:
                 currentID = id
                 beyond = 1
     return out
