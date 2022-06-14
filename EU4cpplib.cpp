@@ -1,4 +1,4 @@
-/*
+/*cppimport
 <%
 import pybind11
 import sysconfig
@@ -23,7 +23,7 @@ cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
 
 namespace py = pybind11;
 
-std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::list<std::tuple<size_t, size_t>>> drawBorders(std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::tuple<uint8_t, uint8_t, uint8_t>> playerColors, std::string pixels, size_t width, size_t height) {
+std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::list<std::tuple<size_t, size_t>>> drawBorders(std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::tuple<uint8_t, uint8_t, uint8_t>> playerColors, const std::string &pixels, size_t width, size_t height) {
     std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::list<std::tuple<size_t, size_t>>> out;
     // Go through and find borders
     for (size_t i = width + 1; i < width * height - width - 1; ++i) {
@@ -76,8 +76,8 @@ int readifstream2b(std::ifstream &stream) {
     return (bytes[1] << 8) | bytes[0];
 }
 
-std::string loadProvinceMap() {
-    std::ifstream mapfile("resources/provinces.bmp", std::ios_base::binary | std::ios_base::in);
+std::string loadProvinceMap(const std::string &mod) {
+    std::ifstream mapfile(std::string("resources/") + mod + "/provinces.bmp", std::ios_base::binary | std::ios_base::in);
 
     /* ===== Bitmap File Header ===== */
     /*  ---  offset 0; 14 bytes  ---  */
@@ -109,13 +109,13 @@ std::string loadProvinceMap() {
     int DIBlength = readifstreamint(mapfile);
 
     // The map is using a 40-byte DIB header, which is the type BITMAPINFOHEADER
-    if (DIBlength != 40) {
-        Py_FatalError("We only support BITMAPINFOHEADER DIB header for bitmap images.");
+    if (DIBlength != 40 && DIBlength != 108) {
+        Py_FatalError("We only support BITMAPINFOHEADER and BITMAPV4HEADER DIB header for bitmap images.");
         return "";
     }
 
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
     // width (signed int)
     // offset 18; length 4
@@ -155,8 +155,8 @@ std::string loadProvinceMap() {
     // number of important colors (0 if all important; generally ignored)
     // offset 50; length 4
     int importantcolors = readifstreamint(mapfile);
-    
-    #pragma GCC diagnostic pop
+
+#pragma GCC diagnostic pop
 
     // Well most of this will be useless, but whatever.
     // Verify data
@@ -201,8 +201,8 @@ std::string loadProvinceMap() {
     return imgdata;
 };
 
-py::bytes pyProvMap() {
-    return loadProvinceMap();
+py::bytes pyProvMap(const std::string &mod) {
+    return loadProvinceMap(mod);
 }
 
 static const auto maxGet = std::numeric_limits<std::streamsize>::max();
@@ -210,9 +210,8 @@ static const auto maxGet = std::numeric_limits<std::streamsize>::max();
 void skipToLineEnd(std::ifstream &file) {
     char skip;
     while (file.get(skip)) {
-        if (skip == '\n' || skip == file.eofbit) {
+        if (skip == '\n' || skip == file.eofbit)
             break;
-        }
     }
 }
 
@@ -238,9 +237,9 @@ inline void putColor(const intColor *color, char *location) {
     std::memcpy(location, pointer, 3);
 }
 
-std::map<uint32_t, intColor> loadMapDef() {
+std::map<uint32_t, intColor> loadMapDef(const std::string &mod) {
     std::map<uint32_t, intColor> out;
-    std::ifstream file("resources/definition.csv");
+    std::ifstream file(std::string("resources/") + mod + "/definition.csv");
     // skip first line: province;red;green;blue;name;x
     file.ignore(maxGet, '\n');
 
@@ -335,8 +334,8 @@ std::vector<uint32_t> loadIntList(std::ifstream &file, const std::set<std::strin
  * Loads data from resources/default.map to get the IDs of all lake and sea provinces.
  * @returns Sorted vector of all lake and sea province IDs.
  */
-std::vector<uint32_t> loadWaterProvinces() {
-    std::ifstream file("resources/default.map");
+std::vector<uint32_t> loadWaterProvinces(const std::string &mod) {
+    std::ifstream file(std::string("resources/") + mod + "/default.map");
     std::vector<uint32_t> waterProvs = loadIntList(file, std::set<std::string>({"sea_starts", "lakes"}));
 
     std::sort(waterProvs.begin(), waterProvs.end());
@@ -347,8 +346,8 @@ std::vector<uint32_t> loadWaterProvinces() {
  * Loads data from resources/climate.txt to get the IDs of all wasteland provinces.
  * @returns Sorted vector of all impassable province IDs.
  */
-std::vector<uint32_t> loadWastelandProvinces() {
-    std::ifstream file("resources/climate.txt");
+std::vector<uint32_t> loadWastelandProvinces(const std::string &mod) {
+    std::ifstream file(std::string("resources/") + mod + "/climate.txt");
     std::vector<uint32_t> wasteProvs = loadIntList(file, std::set<std::string>({"impassable"}));
 
     std::sort(wasteProvs.begin(), wasteProvs.end());
@@ -399,11 +398,14 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
                     if (std::binary_search(waterProvs.begin(), waterProvs.end(), opix)) {
                         continue;
                     }
-                    uint32_t provinceID = colorProvs.at(pix);
-                    uint32_t oprov = colorProvs.at(opix);
+
+                    auto provinceID = colorProvs.find(pix);
+                    auto oprov = colorProvs.find(opix);
+                    if (provinceID == colorProvs.end() || oprov == colorProvs.end())
+                        continue;
                     // So we have a different adjacent land province, only reversing if the forward direction worked.
-                    if (adjacencies[provinceID].insert(oprov).second)
-                        adjacencies[oprov].insert(provinceID);
+                    if (adjacencies[provinceID->second].insert(oprov->second).second)
+                        adjacencies[oprov->second].insert(provinceID->second);
                 }
             }
         }
@@ -411,11 +413,11 @@ std::map<uint32_t, std::set<uint32_t>> generateLandAdjacency(const std::string &
     return adjacencies;
 }
 
-std::map<uint32_t, std::set<uint32_t>> pyGenerateLandAdjacency() {
-    return generateLandAdjacency(loadProvinceMap(), loadMapDef(), loadWaterProvinces());
+std::map<uint32_t, std::set<uint32_t>> pyGenerateLandAdjacency(const std::string &mod) {
+    return generateLandAdjacency(loadProvinceMap(mod), loadMapDef(mod), loadWaterProvinces(mod));
 }
 
-std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> &tagColors, const std::map<uint32_t, std::string> &provinceOwners) {
+std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> &tagColors, const std::map<uint32_t, std::string> &provinceOwners, const std::string &mod) {
     // First, construct a more direct map of province color to tag color
 
     /*
@@ -438,14 +440,14 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
     static const intColor unclaimedColor = packColor(94, 94, 94);
     static const intColor wastelandColor = packColor(150, 150, 150);
 
-    const std::string provinceMap = loadProvinceMap();
+    const std::string provinceMap = loadProvinceMap(mod);
     std::map<intColor, intColor> colorMap;
 
     {
         // A scope so that the mapDef will get freed
-        const std::map<uint32_t, intColor> mapDef = loadMapDef();
-        const std::vector<uint32_t> waterProvs = loadWaterProvinces();
-        const std::vector<uint32_t> wasteProvs = loadWastelandProvinces();
+        const std::map<uint32_t, intColor> mapDef = loadMapDef(mod);
+        const std::vector<uint32_t> waterProvs = loadWaterProvinces(mod);
+        const std::vector<uint32_t> wasteProvs = loadWastelandProvinces(mod);
         const std::map<uint32_t, std::set<uint32_t>> landAdjacency = generateLandAdjacency(provinceMap, mapDef, waterProvs);
         for (auto iter = mapDef.begin(); iter != mapDef.end(); ++iter) {
 
@@ -516,14 +518,14 @@ std::string drawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
     return imgStr;
 }
 
-py::bytes pyDrawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> &tagColors, const std::map<uint32_t, std::string> &provinceOwners) {
-    return drawMap(tagColors, provinceOwners);
+py::bytes pyDrawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> &tagColors, const std::map<uint32_t, std::string> &provinceOwners, const std::string &mod) {
+    return drawMap(tagColors, provinceOwners, mod);
 }
 
-std::pair<float, float> provinceLocation(const size_t &id) {
+std::pair<float, float> provinceLocation(size_t id, const std::string &mod) {
     std::string idstr = std::to_string(id);
     std::ifstream file;
-    file.open("resources/positions.txt");
+    file.open(std::string("resources/") + mod + "/positions.txt");
 
     std::string line;
     while (std::getline(file, line)) {
@@ -579,11 +581,11 @@ PYBIND11_MODULE(EU4cpplib, m) {
         .def("isEU4Date", &EU4Date::isEU4Date)
         .def_static("stringValid", &EU4Date::stringValid, py::arg("text"));
 
-    m.def("provinceLocation", &provinceLocation, py::arg("id"));
+    m.def("provinceLocation", &provinceLocation, py::arg("id"), py::arg("mod"));
     m.def("drawBorders", &drawBorders, py::arg("playerColors"), py::arg("pixels"), py::arg("width"), py::arg("height"));
-    m.def("loadProvinceMap", &pyProvMap);
-    m.def("loadMapDef", &loadMapDef);
-    m.def("drawMap", &pyDrawMap, py::arg("tagColors"), py::arg("provinceOwners"));
-    m.def("loadWaterProvinces", &loadWaterProvinces);
-    m.def("generateLandAdjacency", &pyGenerateLandAdjacency);
+    m.def("loadProvinceMap", &pyProvMap, py::arg("mod"));
+    m.def("loadMapDef", &loadMapDef, py::arg("mod"));
+    m.def("drawMap", &pyDrawMap, py::arg("tagColors"), py::arg("provinceOwners"), py::arg("mod"));
+    m.def("loadWaterProvinces", &loadWaterProvinces, py::arg("mod"));
+    m.def("generateLandAdjacency", &pyGenerateLandAdjacency, py::arg("mod"));
 }

@@ -6,6 +6,7 @@ __pycache__/
 final.png
 *.pyd
 .rendered.*.cpp
+venv/
 
 #Shortcuts
 save games.lnk

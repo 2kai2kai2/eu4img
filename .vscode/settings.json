@@ -66,7 +66,18 @@
         "xtree": "cpp",
         "xutility": "cpp",
         "bit": "cpp",
-        "clocale": "cpp"
+        "clocale": "cpp",
+        "charconv": "cpp",
+        "filesystem": "cpp",
+        "format": "cpp",
+        "iomanip": "cpp",
+        "locale": "cpp",
+        "mutex": "cpp",
+        "stop_token": "cpp",
+        "xlocbuf": "cpp",
+        "xlocmes": "cpp",
+        "xlocmon": "cpp",
+        "xloctime": "cpp"
     },
     "cmake.configureOnOpen": false
 }

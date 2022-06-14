@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from PIL import Image, ImageDraw
 
 
-def country(text: str) -> Optional[str]:
+def country(text: str, mod: str = "vanilla") -> Optional[str]:
     """
     Returns the tag of a nation from the name of the nation.
 
@@ -13,7 +13,8 @@ def country(text: str) -> Optional[str]:
     """
     text = text.upper()
     # Read out the countries file
-    srcFile = open("resources/countries_l_english.yml", encoding="cp1252")
+    srcFile = open(
+        f"resources/{mod}/countries_l_english.yml", encoding="cp1252")
     # If it could be a tag, check for that.
     if len(text) == 3:
         # Check dynamic tags
@@ -33,7 +34,7 @@ def country(text: str) -> Optional[str]:
     return None
 
 
-def tagToName(tag: str) -> Optional[str]:
+def tagToName(tag: str, mod: str = "vanilla") -> Optional[str]:
     """
     Returns the name of a nation based on its tag.
 
@@ -61,7 +62,8 @@ def tagToName(tag: str) -> Optional[str]:
                 return f"Trading City T{tag[1:]}"
         # Then search for it and return the first thing in quotes on that line
         # Read out the countries file
-        srcFile = open("resources/countries_l_english.yml", encoding="cp1252")
+        srcFile = open(
+            f"resources/{mod}/countries_l_english.yml", encoding="cp1252")
         for line in srcFile:
             if line[1:4] == tag:
                 firstQuote = line.index('"')
@@ -70,14 +72,14 @@ def tagToName(tag: str) -> Optional[str]:
     return None
 
 
-def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
+def province(id: Union[str, int], mod: str = "vanilla") -> Optional[Tuple[float, float]]:
     """
     Gets the location of a province on a screenshot map.
 
     Returns a tuple of floats, (x, y).
     """
     # Read file
-    srcFile = open("resources/positions.txt", "r", encoding="cp1252")
+    srcFile = open(f"resources/{mod}/positions.txt", "r", encoding="cp1252")
     """
     Format of the file:
     1={
@@ -108,14 +110,14 @@ def province(id: Union[str, int]) -> Optional[Tuple[float, float]]:
     return None
 
 
-def provinces(ids: List[Union[str, int]]) -> Dict[int, Tuple[float, float]]:
+def provinces(ids: List[Union[str, int]], mod: str = "vanilla") -> Dict[int, Tuple[float, float]]:
     """
     Gets the location of multiple provinces on a screenshot map.
     Similar to province() except that it will only go through the file once to find all provinces.
     """
     out: Dict[int, Optional[Tuple[float, float]]] = {}
     ids: List[int] = [int(x) for x in ids]
-    srcFile = open("resources/positions.txt", "r", encoding="cp1252")
+    srcFile = open(f"resources/{mod}/positions.txt", "r", encoding="cp1252")
     currentID: int = None
     beyond = 0
     for line in srcFile:
@@ -135,20 +137,20 @@ def provinces(ids: List[Union[str, int]]) -> Dict[int, Tuple[float, float]]:
     return out
 
 
-def flag(tag: str) -> Image.Image:
+def flag(tag: str, mod: str = "vanilla") -> Image.Image:
     """
     Gets an Image of the flag of the specified nation.
 
     Returns Image of size (128, 128).
     """
     # Read file
-    srcFile = open("resources/flagfiles.txt", "r", encoding="cp1252")
+    srcFile = open(f"resources/{mod}/flagfiles.txt", "r", encoding="cp1252")
     line = srcFile.read()
     srcFile.close()
     # Get the number for the order of the flag; starts at 0
     flagnum = line[:line.index(tag)].count(".tga")
     # Get the file based on 256 flags per
-    flagfile = Image.open(f"resources/flagfiles_{int(flagnum/256)}.tga")
+    flagfile = Image.open(f"resources/{mod}/flagfiles_{int(flagnum/256)}.tga")
     # Get the location of the flag within the file
     x = 128*((flagnum % 256) % 16)
     y = 128*int((flagnum % 256)/16)
@@ -158,7 +160,7 @@ def flag(tag: str) -> Image.Image:
     return flagimg
 
 
-def provinceArea(provinceID: Union[str, int]) -> str:
+def provinceArea(provinceID: Union[str, int], mod: str = "vanilla") -> str:
     """
     Returns the area (state) name of a specified province's id.
 
@@ -166,7 +168,7 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     """
     provinceID = str(provinceID)
     # Read file
-    srcFile = open("resources/area.txt", "r", encoding="cp1252")
+    srcFile = open(f"resources/{mod}/area.txt", "r", encoding="cp1252")
     # Search file
     currentArea = None
     for line in srcFile:
@@ -181,7 +183,7 @@ def provinceArea(provinceID: Union[str, int]) -> str:
     raise ValueError(f"{provinceID} was not a valid province.")
 
 
-def region(areaName: str) -> str:
+def region(areaName: str, mod: str = "vanilla") -> str:
     """
     Returns the region name of a specified area.
 
@@ -189,7 +191,7 @@ def region(areaName: str) -> str:
     Raises an error if the area is not found.
     """
     # Read file
-    srcFile = open("resources/region.txt", "r", encoding="cp1252")
+    srcFile = open(f"resources/{mod}/region.txt", "r", encoding="cp1252")
     # Search File
     currentRegion = None
     for line in srcFile:
@@ -203,7 +205,7 @@ def region(areaName: str) -> str:
     raise ValueError(f"{areaName} was not a valid area.")
 
 
-def superregion(regionName: str) -> str:
+def superregion(regionName: str, mod: str = "vanilla") -> str:
     """
     Returns the superregion name of a specified region.
 
@@ -211,7 +213,7 @@ def superregion(regionName: str) -> str:
     Raises an error if the region is not found.
     """
     # Read file
-    srcFile = open("resources/superregion.txt", "r", encoding="cp1252")
+    srcFile = open(f"resources/{mod}/superregion.txt", "r", encoding="cp1252")
     # Search file
     currentSuperregion = None
     for line in srcFile:
@@ -225,7 +227,7 @@ def superregion(regionName: str) -> str:
     raise ValueError(f"{regionName} was not a valid region.")
 
 
-def continent(provinceID: Union[str, int]) -> str:
+def continent(provinceID: Union[str, int], mod: str = "vanilla") -> str:
     """
     Returns the continent name from a specified province's id.
 
@@ -233,7 +235,7 @@ def continent(provinceID: Union[str, int]) -> str:
     """
     provinceID = str(provinceID)
     # Read file
-    srcFile = open("resources/continent.txt", "r", encoding="cp1252")
+    srcFile = open(f"resources/{mod}/continent.txt", "r", encoding="cp1252")
     # Search file
     currentContinent = None
     for line in srcFile:
@@ -247,27 +249,27 @@ def continent(provinceID: Union[str, int]) -> str:
     raise ValueError(f"{provinceID} was not a valid province.")
 
 
-def isIn(provinceID: Union[str, int], group: str) -> bool:
+def isIn(provinceID: Union[str, int], group: str, mod: str = "vanilla") -> bool:
     """
     Checks if the province is within the given area, region, superregion, or continent.
     """
     # Because area, region, and superregion has the suffix with _area, etc. each can't be confused with the other.
-    provarea = provinceArea(provinceID)
+    provarea = provinceArea(provinceID, mod)
     if provarea == group:
         return True
-    provregion = region(provarea)
+    provregion = region(provarea, mod)
     if provregion == group:
         return True
-    provsuperregion = superregion(provregion)
+    provsuperregion = superregion(provregion, mod)
     if provsuperregion == group:
         return True
-    provcontinent = continent(provinceID)
+    provcontinent = continent(provinceID, mod)
     if provcontinent == group:
         return True
     return False
 
 
-def colonialRegion(provinceID: Union[str, int]) -> str:
+def colonialRegion(provinceID: Union[str, int], mod: str = "vanilla") -> str:
     """
     Returns the colonial region from a specified province's id.
 
@@ -275,7 +277,8 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
     """
     provinceID = str(provinceID)
     # Read file
-    srcFile = open("resources/00_colonial_regions.txt", "r", encoding="cp1252")
+    srcFile = open(
+        f"resources/{mod}/00_colonial_regions.txt", "r", encoding="cp1252")
     # Search file
     currentColReg: Optional[str] = None
     provsOpen = False
@@ -295,14 +298,15 @@ def colonialRegion(provinceID: Union[str, int]) -> str:
         f"{provinceID} was not a valid province in a colonial region.")
 
 
-def colonialFlag(overlordTag: str, colReg: str) -> Image.Image:
+def colonialFlag(overlordTag: str, colReg: str, mod: str = "vanilla") -> Image.Image:
     """
     Generates a colonial nation flag for the given motherland and colonial region.
     """
     # First find the correct colonial region color
     color: Tuple[int, int, int] = None
     # Read file
-    srcFile = open("resources/00_colonial_regions.txt", "r", encoding="cp1252")
+    srcFile = open(
+        f"resources/{mod}/00_colonial_regions.txt", "r", encoding="cp1252")
     # Search file
     currentColReg: Optional[str] = None
     for line in srcFile:
@@ -369,9 +373,9 @@ class dataReq:
         # More datatypes
 
 
-def provinceData(*requests: dataReq) -> List[dataReq]:
+def provinceData(*requests: dataReq, mod: str = "vanilla") -> List[dataReq]:
     data = requests
-    srcFile = open("resources/save_1444.eu4", encoding="cp1252")
+    srcFile = open(f"resources/{mod}/save_1444.eu4", encoding="cp1252")
     brackets: List[str] = []
 
     # Reading save file...

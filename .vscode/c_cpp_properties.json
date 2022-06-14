@@ -4,8 +4,8 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C:/Python39/Lib/site-packages/pybind11/include",
-                "C:/Python39/include"
+                "C:/Users/2kai2/AppData/Local/Programs/Python/Python310/Include",
+                "${workspaceFolder}/venv/lib/site-packages/pybind11/include"
             ],
             "defines": [
                 "_DEBUG",

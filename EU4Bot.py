@@ -7,7 +7,8 @@ from random import shuffle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import aiohttp
-import cppimport
+import cppimport.import_hook
+import EU4cpplib
 import discord
 from discord.errors import DiscordException
 from dotenv import load_dotenv
@@ -17,17 +18,6 @@ import EU4Lib
 import EU4Reserve
 import GuildManager
 import Skanderbeg
-
-print("Compiling C++ modules...")
-try:
-    EU4cpplib = cppimport.imp("EU4cpplib")
-except Exception as e:
-    cppcompiled = False
-    print("C++ module compilation failed.")
-    print(traceback.print_exc())
-else:
-    cppcompiled = True
-    print("C++ module compilation successful.")
 
 
 # Load Discord Client
@@ -57,6 +47,10 @@ def imageToFile(img: Image.Image) -> discord.File:
     img.save(file, "PNG")
     file.seek(0)
     return discord.File(file, "img.png")
+
+
+def stringifyTraceback(e: BaseException) -> str:
+    return "\n".join(traceback.format_exception(e))
 
 
 async def sendUserMessage(user: Union[str, int, DiscUser], message: str) -> discord.Message:
@@ -579,6 +573,7 @@ class saveGame():
         self.china: str = None
         self.crusade: str = None
         self.playerWars: List[war] = []
+        self.mod: str = "vanilla"
 
     def allPlayerTags(self) -> List[str]:
         if hasattr(self, "allplayertags"):
@@ -623,12 +618,12 @@ class statsChannel(AbstractChannel):
         """
         prompt = "**Current players list:**```"
         for tag in self.game.playertags:
-            natName = EU4Lib.tagToName(tag)
+            natName = EU4Lib.tagToName(tag, self.game.mod)
             prompt += f"\n{tag if natName is None else natName}: {self.game.playertags[tag]}"
         prompt += "```\n**Do you want to make any changes?\nType `done` to finish. Commands:\n`remove [nation]`\n`add [player], [nation]`**"
         return prompt
 
-    async def readFile(self, file: StringIO):
+    async def readFile(self, file: iter):
         """
         Gets all data from file and saves it to the self.game.
         """
@@ -700,6 +695,9 @@ class statsChannel(AbstractChannel):
                         self.game.playertags[lineval.strip(
                             '"')] = lastPlayerInList
                         lastPlayerInList = None
+                elif len(brackets) == 2 and brackets[0] == "mods_enabled_names" and linekey == "name":
+                    if lineval == '"Anbennar: A Fantasy Total Conversion Mod"':
+                        self.game.mod = "anbennar"
                 # Get top 8
                 elif linekey == "country" and brackets == ["great_powers", "original"]:
                     if len(self.game.GP) < 8:  # Make sure to not include leaving GPs
@@ -840,7 +838,7 @@ class statsChannel(AbstractChannel):
         # Finalize data
         # These signify that it's probably not a valid save file.
         if self.game.GP == [] or self.game.date is None or self.game.age is None:
-            raise Exception(
+            raise ValueError(
                 f"This probably isn't a valid .eu4 uncompressed save file from {self.user.mention}")
         for nat in self.game.allNations.copy().keys():
             if self.game.allNations[nat].development == 0:
@@ -929,7 +927,7 @@ class statsChannel(AbstractChannel):
         # Modify the image
         await updateProgress("Drawing map...", 2, 9)
         img: Image.Image = Image.frombytes(
-            "RGB", (5632, 2048), EU4cpplib.drawMap(tagColors, self.game.provinces))
+            "RGB", (5632, 2048), EU4cpplib.drawMap(tagColors, self.game.provinces, self.game.mod))
         img = ImageOps.flip(img)
 
         await updateProgress("Calculating player borders...", 3, 9)
@@ -982,10 +980,10 @@ class statsChannel(AbstractChannel):
                     flag: Image.Image = None
                     if (nat.tag.startswith("C") and nat.tag[1:].isdigit() and nat.overlord is not None):
                         # This is a colonial nation, so make that flag instead.
-                        flag = EU4Lib.colonialFlag(
-                            nat.overlord, EU4Lib.colonialRegion(nat.capitalID))
+                        flag = EU4Lib.colonialFlag(nat.overlord, EU4Lib.colonialRegion(
+                            nat.capitalID, self.game.mod), self.game.mod)
                     else:
-                        flag = EU4Lib.flag(nat.tag)
+                        flag = EU4Lib.flag(nat.tag, self.game.mod)
                     imgFinal.paste(flag, (x, y))
                     # x+128: Player
                     playerName = self.game.playertags[nat.tag]
@@ -1048,12 +1046,12 @@ class statsChannel(AbstractChannel):
                                 # This is a colonial nation, so make that flag instead.
                                 try:
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
-                                        self.game.allNations[nat].capitalID))
+                                        self.game.allNations[nat].capitalID, self.game.mod), self.game.mod)
                                 except:
                                     raise RuntimeWarning(
                                         f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
                             else:
-                                flag = EU4Lib.flag(nat)
+                                flag = EU4Lib.flag(nat, self.game.mod)
                             imgFinal.paste(flag.resize((64, 64)), (round(x + 3 * (12 + 64) - (
                                 natnum % 4) * (64 + 12)), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
                     # Draw Attacker Casualties
@@ -1073,12 +1071,12 @@ class statsChannel(AbstractChannel):
                                 # This is a colonial nation, so make that flag instead.
                                 try:
                                     flag = EU4Lib.colonialFlag(self.game.allNations[nat].overlord, EU4Lib.colonialRegion(
-                                        self.game.allNations[nat].capitalID))
+                                        self.game.allNations[nat].capitalID, self.game.mod), self.game.mod)
                                 except:
                                     raise RuntimeWarning(
                                         f"Something went wrong in creating a colonial flag. Details:\n{nat.fullDataStr()}")
                             else:
-                                flag = EU4Lib.flag(nat)
+                                flag = EU4Lib.flag(nat, self.game.mod)
                             imgFinal.paste(flag.resize((64, 64)), (round(
                                 x + (natnum % 4) * (64 + 12) + 585), round(y + (natnum - natnum % 4) / 4 * (64 + 12) + 12)))
                     # Draw Defender Casualties
@@ -1151,7 +1149,7 @@ class statsChannel(AbstractChannel):
             else:  # str
                 saveURL: str = message.content.strip()
                 try:
-                    response = await session.get(saveURL)
+                    response = await session.get(saveURL, allow_redirects=False)
                 except Exception as e:
                     await self.interactChannel.send(f"Something went wrong. This may not be a valid link.\n```{repr(e)}```")
                     return
@@ -1162,12 +1160,15 @@ class statsChannel(AbstractChannel):
                     return
             await self.interactChannel.send("**Recieved save file. Processing...**")
             try:
-                await self.readFile(StringIO(saveFile.decode("cp1252")))
-            except DiscordException as e:
-                await self.interactChannel.send(f"**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```{repr(e)}```")
+                await self.readFile(StringIO(saveFile.decode("cp1252", "replace")))
+            except UnicodeDecodeError as e:
+                await self.interactChannel.send(f"****Something went wrong in decoding your `.eu4` file.**\nThis may mean your file is not an eu4 save file or has been changed from cp1252 encoding.\n**Please try another file or fix the file's encoding and try again.**\n```{stringifyTraceback(e)}```")
                 return
-            except:
-                await self.interactChannel.send(f"**Something went wrong in decoding your `.eu4` file.**\nThis may mean your file is not an eu4 save file, or has been changed from the cp1252 encoding.\n**Please try another file or change the file's encoding and try again.**\n```{repr(e)}```")
+            except DiscordException as e:
+                await self.interactChannel.send(f"**Uh oh! something went wrong.**\nIt could be that your save file was incorrectly formatted. Make sure it is uncompressed.\n**Please try another file.**\n```{stringifyTraceback(e)}```")
+                return
+            except Exception as e:
+                await self.interactChannel.send(f"**Something went wrong.**\n```{stringifyTraceback(e)}```")
                 return
             else:
                 self.hasReadFile = True
@@ -1211,13 +1212,13 @@ class statsChannel(AbstractChannel):
                 player = message.content.strip().partition(
                     " ")[2].partition(",")[0].strip()
                 natName = message.content.strip().partition(",")[2].strip()
-                tag = EU4Lib.country(natName)
+                tag = EU4Lib.country(natName, self.game.mod)
                 if tag is None:
                     await message.add_reaction("\u2754")  # Question Mark
                 elif tag in self.game.playertags:
-                    await sendUserMessage(self.user, f"{EU4Lib.tagToName(tag)} is already played. If you wish to replace the player, please remove them first.")
+                    await sendUserMessage(self.user, f"{EU4Lib.tagToName(tag, self.game.mod)} is already played. If you wish to replace the player, please remove them first.")
                 elif not tag in self.game.allNations:
-                    await sendUserMessage(self.user, f"{EU4Lib.tagToName(tag)} does not exist in this game.")
+                    await sendUserMessage(self.user, f"{EU4Lib.tagToName(tag, self.game.mod)} does not exist in this game.")
                 else:
                     self.game.playertags[tag] = player
                     await self.modMsg.edit(content=self.modPromptStr())
@@ -1225,7 +1226,7 @@ class statsChannel(AbstractChannel):
             # remove [nation]
             elif message.content.strip().lower().startswith("remove "):
                 name = message.content.strip().partition(" ")[2].strip()
-                tag = EU4Lib.country(name)
+                tag = EU4Lib.country(name, self.game.mod)
                 if tag is None:
                     await message.add_reaction("\u2754")  # Question Mark
                 elif tag in self.game.playertags:
