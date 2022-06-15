@@ -9,6 +9,7 @@ import pymongo
 from PIL import Image
 from pymongo.collection import Collection
 from pymongo.database import Database
+import EU4Lib
 
 dotenv.load_dotenv()
 client = pymongo.MongoClient(
@@ -404,20 +405,11 @@ def createMap(reserve: Reserve) -> Image.Image:
     countries: List[reservePick] = reserve.getPlayers()
     capitalLocs: Dict[str, Tuple[float, float]] = {}
 
-    srcFile = open("resources/tagCapitals.txt", "r", encoding="cp1252")
+    for country in countries:
+        capitalLocs[country.tag] = EU4Lib.province(
+            EU4Lib.tagCapital(country.tag))
 
-    for line in srcFile:
-        for natnum in range(len(countries)):
-            if line.startswith(countries[natnum].tag):
-                capitalLocs[countries[natnum].tag] = (
-                    float(line[4:line.index(",", 4)]), float(line[line.index(",", 4) + 1:]))
-                countries.pop(natnum)
-                break
-        if len(countries) == 0:
-            break
-    srcFile.close()
-
-    mapFinal: Image.Image = Image.open("resources/map_1444.png")
+    mapFinal: Image.Image = Image.open("resources/vanilla/map_1444.png")
     imgX: Image.Image = Image.open("resources/xIcon.png")
     for x in capitalLocs:
         mapFinal.paste(

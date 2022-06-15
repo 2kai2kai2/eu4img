@@ -522,45 +522,6 @@ py::bytes pyDrawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
     return drawMap(tagColors, provinceOwners, mod);
 }
 
-std::pair<float, float> provinceLocation(size_t id, const std::string &mod) {
-    std::string idstr = std::to_string(id);
-    std::ifstream file;
-    file.open(std::string("resources/") + mod + "/positions.txt");
-
-    std::string line;
-    while (std::getline(file, line)) {
-        // While items such as "11={" will catch "1={", that is fine because the smaller number will come first, meaning the larger number should not be reached.
-        if (line.find(idstr + "={") != std::string::npos) {
-
-            std::getline(file, line); // position={
-            std::getline(file, line); // Line with position data. We want the first two.
-
-            std::pair<float, float> out;
-            bool second = false;
-            size_t start = std::string::npos;
-
-            // Go through each character to get the first two numbers
-            for (size_t i = 0; i < line.size(); ++i) {
-                if (start == std::string::npos && !std::isspace(line[i])) {
-                    // The first character of the number
-                    start = i;
-                } else if (start != std::string::npos && std::isspace(line[i])) {
-                    // The first whitespace after the number
-                    if (second) {
-                        out.second = std::stof(line.substr(start, i - start));
-                        return out;
-                    } else {
-                        out.first = std::stof(line.substr(start, i - start));
-                        start = std::string::npos;
-                        second = true;
-                    }
-                }
-            }
-        }
-    }
-    return std::pair<float, float>(-1.0f, -1.0f);
-}
-
 PYBIND11_MODULE(EU4cpplib, m) {
     m.doc() = "Libraries for eu4img written in C++ to improve speed and resource-consumption.";
 
@@ -581,7 +542,6 @@ PYBIND11_MODULE(EU4cpplib, m) {
         .def("isEU4Date", &EU4Date::isEU4Date)
         .def_static("stringValid", &EU4Date::stringValid, py::arg("text"));
 
-    m.def("provinceLocation", &provinceLocation, py::arg("id"), py::arg("mod"));
     m.def("drawBorders", &drawBorders, py::arg("playerColors"), py::arg("pixels"), py::arg("width"), py::arg("height"));
     m.def("loadProvinceMap", &pyProvMap, py::arg("mod"));
     m.def("loadMapDef", &loadMapDef, py::arg("mod"));

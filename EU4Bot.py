@@ -1337,50 +1337,15 @@ class asiresChannel(AbstractChannel):
         elif text.upper() == "END" and await checkResAdmin(message.guild, message.author):  # END
             await message.delete()
             finalReserves: List[EU4Reserve.reservePick] = []
-            # This stores the capitals of all possible tags, so that their factions can be determined.
-            tagCapitals: Dict[str, int] = {}
-            # Add all possibly reserved nations to the tagCapitals dictionary with a capital of -1
             reserves = self.reserve.getPlayers()
-            for res in reserves:
-                for tag in res.picks:
-                    if tagCapitals.get(tag.upper()) is None:
-                        tagCapitals[tag.upper()] = -1
-            # Get the actual capitals and add to tagCapitals.
-            srcFile = open("resources/save_1444.eu4", "r", encoding="cp1252")
-            brackets: List[str] = []
-            linenum = 0
-            for line in srcFile:
-                linenum += 1
-                if "{" in line:
-                    if line.count("{") == line.count("}"):
-                        continue
-                    elif line.count("}") == 0 and line.count("{") == 1:
-                        brackets.append(line.rstrip("\n "))
-                    elif line.count("}") == 0 and line.count("{") > 1:
-                        for x in range(line.count("{")):
-                            # TODO: fix this so it has more
-                            brackets.append("{")
-                    else:
-                        print(f"Unexpected brackets at line {linenum}: {line}")
-                elif "}" in line:
-                    try:
-                        brackets.pop()
-                    except IndexError:  # This shouldn't happen.
-                        print(
-                            f"No brackets to delete at line {linenum}: {line}")
-                elif len(brackets) > 1 and brackets[0] == "countries={":
-                    for x in tagCapitals:
-                        if x in brackets[1]:
-                            # Here we have all the stats for country x on the players list
-                            if len(brackets) == 2 and "capital=" in line and not "original_capital=" in line and not "fixed_capital=" in line:
-                                tagCapitals[x] = int(line.strip("\tcapitl=\n"))
+
             # Draft Executive Reserves
             for res in reserves:
                 if res.priority:
                     finalReserves.append(EU4Reserve.reservePick(
                         res.userID, res.picks[0].upper()))
-                    self.getFaction(
-                        tagCapitals[res.picks[0].upper()]).taken += 1
+                    self.getFaction(EU4Lib.tagCapital(
+                        res.picks[0].upper())).taken += 1
                     reserves.remove(res)
             # Shuffle
             shuffle(reserves)
@@ -1388,7 +1353,8 @@ class asiresChannel(AbstractChannel):
             for res in reserves:
                 finaltag = None
                 for tag in res.picks:
-                    resFaction = self.getFaction(tagCapitals[tag.upper()])
+                    resFaction = self.getFaction(
+                        EU4Lib.tagCapital(tag.upper()))
                     # if faction is full, skip to next one
                     if resFaction is None or resFaction.taken >= resFaction.maxPlayers:
                         continue
