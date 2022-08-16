@@ -1,3 +1,4 @@
+./cpp
 aiohttp>=3.7.4
 discord.py>=1.7.1
 Pillow>=8.3.2
@@ -6,6 +7,4 @@ python-dateutil>=2.8.1
 python-dotenv>=0.17.0
 pyyaml>=6.0
 requests>=2.25.1
-cppimport>=21.3.7
-pybind11>=2.6.2
 typing>=3.7.4.3

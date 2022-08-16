@@ -6,7 +6,6 @@ from random import shuffle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import aiohttp
-import cppimport.import_hook
 import EU4cpplib
 import discord
 from discord.errors import DiscordException

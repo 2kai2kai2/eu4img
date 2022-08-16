@@ -1,12 +1,3 @@
-/*cppimport
-<%
-import pybind11
-import sysconfig
-setup_pybind11(cfg)
-cfg['include_dirs'] = [pybind11.get_include(), sysconfig.get_path("include")]
-%>
-*/
-
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
