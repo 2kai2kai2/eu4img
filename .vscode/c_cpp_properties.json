@@ -3,9 +3,7 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/**",
-                "C:/Users/2kai2/AppData/Local/Programs/Python/Python310/Include",
-                "${workspaceFolder}/venv/lib/site-packages/pybind11/include"
+                "${workspaceFolder}/**"
             ],
             "defines": [
                 "_DEBUG",

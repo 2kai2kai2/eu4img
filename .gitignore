@@ -4,9 +4,11 @@ EU4img.zip
 #Files created upon testing
 __pycache__/
 final.png
-*.pyd
-.rendered.*.cpp
 venv/
+
+#Build
+/cpp/build/
+/cpp/*.egg-info/
 
 #Shortcuts
 save games.lnk

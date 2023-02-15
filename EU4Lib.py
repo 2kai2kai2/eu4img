@@ -1,7 +1,8 @@
-# This will need to be updated. Currently for 1.30.2
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union
+import yaml
 
 from PIL import Image, ImageDraw
+from os import listdir, path
 
 
 def country(text: str, mod: str = "vanilla") -> Optional[str]:
@@ -72,69 +73,40 @@ def tagToName(tag: str, mod: str = "vanilla") -> Optional[str]:
     return None
 
 
-def province(id: Union[str, int], mod: str = "vanilla") -> Optional[Tuple[float, float]]:
+# LOAD PROVINCE LOCATION DATA
+# Even if not __main__
+province_locations: Dict[str, Dict[int, Tuple[float, float]]] = {}
+for p in listdir("resources"):
+    filepath = path.join("resources", p, "positions.yml")
+    if path.isfile(filepath):
+        province_locations_file = open(filepath, "r")
+        province_locations[p] = yaml.load(
+            province_locations_file, yaml.CLoader)
+        province_locations_file.close()
+
+
+def province(id: Union[str, int], mod: str = "vanilla") -> Tuple[float, float]:
     """
     Gets the location of a province on a screenshot map.
 
     Returns a tuple of floats, (x, y).
     """
-    # Read file
-    srcFile = open(f"resources/{mod}/positions.txt", "r", encoding="cp1252")
-    """
-    Format of the file:
-    1={
-        position={
-            3085.000 1723.000 3086.000 1730.000 3084.500 1729.000 3095.000 1724.500 3082.000 1730.000 3080.000 1736.000 0.000 0.000 
-        }
-        rotation={
-            0.000 0.000 0.087 -0.698 0.000 0.000 0.000 
-        }
-        height={
-            0.000 0.000 1.000 0.000 0.000 0.000 0.000 
-        }
-    }
-    
-    So we want the 3085.000 1723.000 from the 1={ because the first two are the location of the city in the province
-    """
-    beyond = 0
-    for line in srcFile:
-        if beyond == 2:  # Two after the province, this is the line with the position.
-            vals = line.split()
-            # Need to subtract the y value because the position starts from the bottom rather than the top like images
-            return (float(vals[0]), 2048-float(vals[1]))
-        elif beyond == 1:  # One after the province, wait one more line for the position
-            beyond = 2
-        elif line.strip() == str(id)+"={":
-            # So we have the province... Wait two lines for the position
-            beyond = 1
-    return None
+    return province_locations[mod][int(id)]
 
 
-def provinces(ids: List[Union[str, int]], mod: str = "vanilla") -> Dict[int, Tuple[float, float]]:
-    """
-    Gets the location of multiple provinces on a screenshot map.
-    Similar to province() except that it will only go through the file once to find all provinces.
-    """
-    out: Dict[int, Optional[Tuple[float, float]]] = {}
-    ids: List[int] = [int(x) for x in ids]
-    srcFile = open(f"resources/{mod}/positions.txt", "r", encoding="cp1252")
-    currentID: int = None
-    beyond = 0
-    for line in srcFile:
-        if beyond == 2:  # Two after the province, this is the line with the position.
-            vals = line.split()
-            # Need to subtract the y value because the position starts from the bottom rather than the top like images
-            out[currentID] = (float(vals[0]), 2048-float(vals[1]))
-            currentID = None
-            beyond = 0
-        elif beyond == 1:  # One after the province, wait one more line for the position
-            beyond = 2
-        elif line.strip("\t ={\n").isdigit():  # Province top-level bracket
-            id = int(line[:line.index("={")])
-            if id in ids:
-                currentID = id
-                beyond = 1
-    return out
+# LOAD INITIAL TAG CAPITAL DATA
+# Even if not __main__
+tag_capitals: Dict[str, Dict[str, int]] = {}
+for p in listdir("resources"):
+    filepath = path.join("resources", p, "tagCapitals.yml")
+    if path.isfile(filepath):
+        tag_capitals_file = open(filepath, "r")
+        tag_capitals[p] = yaml.load(tag_capitals_file, yaml.CLoader)
+        tag_capitals_file.close()
+
+
+def tagCapital(tag: str, mod: str = "vanilla") -> int:
+    return tag_capitals[mod][tag]
 
 
 def flag(tag: str, mod: str = "vanilla") -> Image.Image:
@@ -328,88 +300,3 @@ def colonialFlag(overlordTag: str, colReg: str, mod: str = "vanilla") -> Image.I
     flagDraw = ImageDraw.Draw(flagimg)
     flagDraw.rectangle([64, 0, 127, 127], color)
     return flagimg
-
-
-class dataReq:
-    DATATYPE_PROVINCEDAT = 0
-    REQUEST_PROVINCE_NAME = 0
-    REQUEST_PROVINCE_TRADE = 1
-    REQUEST_PROVINCE_CULTURE_ORIGINAL = 2
-    REQUEST_PROVINCE_RELIGION_ORIGINAL = 3
-
-    def __init__(self, datatype: int, key: str, request: int):
-        self.datatype = datatype
-        self.key = key
-        self.request = request
-        self.response = None
-
-    def respond(self, r):
-        if self.datatype == self.DATATYPE_PROVINCEDAT:
-            if self.request == self.REQUEST_PROVINCE_NAME:
-                if isinstance(r, str):
-                    self.response = r
-                else:
-                    raise ValueError(
-                        f"PROVINCE NAME request for {self.key} was the wrong type.")
-            elif self.request == self.REQUEST_PROVINCE_TRADE:
-                if isinstance(r, str):
-                    self.response = r
-                else:
-                    raise ValueError(
-                        f"PROVINCE TRADE request for {self.key} was the wrong type.")
-            elif self.request == self.REQUEST_PROVINCE_CULTURE_ORIGINAL:
-                if isinstance(r, str):
-                    self.response = r
-                else:
-                    raise ValueError(
-                        f"PROVINCE CULTURE ORIGINAL request for {self.key} was the wrong type.")
-            elif self.request == self.REQUEST_PROVINCE_RELIGION_ORIGINAL:
-                if isinstance(r, str):
-                    self.response = r
-                else:
-                    raise ValueError(
-                        f"PROVINCE RELIGION ORIGINAL request for {self.key} was the wrong type.")
-            # More things
-        # More datatypes
-
-
-def provinceData(*requests: dataReq, mod: str = "vanilla") -> List[dataReq]:
-    data = requests
-    srcFile = open(f"resources/{mod}/save_1444.eu4", encoding="cp1252")
-    brackets: List[str] = []
-
-    # Reading save file...
-    linenum = 0
-    for line in srcFile:
-        linenum += 1
-        if "{" in line:
-            if line.count("{") == line.count("}"):
-                continue
-            elif line.count("}") == 0 and line.count("{") == 1:
-                brackets.append(line.rstrip("\n "))
-            elif line.count("}") == 0 and line.count("{") > 1:
-                # TODO: fix this so it has more stuff
-                brackets.append("{" * line.count("{"))
-            else:
-                pass
-        elif "}" in line:
-            try:
-                brackets.pop()
-            except IndexError:
-                pass
-        elif len(brackets) == 2 and "provinces={" == brackets[0]:
-            for request in data:
-                if request.response is None and request.datatype == dataReq.DATATYPE_PROVINCEDAT and ("-" + str(request.key) + "={") == brackets[1]:
-                    if request.request == dataReq.REQUEST_PROVINCE_NAME and line.startswith("\t\tname="):
-                        request.respond(line.split("\"", 2)[1].strip("\n\t "))
-                    elif request.request == dataReq.REQUEST_PROVINCE_TRADE and line.startswith("\t\ttrade="):
-                        request.respond(line.split("\"", 2)[1].strip("\n\t "))
-                    elif request.request == dataReq.REQUEST_PROVINCE_CULTURE_ORIGINAL and line.startswith("\t\toriginal_culture="):
-                        request.respond(line.split("=", 1)[1].strip("\n\t "))
-                    elif request.request == dataReq.REQUEST_PROVINCE_RELIGION_ORIGINAL and line.startswith("\t\toriginal_religion="):
-                        request.respond(line.split("=", 1)[1].strip("\n\t "))
-        # elif len(brackets) < 0 and ("trade={" == brackets[1]  or "rebel_faction={" == brackets[0] or (len(brackets) < 1 and "\tledger_data={" == brackets[1]) or "_area={" in brackets[0] or "change_price={" == brackets[0]):
-        #    continue
-        else:
-            pass
-    return data

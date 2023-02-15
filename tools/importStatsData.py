@@ -3,6 +3,7 @@ from typing import List
 import shutil
 import re
 import TagLocalizations
+import ProvinceLocations
 
 
 destination_dir = path.join("resources", input("Target name: ").strip('" ?'))
@@ -17,12 +18,20 @@ if not path.exists(docs_dir):
     print("Invalid EU4 documents files directory.")
     quit()
 
-# Europa Universalis IV/maps/
+# Europa Universalis IV/map/
 steam_map_files: List[str] = ["continent.txt", "superregion.txt", "region.txt", "area.txt",
-                              "definition.csv", "provinces.bmp", "default.map", "positions.txt", "climate.txt"]
+                              "definition.csv", "provinces.bmp", "default.map", "climate.txt"]
 for file in steam_map_files:
     shutil.copy(path.join(steam_dir, "map", file),
                 path.join(destination_dir, file))
+
+# Europa Universalis IV/maps/positions.txt
+positions_txt = open(path.join(steam_dir, "map", "positions.txt"), "r")
+positions_yml = open(path.join(destination_dir, "positions.yml"), "w")
+ProvinceLocations.saveProvLocs(positions_yml,
+                               ProvinceLocations.readProvLocs(positions_txt))
+positions_txt.close()
+positions_yml.close()
 
 # Europa Universalis IV/localisation/
 allLines = TagLocalizations.loadLanguage(
