@@ -18,7 +18,7 @@ if not path.exists(docs_dir):
     print("Invalid EU4 documents files directory.")
     quit()
 
-# Europa Universalis IV/maps/
+# Europa Universalis IV/map/
 steam_map_files: List[str] = ["continent.txt", "superregion.txt", "region.txt", "area.txt",
                               "definition.csv", "provinces.bmp", "default.map", "climate.txt"]
 for file in steam_map_files:
