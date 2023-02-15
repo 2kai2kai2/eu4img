@@ -1,1 +1,1 @@
-from _cpplib import *
+from EU4cpplib._cpplib import *

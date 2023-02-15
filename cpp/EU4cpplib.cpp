@@ -513,7 +513,7 @@ py::bytes pyDrawMap(const std::map<std::string, std::tuple<uint8_t, uint8_t, uin
     return drawMap(tagColors, provinceOwners, mod);
 }
 
-PYBIND11_MODULE(EU4cpplib, m) {
+PYBIND11_MODULE(_cpplib, m) {
     m.doc() = "Libraries for eu4img written in C++ to improve speed and resource-consumption.";
 
     py::class_<EU4Date>(m, "EU4Date")
