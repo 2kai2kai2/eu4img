@@ -1383,8 +1383,9 @@ async def on_ready():
     rescount = 0
     closedcount = 0
     for res in reserves:
-        reschannel = await dLib.findChannel(res.channelID)
-        if reschannel is None:
+        try:
+            reschannel = await dLib.findChannel(res.channelID)
+        except ValueError:
             res.delete()
             closedcount += 1
         else:
