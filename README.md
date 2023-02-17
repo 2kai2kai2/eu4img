@@ -1,4 +1,3 @@
-![Deployment State](https://img.shields.io/github/deployments/2kai2kai2/eu4img/eu4imgbot?label=deployment&logo=heroku)
 ![Code Size](https://img.shields.io/github/languages/code-size/2kai2kai2/eu4img)
 ![Total Size](https://img.shields.io/github/repo-size/2kai2kai2/eu4img)
 ![License GPL-3.0](https://img.shields.io/github/license/2kai2kai2/eu4img)
