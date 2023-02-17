@@ -40,10 +40,10 @@ Easy commands to set up a channel for reservations. Simply set up a fresh channe
 
 ## How can I add this to my Discord server?
 While we do not currently have a link to add the bot publically available, but you can request a link on
-[**The Cartographer** Official Discord Server](https://img.shields.io/discord/846487859661504532?label=Discord&logo=discord&logoColor=white)
+[**The Cartographer** Official Discord Server](https://discord.gg/yQWUAxMsZf)
 
 [![Discord Button](https://img.shields.io/discord/846487859661504532?label=Discord&logo=discord&logoColor=white)
-](https://img.shields.io/discord/846487859661504532?label=Discord&logo=discord&logoColor=white)
+](https://discord.gg/yQWUAxMsZf)
 
 ## Running Your Own Bot Instance
 

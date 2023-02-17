@@ -1,0 +1,15 @@
+#Files created upon testing
+**\__pycache__
+**\.vscode
+**\venv
+
+#Build
+cpp\build
+cpp\*.egg-info
+
+#Discord specifics
+**\.env
+**\*.env
+
+#Extras
+**\tools

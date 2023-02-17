@@ -1496,142 +1496,143 @@ async def on_guild_remove(guild: discord.Guild):
 @client.event
 async def on_socket_response(msg: Dict):
     # This is not a publically listed event, but we can intercept it to catch interactions
-    if msg["op"] == 0 and msg["t"] == "INTERACTION_CREATE":
-        # This means it's an interaction.
-        # https://discord.com/developers/docs/interactions/slash-commands#interaction
-        interaction: Dict[str, Any] = msg["d"]
-        # Verify this is for us
-        if int(interaction["application_id"]) != (await client.application_info()).id or interaction["type"] != 2:
-            # Not sure if this'll ever happen, but we're recieving an interaction not for us.
-            return
-        commandname: str = interaction["data"]["name"]
-        responseurl = f"https://discord.com/api/v8/interactions/{interaction['id']}/{interaction['token']}/callback"
+    if msg["op"] != 0 or msg["t"] != "INTERACTION_CREATE":
+        return
+    # This means it's an interaction.
+    # https://discord.com/developers/docs/interactions/slash-commands#interaction
+    interaction: Dict[str, Any] = msg["d"]
+    # Verify this is for us
+    if int(interaction["application_id"]) != (await client.application_info()).id or interaction["type"] != 2:
+        # Not sure if this'll ever happen, but we're recieving an interaction not for us.
+        return
+    commandname: str = interaction["data"]["name"]
+    responseurl = f"https://discord.com/api/v8/interactions/{interaction['id']}/{interaction['token']}/callback"
 
-        async def respond(content: str, hidden: bool = False):
-            responsejson = {
-                "type": 4,
-                "data": {
-                    "content": content,
-                    "flags": 64
-                }
+    async def respond(content: str, hidden: bool = False):
+        responsejson = {
+            "type": 4,
+            "data": {
+                "content": content,
+                "flags": 64
             }
-            if hidden:
-                responsejson["data"]["flags"] = 64
-            await session.post(responseurl, json=responsejson)
+        }
+        if hidden:
+            responsejson["data"]["flags"] = 64
+        await session.post(responseurl, json=responsejson)
 
-        async def guildRequired():
-            await respond("You must be in a guild to use this command.", True)
+    async def guildRequired():
+        await respond("You must be in a guild to use this command.", True)
 
-        async def permissionDenied():
-            await respond("You do not have permission to use this command.", True)
+    async def permissionDenied():
+        await respond("You do not have permission to use this command.", True)
 
-        authorid: int = int(interaction["member"]["user"]["id"]
-                            if "member" in interaction else interaction["user"]["id"])
-        guild: discord.Guild = None
-        if "guild_id" in interaction:
-            guild = await dLib.findGuild(interaction["guild_id"])
+    authorid: int = int(interaction["member"]["user"]["id"]
+                        if "member" in interaction else interaction["user"]["id"])
+    guild: discord.Guild = None
+    if "guild_id" in interaction:
+        guild = await dLib.findGuild(interaction["guild_id"])
 
-        if commandname.lower() == "reservations":
-            if guild is None:
-                await guildRequired()
+    if commandname.lower() == "reservations":
+        if guild is None:
+            await guildRequired()
+            return
+        elif not await checkResAdmin(guild, authorid):
+            await permissionDenied()
+            return
+        for channel in controlledChannels:
+            if channel.interactChannel.id == int(interaction["channel_id"]):
+                await respond("This channel already contains a controlled channel.", True)
                 return
-            elif not await checkResAdmin(guild, authorid):
-                await permissionDenied()
+        await respond("Loading Reservation Channel...")
+        c = ReserveChannel(None, await dLib.findChannel(interaction["channel_id"]))
+        await c.updateText()
+        await c.updateImg()
+        controlledChannels.append(c)
+        await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
+    elif commandname.lower() == "asireservations":
+        if guild is None:
+            await guildRequired()
+            return
+        elif not await checkResAdmin(guild, authorid):
+            await permissionDenied()
+            return
+        for channel in controlledChannels:
+            if channel.interactChannel.id == int(interaction["channel_id"]):
+                await respond("This channel already contains a controlled channel.", True)
                 return
-            for channel in controlledChannels:
-                if channel.interactChannel.id == int(interaction["channel_id"]):
-                    await respond("This channel already contains a controlled channel.", True)
-                    return
-            await respond("Loading Reservation Channel...")
-            c = ReserveChannel(None, await dLib.findChannel(interaction["channel_id"]))
-            await c.updateText()
-            await c.updateImg()
-            controlledChannels.append(c)
-            await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
-        elif commandname.lower() == "asireservations":
-            if guild is None:
-                await guildRequired()
+        await respond("Loading ASI Reservation Channel...")
+        c = asiresChannel(None, await dLib.findChannel(interaction["channel_id"]))
+        await c.updateText()
+        controlledChannels.append(c)
+        await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
+    elif commandname.lower() == "stats":
+        for channel in controlledChannels:
+            if channel.interactChannel.id == int(interaction["channel_id"]):
+                await respond("This channel already contains a controlled channel.", True)
                 return
-            elif not await checkResAdmin(guild, authorid):
-                await permissionDenied()
-                return
-            for channel in controlledChannels:
-                if channel.interactChannel.id == int(interaction["channel_id"]):
-                    await respond("This channel already contains a controlled channel.", True)
-                    return
-            await respond("Loading ASI Reservation Channel...")
-            c = asiresChannel(None, await dLib.findChannel(interaction["channel_id"]))
-            await c.updateText()
-            controlledChannels.append(c)
-            await session.delete(f"https://discord.com/api/v8/webhooks/{interaction['application_id']}/{interaction['token']}/messages/@original")
-        elif commandname.lower() == "stats":
-            for channel in controlledChannels:
-                if channel.interactChannel.id == int(interaction["channel_id"]):
-                    await respond("This channel already contains a controlled channel.", True)
-                    return
-            await respond("Sent stats creation details to your DMs!", True)
-            c = await statsChannel(await dLib.findUser(authorid), await dLib.findChannel(interaction["channel_id"])).asyncInit()
-            if "options" in interaction["data"]:
-                for option in interaction["data"]["options"]:
-                    if option["name"] == "skanderbeg":
-                        c.skanderbeg = option["value"]
-            else:
-                # Default if not specified
-                c.skanderbeg = False
-            controlledChannels.append(c)
-        elif commandname.lower() == "defaultban":
-            if guild is None:
-                await guildRequired()
-                return
-            subcommand: Dict[str, Any] = interaction["data"]["options"]
-            string = "Something went wrong."
-            if subcommand[0]["name"] == "add":
-                if not await checkResAdmin(guild, authorid):
-                    await permissionDenied()
-                    return
-                tag: str = EU4Lib.country(subcommand[0]["options"][0]["value"])
-                if tag is None:
-                    string = f"Could not find country named {subcommand[0]['options'][0]['value']}."
-                else:
-                    GuildManager.addBan(guild, tag)
-                    string = f"Adding {EU4Lib.tagToName(tag)} to default ban list."
-                    string += "\nNew default ban list: "
-                    banlist = GuildManager.getBan(guild)
-                    for listtag in banlist:
-                        string += f"{EU4Lib.tagToName(listtag)}{'' if listtag is banlist[-1] else ', '}"
-            elif subcommand[0]["name"] == "del":
-                if not await checkResAdmin(guild, authorid):
-                    await permissionDenied()
-                    return
-                tag: str = EU4Lib.country(subcommand[0]["options"][0]["value"])
-                if tag is None:
-                    string = f"Could not find country named {subcommand[0]['options'][0]['value']}."
-                if tag is not None:
-                    GuildManager.removeBan(guild, tag)
-                    string = f"Removing {EU4Lib.tagToName(tag)} from default ban list."
-                    string += "\nNew default ban list: "
-                    banlist = GuildManager.getBan(guild)
-                    for listtag in banlist:
-                        string += f"{EU4Lib.tagToName(listtag)}{'' if listtag is banlist[-1] else ', '}"
-            elif subcommand[0]["name"] == "list":
-                string = "Default ban list: "
-                banlist = GuildManager.getBan(guild)
-                for tag in banlist:
-                    string += EU4Lib.tagToName(tag) + \
-                        ("" if tag is banlist[-1] else ", ")
-            await respond(string, True)
-        elif commandname.lower() == "adminrank":
-            if guild is None:
-                await guildRequired()
-                return
-            elif not await checkResAdmin(guild, authorid):
-                await permissionDenied()
-                return
-            newRankID: int = int(interaction["data"]["options"][0]["value"])
-            GuildManager.setAdmin(guild, newRankID)
-            await respond(f"Admin rank set to <@&{newRankID}>.", True)
+        await respond("Sent stats creation details to your DMs!", True)
+        c = await statsChannel(await dLib.findUser(authorid), await dLib.findChannel(interaction["channel_id"])).asyncInit()
+        if "options" in interaction["data"]:
+            for option in interaction["data"]["options"]:
+                if option["name"] == "skanderbeg":
+                    c.skanderbeg = option["value"]
         else:
-            await respond("The bot was unable to process this command. Please report with details to the developer.", True)
+            # Default if not specified
+            c.skanderbeg = False
+        controlledChannels.append(c)
+    elif commandname.lower() == "defaultban":
+        if guild is None:
+            await guildRequired()
+            return
+        subcommand: Dict[str, Any] = interaction["data"]["options"]
+        string = "Something went wrong."
+        if subcommand[0]["name"] == "add":
+            if not await checkResAdmin(guild, authorid):
+                await permissionDenied()
+                return
+            tag: str = EU4Lib.country(subcommand[0]["options"][0]["value"])
+            if tag is None:
+                string = f"Could not find country named {subcommand[0]['options'][0]['value']}."
+            else:
+                GuildManager.addBan(guild, tag)
+                string = f"Adding {EU4Lib.tagToName(tag)} to default ban list."
+                string += "\nNew default ban list: "
+                banlist = GuildManager.getBan(guild)
+                for listtag in banlist:
+                    string += f"{EU4Lib.tagToName(listtag)}{'' if listtag is banlist[-1] else ', '}"
+        elif subcommand[0]["name"] == "del":
+            if not await checkResAdmin(guild, authorid):
+                await permissionDenied()
+                return
+            tag: str = EU4Lib.country(subcommand[0]["options"][0]["value"])
+            if tag is None:
+                string = f"Could not find country named {subcommand[0]['options'][0]['value']}."
+            if tag is not None:
+                GuildManager.removeBan(guild, tag)
+                string = f"Removing {EU4Lib.tagToName(tag)} from default ban list."
+                string += "\nNew default ban list: "
+                banlist = GuildManager.getBan(guild)
+                for listtag in banlist:
+                    string += f"{EU4Lib.tagToName(listtag)}{'' if listtag is banlist[-1] else ', '}"
+        elif subcommand[0]["name"] == "list":
+            string = "Default ban list: "
+            banlist = GuildManager.getBan(guild)
+            for tag in banlist:
+                string += EU4Lib.tagToName(tag) + \
+                    ("" if tag is banlist[-1] else ", ")
+        await respond(string, True)
+    elif commandname.lower() == "adminrank":
+        if guild is None:
+            await guildRequired()
+            return
+        elif not await checkResAdmin(guild, authorid):
+            await permissionDenied()
+            return
+        newRankID: int = int(interaction["data"]["options"][0]["value"])
+        GuildManager.setAdmin(guild, newRankID)
+        await respond(f"Admin rank set to <@&{newRankID}>.", True)
+    else:
+        await respond("The bot was unable to process this command. Please report with details to the developer.", True)
 
 
 client.run(token)
