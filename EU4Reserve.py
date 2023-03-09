@@ -51,37 +51,6 @@ Or,
 """
 
 
-class Eastern(datetime.tzinfo):
-    def __init__(self):
-        pass
-
-    def dst(self, dt: datetime.datetime) -> datetime.timedelta:
-        if dt.month < 3 or 11 < dt.month:
-            return datetime.timedelta(0)
-        elif 3 < dt.month and dt.month < 11:
-            return datetime.timedelta(hours=1)
-        elif dt.month == 3:  # DST starts second Sunday of March
-            week2Day = dt.day - 7
-            if week2Day > 0 and (dt.weekday() == 6 or week2Day < dt.weekday() + 1):
-                return datetime.timedelta(0)
-            else:
-                return datetime.timedelta(hours=1)
-        elif dt.month == 11:  # DST ends first Sunday of November
-            if dt.weekday() == 6 or dt.day > dt.weekday() + 1:
-                return datetime.timedelta(hours=1)
-            else:
-                return datetime.timedelta(0)
-
-    def utcoffset(self, dt: datetime.datetime) -> datetime.timedelta:
-        return datetime.timedelta(hours=-5) + self.dst(dt)
-
-    def tzname(self, dt: datetime.datetime) -> str:
-        if self.dst(dt).total_seconds() == 0:
-            return "EST"
-        else:
-            return "EDT"
-
-
 class AbstractPick(ABC):
     """
     An abstract class containing all the data for a player's pick in a reservations-type channel.
@@ -93,8 +62,7 @@ class AbstractPick(ABC):
         self.time: int = None
 
     def timeStr(self) -> str:
-        date = datetime.datetime.fromtimestamp(self.time, Eastern())
-        return date.strftime("%m/%d/%y %I:%M:%S %p %Z")
+        return f"<t:{round(self.time)}>"
 
 
 class reservePick(AbstractPick):
