@@ -1,3 +1,10 @@
+> [!WARNING]
+> ### This version is not longer supported
+> 
+> I have a new version of the The Cartographer [**here**](https://github.com/2kai2kai2/cartographer), written in rust and supporting modern versions of Discord (if you previously had the bot in your server, it will be using the new version now).
+
+---
+
 ![Deployment State](https://img.shields.io/github/deployments/2kai2kai2/eu4img/eu4imgbot?label=deployment&logo=heroku)
 ![Code Size](https://img.shields.io/github/languages/code-size/2kai2kai2/eu4img)
 ![Total Size](https://img.shields.io/github/repo-size/2kai2kai2/eu4img)
